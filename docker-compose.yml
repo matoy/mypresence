@@ -1,5 +1,5 @@
 # =============================================================================
-# Docker Compose - Presence App
+# Docker Compose - myPresence App
 # =============================================================================
 #
 # Quick start:
@@ -11,17 +11,24 @@
 # =============================================================================
 
 services:
-  presence:
+  mypresence:
     #build: .
     image: matoy/mypresence:latest
-    container_name: presence-app
+    container_name: mypresence-app
     restart: unless-stopped
+    healthcheck:
+      # Tente d'ouvrir un descripteur de fichier vers le port
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 8080 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     ports:
       - "8080:8080"
     volumes:
       # Persistent volume for the SQLite database and files
       # Contains: app.db (database), logo.png (optional)
-      # - presence-data:/data
+      # - mypresence-data:/data
       - ./mypresence-data:/data
     environment:
       # =====================================================================
@@ -47,7 +54,7 @@ services:
       # =====================================================================
 
       # Application name (displayed in the header and login page)
-      - APP_NAME=My Presence
+      - APP_NAME=myPresence App
 
       # UI colors (hexadecimal format)
       # PrimaryColor: main color (header, buttons, links)
@@ -62,7 +69,7 @@ services:
       # Custom logo
       # To add your logo:
       #   1. Copy your logo.png into the Docker volume
-      #      Example: docker cp my-logo.png presence-app:/data/logo.png
+      #      Example: docker cp my-logo.png mypresence-app:/data/logo.png
       #   2. Or mount it directly below
       # - LOGO_PATH=logo.png
 
@@ -114,7 +121,7 @@ services:
       #   - job_name: mypresence
       #     bearer_token: <your-token>
       #     static_configs:
-      #       - targets: ['presence-app:8080']
+      #       - targets: ['mypresence-app:8080']
       # - METRICS_TOKEN=change-me-strong-random-token
 
       # =====================================================================
@@ -140,7 +147,7 @@ services:
       #
       # - SMTP_URL=smtp://user:password@smtp.example.com:587
       # - SMTP_FROM=noreply@example.com
-      # - APP_URL=https://presence.example.com
+      # - APP_URL=https://mypresence.example.com
 
       # =====================================================================
       # SAML2 / SSO AUTHENTICATION (Microsoft Entra ID example)
@@ -154,7 +161,7 @@ services:
       #   2. Go to "Microsoft Entra ID" > "Enterprise applications"
       #   3. Click "+ New application"
       #   4. Choose "Create your own application"
-      #   5. Name it (e.g. "Presence App") and select
+      #   5. Name it (e.g. "myPresence App") and select
       #      "Integrate any other application you don't find in the gallery"
       #   6. Click "Create"
       #
@@ -187,11 +194,11 @@ services:
       # - SAML_IDP_METADATA_URL=
 
       # SP Entity ID (must match the Identifier configured in Entra ID)
-      # Example: https://presence.your-domain.com/saml/metadata
+      # Example: https://mypresence.your-domain.com/saml/metadata
       # - SAML_ENTITY_ID=
 
       # Public URL of your application (no trailing slash)
-      # Example: https://presence.your-domain.com
+      # Example: https://mypresence.your-domain.com
       # - SAML_ROOT_URL=
 
       # SP certificate (optional - a self-signed certificate is generated if not provided)
@@ -235,7 +242,7 @@ services:
       # - Roles are re-evaluated at every login
 
 #volumes:
-#  presence-data:
+#  mypresence-data:
 #    driver: local
 
 # =============================================================================
@@ -244,14 +251,14 @@ services:
 #
 # To mount a custom logo directly:
 #   volumes:
-#     - presence-data:/data
+#     - mypresence-data:/data
 #     - ./my-logo.png:/data/logo.png:ro
 #
 # To access the SQLite database:
-#   docker exec -it presence-app cat /data/app.db > backup.db
+#   docker exec -it mypresence-app cat /data/app.db > backup.db
 #
 # To view logs:
-#   docker compose logs -f presence
+#   docker compose logs -f mypresence
 #
 # To restart after a config change:
 #   docker compose down && docker compose up -d

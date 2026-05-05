@@ -2,6 +2,46 @@
 // Calendar drag-to-select + Admin AJAX helpers
 
 // ============================================================
+// Dark Mode Toggle (Alpine.js component)
+// ============================================================
+function darkModeToggle() {
+    return {
+        mode: localStorage.getItem('darkMode') || 'system',
+        get icon() {
+            if (this.mode === 'light') return '☀️';
+            if (this.mode === 'dark') return '🌙';
+            return '🖥️';
+        },
+        get label() {
+            if (this.mode === 'light') return (_t['nav.theme.light']  || 'Light');
+            if (this.mode === 'dark')  return (_t['nav.theme.dark']   || 'Dark');
+            return (_t['nav.theme.system'] || 'System');
+        },
+        cycle() {
+            const modes = ['system', 'light', 'dark'];
+            const idx = modes.indexOf(this.mode);
+            this.mode = modes[(idx + 1) % modes.length];
+            localStorage.setItem('darkMode', this.mode);
+            this.apply();
+        },
+        apply() {
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            if (this.mode === 'dark' || (this.mode === 'system' && prefersDark)) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        },
+        init() {
+            // Listen for system preference changes when in 'system' mode
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+                if (this.mode === 'system') this.apply();
+            });
+        }
+    };
+}
+
+// ============================================================
 // Calendar Component (Alpine.js)
 // ============================================================
 function calendarApp(statuses, currentUserId, isAdmin, presences) {
