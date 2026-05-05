@@ -145,10 +145,10 @@ func TestStatusesPage_AsAdmin_Returns200(t *testing.T) {
 	// StatusesPage is registered only via POST/PUT/DELETE in the mux; only CRUD endpoints exist.
 	// We verify the admin has access via a status CRUD operation.
 	resp := e.postJSON("/admin/statuses", map[string]interface{}{
-		"name":    "Test Status",
-		"color":   "#123456",
+		"name":     "Test Status",
+		"color":    "#123456",
 		"billable": true,
-		"on_site": false,
+		"on_site":  false,
 	})
 	defer drain(resp)
 
