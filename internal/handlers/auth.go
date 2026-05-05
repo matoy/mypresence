@@ -320,7 +320,8 @@ func (h *AuthHandler) SAMLACS(w http.ResponseWriter, r *http.Request) {
 	// Apply RBAC: map IDP groups to application roles if group mapping is configured.
 	if h.Config.SAMLGroupGlobal != "" || h.Config.SAMLGroupTeamManager != "" ||
 		h.Config.SAMLGroupTeamLeader != "" || h.Config.SAMLGroupStatusManager != "" ||
-		h.Config.SAMLGroupActivityViewer != "" || h.Config.SAMLGroupFloorplanManager != "" {
+		h.Config.SAMLGroupActivityViewer != "" || h.Config.SAMLGroupFloorplanManager != "" ||
+		h.Config.SAMLGroupProjectsAdmin != "" || h.Config.SAMLGroupProjectsViewer != "" {
 		groups := getAttributeValues(assertion, h.Config.SAMLGroupsClaim)
 		groupSet := make(map[string]bool, len(groups))
 		for _, g := range groups {
@@ -334,6 +335,8 @@ func (h *AuthHandler) SAMLACS(w http.ResponseWriter, r *http.Request) {
 			{h.Config.SAMLGroupStatusManager, models.RoleStatusManager},
 			{h.Config.SAMLGroupActivityViewer, models.RoleActivityViewer},
 			{h.Config.SAMLGroupFloorplanManager, models.RoleFloorplanManager},
+			{h.Config.SAMLGroupProjectsAdmin, models.RoleProjectsAdmin},
+			{h.Config.SAMLGroupProjectsViewer, models.RoleProjectsViewer},
 		} {
 			if mapping.groupID != "" && groupSet[mapping.groupID] {
 				roles = append(roles, mapping.role)

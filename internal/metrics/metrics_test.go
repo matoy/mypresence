@@ -163,7 +163,7 @@ func newIsolatedRegistry(fn func() DBStats) *prometheus.Registry {
 	return reg
 }
 
-func TestDBCollector_Describe_EmitsSevenDescs(t *testing.T) {
+func TestDBCollector_Describe_EmitsNineDescs(t *testing.T) {
 	c := newDBCollector(func() DBStats { return DBStats{} })
 	ch := make(chan *prometheus.Desc, 20)
 	c.Describe(ch)
@@ -173,8 +173,8 @@ func TestDBCollector_Describe_EmitsSevenDescs(t *testing.T) {
 	for range ch {
 		count++
 	}
-	if count != 7 {
-		t.Errorf("Describe emitted %d descriptors, want 7", count)
+	if count != 9 {
+		t.Errorf("Describe emitted %d descriptors, want 9", count)
 	}
 }
 
@@ -182,6 +182,7 @@ func TestDBCollector_Collect_AllValues(t *testing.T) {
 	stats := DBStats{
 		Users: 5, ActiveSessions: 3, Teams: 2,
 		Statuses: 7, Presences: 100, Floorplans: 2, Seats: 20,
+		Projects: 4, ProjectEntries: 42,
 	}
 	reg := newIsolatedRegistry(func() DBStats { return stats })
 
@@ -194,6 +195,12 @@ mypresence_db_floorplans_total 2
 # HELP mypresence_db_presences_total Total presence records stored.
 # TYPE mypresence_db_presences_total gauge
 mypresence_db_presences_total 100
+# HELP mypresence_db_project_time_entries_total Total project time entries stored.
+# TYPE mypresence_db_project_time_entries_total gauge
+mypresence_db_project_time_entries_total 42
+# HELP mypresence_db_projects_total Total projects.
+# TYPE mypresence_db_projects_total gauge
+mypresence_db_projects_total 4
 # HELP mypresence_db_seats_total Total seats defined across all floor plans.
 # TYPE mypresence_db_seats_total gauge
 mypresence_db_seats_total 20
@@ -225,6 +232,12 @@ mypresence_db_floorplans_total 0
 # HELP mypresence_db_presences_total Total presence records stored.
 # TYPE mypresence_db_presences_total gauge
 mypresence_db_presences_total 0
+# HELP mypresence_db_project_time_entries_total Total project time entries stored.
+# TYPE mypresence_db_project_time_entries_total gauge
+mypresence_db_project_time_entries_total 0
+# HELP mypresence_db_projects_total Total projects.
+# TYPE mypresence_db_projects_total gauge
+mypresence_db_projects_total 0
 # HELP mypresence_db_seats_total Total seats defined across all floor plans.
 # TYPE mypresence_db_seats_total gauge
 mypresence_db_seats_total 0

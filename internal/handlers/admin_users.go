@@ -35,13 +35,6 @@ func (h *UsersAdminHandler) UsersPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// NewUserPage renders the dedicated local account creation page.
-func (h *UsersAdminHandler) NewUserPage(w http.ResponseWriter, r *http.Request) {
-	h.Render(w, r, "admin_user_new", map[string]interface{}{
-		"Error": r.URL.Query().Get("error"),
-	})
-}
-
 // CreateUser creates a new local user account.
 func (h *UsersAdminHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	var req struct {

@@ -2,31 +2,50 @@
 {{with .Data}}
 {{$allUsers := .Users}}
 {{$canManageTeams := .CanManageTeams}}
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" x-data="teamsAdmin()">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" x-data="teamsAdmin({{json .Teams}})">
     <div class="flex items-center justify-between mb-6">
         <h1 class="text-2xl font-bold text-gray-900">{{index $.T "teams.title"}}</h1>
+        <div class="flex items-center gap-3">
+            <span class="text-sm text-gray-400" x-text="filteredCount + ' / ' + totalCount"></span>
+            {{if $canManageTeams}}
+            <button @click="showCreateModal = true; createError = ''; newTeamName = ''"
+                    class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
+                + {{index $.T "teams.create"}}
+            </button>
+            {{end}}
+        </div>
     </div>
 
-    <!-- Create Team Form -->
-    {{if $canManageTeams}}
-    <div class="bg-white rounded-xl shadow-md p-6 mb-6">
-        <h2 class="text-lg font-semibold text-gray-800 mb-3">{{index $.T "teams.create"}}</h2>
-        <div class="flex gap-3">
-            <input type="text" x-model="newTeamName"
-                   placeholder="{{index $.T "teams.team_name"}}" 
-                   @keydown.enter="createTeam()"
-                   class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary">
-            <button @click="createTeam()"
-                    class="px-6 py-2 bg-primary text-white rounded-lg font-medium hover:opacity-90 transition">
-                {{index $.T "admin.create"}}
+    <!-- Filters -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
+        <div class="flex flex-wrap gap-3 items-end">
+            <div class="flex-1 min-w-[220px]">
+                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "admin.search"}}</label>
+                <input type="text" x-model="filterText" placeholder="{{index $.T "teams.team_name"}}"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "admin.filter"}}</label>
+                <select x-model="filterMembers"
+                        class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+                    <option value="all">{{index $.T "admin.all"}}</option>
+                    <option value="with">{{index $.T "admin.yes"}}</option>
+                    <option value="empty">{{index $.T "admin.no"}}</option>
+                </select>
+            </div>
+            <button @click="resetFilters()"
+                    class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
+                {{index $.T "admin.reset"}}
             </button>
         </div>
     </div>
-    {{end}}
 
     <!-- Teams List -->
     {{range $teamItem := .Teams}}
-    <div class="bg-white rounded-xl shadow-md p-6 mb-4" x-data="{ editName: false, showAddMember: false, memberSearch: '', memberIds: [{{range $i, $m := .Members}}{{if $i}},{{end}}{{$m.ID}}{{end}}] }">
+    <div class="bg-white rounded-xl shadow-md p-6 mb-4"
+         x-data="{ editName: false, showAddMember: false, memberSearch: '', memberIds: [{{range $i, $m := .Members}}{{if $i}},{{end}}{{$m.ID}}{{end}}] }"
+         x-show="matchesTeam({{json .Team.Name}}, {{len .Members}})"
+         x-cloak>
         <div class="flex items-center justify-between mb-4">
             <div class="flex items-center gap-3">
                 <div class="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -129,6 +148,34 @@
     {{if not .Teams}}
     <div class="bg-gray-50 rounded-xl p-8 text-center">
         <p class="text-gray-500">{{index $.T "teams.no_teams"}}</p>
+    </div>
+    {{end}}
+
+    <!-- Create team modal -->
+    {{if $canManageTeams}}
+    <div x-show="showCreateModal" x-cloak
+         class="fixed inset-0 z-50 flex items-center justify-center"
+         @keydown.escape.window="showCreateModal = false">
+        <div class="absolute inset-0 bg-black/40" @click="showCreateModal = false"></div>
+        <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6" @click.stop>
+            <h2 class="text-lg font-bold text-gray-900 mb-4">{{index $.T "teams.create"}}</h2>
+            <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "teams.team_name"}}</label>
+                <input type="text" x-model="newTeamName" @keydown.enter="createTeam()"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+            </div>
+            <p x-show="createError" x-text="createError" class="mt-3 text-sm text-red-600"></p>
+            <div class="flex justify-end gap-3 mt-6">
+                <button @click="showCreateModal = false"
+                        class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
+                    {{index $.T "admin.cancel"}}
+                </button>
+                <button @click="createTeam()"
+                        class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
+                    {{index $.T "admin.create"}}
+                </button>
+            </div>
+        </div>
     </div>
     {{end}}
 </div>

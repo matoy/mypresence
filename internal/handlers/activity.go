@@ -13,8 +13,9 @@ import (
 
 // ActivityHandler handles the Activity Report page.
 type ActivityHandler struct {
-	DB     *db.DB
-	Render func(w http.ResponseWriter, r *http.Request, page string, data interface{})
+	DB              *db.DB
+	Render          func(w http.ResponseWriter, r *http.Request, page string, data interface{})
+	DisableProjects bool
 }
 
 // ActivityPage renders the activity report page.
@@ -107,15 +108,20 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Count holidays falling on working days in the month
+	// Count holidays falling on working days in the month.
+	// For the Not set column, all holidays are excluded from the expected input,
+	// even when presences are technically allowed on that day.
 	holidayCount := 0
 	for _, hol := range allHolidays {
 		t, err := time.Parse("2006-01-02", hol.Date)
 		if err != nil {
 			continue
 		}
-		if int(t.Month()) == month && t.Year() == year &&
-			t.Weekday() != time.Saturday && t.Weekday() != time.Sunday {
+		if int(t.Month()) != month || t.Year() != year ||
+			t.Weekday() == time.Saturday || t.Weekday() == time.Sunday {
+			continue
+		}
+		if !hol.AllowImputed {
 			holidayCount++
 		}
 	}
@@ -124,6 +130,22 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 	for _, s := range stats {
 		totalOnSite += s.OnSiteDays
 	}
+
+	projectActivityByUser := make(map[int64]float64)
+	totalProjectDeclared := 0.0
+	if !h.DisableProjects {
+		for _, s := range stats {
+			declared, err := h.DB.GetUserTotalDeclaredForMonth(s.User.ID, year, month)
+			if err != nil {
+				continue
+			}
+			totalProjectDeclared += declared
+			if s.BillableDays > 0 {
+				projectActivityByUser[s.User.ID] = (declared / s.BillableDays) * 100.0
+			}
+		}
+	}
+
 	totalWorkingDays := float64(workingDaysExcluded) * float64(len(stats))
 	totalNotSet := totalWorkingDays - totalSetDays
 	if totalNotSet < 0 {
@@ -164,30 +186,33 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 	nextTime := time.Date(year, time.Month(month)+1, 1, 0, 0, 0, 0, time.UTC)
 
 	h.Render(w, r, "admin_activity", map[string]interface{}{
-		"Teams":            teams,
-		"Statuses":         statuses,
-		"Stats":            stats,
-		"SelectedTeamID":   teamID,
-		"Year":             year,
-		"Month":            month,
-		"ViewMode":         viewMode,
-		"TotalBillable":    totalBillable,
-		"TotalNotSet":      totalNotSet,
-		"TotalOnSite":      totalOnSite,
-		"TotalWorkingDays": totalWorkingDays,
-		"WorkingDays":      workingDays,
-		"WorkingDaysExcl":  workingDaysExcluded,
-		"HolidayCount":     holidayCount,
-		"DayBillable":      dayBillable,
-		"DayOnSite":        dayOnSite,
-		"StatusTotals":     statusTotals,
-		"PrevYear":         prevTime.Year(),
-		"PrevMonth":        int(prevTime.Month()),
-		"NextYear":         nextTime.Year(),
-		"NextMonth":        int(nextTime.Month()),
-		"Days":             days,
-		"Users":            members,
-		"PresenceMap":      presenceMap,
+		"Teams":                 teams,
+		"Statuses":              statuses,
+		"Stats":                 stats,
+		"ShowProjectActivity":   !h.DisableProjects,
+		"ProjectActivityByUser": projectActivityByUser,
+		"TotalProjectDeclared":  totalProjectDeclared,
+		"SelectedTeamID":        teamID,
+		"Year":                  year,
+		"Month":                 month,
+		"ViewMode":              viewMode,
+		"TotalBillable":         totalBillable,
+		"TotalNotSet":           totalNotSet,
+		"TotalOnSite":           totalOnSite,
+		"TotalWorkingDays":      totalWorkingDays,
+		"WorkingDays":           workingDays,
+		"WorkingDaysExcl":       workingDaysExcluded,
+		"HolidayCount":          holidayCount,
+		"DayBillable":           dayBillable,
+		"DayOnSite":             dayOnSite,
+		"StatusTotals":          statusTotals,
+		"PrevYear":              prevTime.Year(),
+		"PrevMonth":             int(prevTime.Month()),
+		"NextYear":              nextTime.Year(),
+		"NextMonth":             int(nextTime.Month()),
+		"Days":                  days,
+		"Users":                 members,
+		"PresenceMap":           presenceMap,
 	})
 }
 

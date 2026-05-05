@@ -124,6 +124,19 @@ foreach ($h in $holidays) {
     if ($r -and $r.id) { Write-Host "  '$($h.name)' id=$($r.id)" }
     else                { Write-Warning "  '$($h.name)' may already exist" }
 }
+# Build lookup of non-imputable holiday dates for presence filtering
+$nonImputedSet = @{}
+foreach ($h in $holidays) { if (-not $h.allow_imputed) { $nonImputedSet[$h.date] = $true } }
+
+function Get-WorkingDays ($year, $month) {
+    $d = [DateTime]::new($year, $month, 1); $days = @()
+    while ($d.Month -eq $month) {
+        $ds = $d.ToString("yyyy-MM-dd")
+        if ($d.DayOfWeek -notin 'Saturday','Sunday' -and -not $nonImputedSet[$ds]) { $days += $ds }
+        $d = $d.AddDays(1)
+    }
+    return $days
+}
 
 # ── 3. Create floorplan + seats ───────────────────────────────────────────────
 Write-Host "`nCreating floorplan..."
@@ -208,8 +221,8 @@ foreach ($m in $memberships) {
 # ── 6. Presences: March and May (all users — on-site except Wed=remote) ───────
 Write-Host "`nSeeding March and May presences..."
 $allUIDs = @($U.admin, $U.alice, $U.bob, $U.claire, $U.david, $U.emma, $U.felix, $U.grace, $U.hugo, $U.iris, $U.julien)
-$marchDays = Get-Weekdays 2026 3
-$mayDays   = Get-Weekdays 2026 5
+$marchDays = Get-WorkingDays 2026 3
+$mayDays   = Get-WorkingDays 2026 5
 
 foreach ($uid in $allUIDs) {
     SetPresences $uid @($marchDays | Where-Object { ([DateTime]::Parse($_)).DayOfWeek -ne 'Wednesday' }) $SITE
@@ -280,5 +293,119 @@ Write-Host "`nBooking seat reservations for admin (seat A1, id=$seatA1)..."
 $adminSiteDays = @("2026-04-01","2026-04-02","2026-04-03","2026-04-08","2026-04-09","2026-04-13","2026-04-14","2026-04-17","2026-04-20","2026-04-22")
 $r = PostJSON "$Base/api/reservations/bulk" @{seat_id=$seatA1; dates=$adminSiteDays; half="full"}
 if ($r) { Write-Host "  Seat A1 reserved: $($r.booked) days" }
+
+# ── 9. Projects ───────────────────────────────────────────────────────────────
+Write-Host "`nCreating projects..."
+# Give alice projects_admin role (in addition to her team_manager role)
+PutJSON "$Base/api/users/$($U.alice)/roles" @{ roles=@("team_manager","projects_admin") } | Out-Null
+Write-Host "  alice: roles set to team_manager + projects_admin"
+
+$projIDs = @{}
+$projectDefs = @(
+    @{ name="Alpha Platform";    code="ALPHA"; team="Engineering"; active=$true; start_date="2026-01-01"; end_date="2026-12-31" },
+    @{ name="Beta App";          code="BETA";  team="Engineering"; active=$true; start_date="2026-01-01"; end_date="2026-12-31" },
+    @{ name="Campaign Spring";   code="CAMP";  team="Marketing";   active=$true; start_date="2026-03-01"; end_date="2026-06-30" },
+    @{ name="Sales CRM";         code="SCRM";  team="Sales";       active=$true; start_date="2026-01-01"; end_date="2026-12-31" },
+    @{ name="HR Transformation"; code="HRXP";  team="HR";          active=$true; start_date="2026-02-01"; end_date="2026-07-31" }
+)
+foreach ($p in $projectDefs) {
+    $tid = $teamIDs[$p.team]
+    $r = PostJSON "$Base/api/admin/projects" @{ name=$p.name; code=$p.code; team_id=[int]$tid; active=$p.active; start_date=$p.start_date; end_date=$p.end_date }
+    if ($r -and $r.id) {
+        $projIDs[$p.code] = [int]$r.id
+        Write-Host "  '$($p.code)' '$($p.name)' id=$($r.id)"
+    } else {
+        Write-Warning "  Failed to create project '$($p.code)' (may already exist)"
+    }
+}
+# Resolve IDs for projects that already existed
+if ($projIDs.Count -lt $projectDefs.Count) {
+    try {
+        $existing = Invoke-RestMethod "$Base/api/admin/projects?active=" -Headers $jh
+        if ($existing -and $existing.projects) {
+            foreach ($p in $existing.projects) {
+                if (-not $projIDs[$p.code] -and (@("ALPHA","BETA","CAMP","SCRM","HRXP") -contains $p.code)) {
+                    $projIDs[$p.code] = [int]$p.id
+                    Write-Host "  '$($p.code)' id=$($p.id) (existing)"
+                }
+            }
+        }
+    } catch { Write-Warning "  Could not resolve existing project IDs" }
+}
+
+# ── 10. Project time declarations ─────────────────────────────────────────────
+Write-Host "`nDeclaring project time for users..."
+
+function LoginAs ($email, $password) {
+    $wr = [System.Net.WebRequest]::Create("$Base/login")
+    $wr.Method = "POST"; $wr.ContentType = "application/x-www-form-urlencoded"; $wr.AllowAutoRedirect = $false
+    $bd = [System.Text.Encoding]::UTF8.GetBytes("username=$email&password=$password")
+    $wr.ContentLength = $bd.Length; $st = $wr.GetRequestStream(); $st.Write($bd,0,$bd.Length); $st.Close()
+    try { $re = $wr.GetResponse() } catch { $re = $_.Exception.Response }
+    $c = (($re.Headers["Set-Cookie"]) -split ";")[0]
+    $re.Close()
+    return @{ Cookie = $c; "Content-Type" = "application/json" }
+}
+function DeclareTime ($headers, $projectId, $year, $month, $days) {
+    $body = @{ project_id=[int]$projectId; year=[int]$year; month=[int]$month; days=[double]$days } | ConvertTo-Json -Compress
+    try { Invoke-RestMethod "$Base/api/project-time" -Method POST -Headers $headers -Body $body | Out-Null; return $true }
+    catch { $m = $_.ErrorDetails.Message; if (-not $m) { $m = $_.Exception.Message }; Write-Warning "    project-time $projectId -> $m"; return $false }
+}
+function GetBillable ($headers, $year, $month) {
+    try { $r = Invoke-RestMethod "$Base/api/projects?year=$year&month=$month" -Headers $headers; return [double]$r.billable_days }
+    catch { return 0.0 }
+}
+function RoundHalf ($v) { return [Math]::Round($v * 2) / 2 }
+
+# Fraction of billable days to allocate per project per user
+# Totals are kept <= 0.90 so users always have some unset days for realism
+$projectAlloc = @{
+    "admin"  = @( @{c="ALPHA";f=0.55}, @{c="BETA";f=0.30}, @{c="HRXP";f=0.05} )
+    "alice"  = @( @{c="ALPHA";f=0.60}, @{c="BETA";f=0.25}, @{c="HRXP";f=0.05} )
+    "bob"    = @( @{c="ALPHA";f=0.45}, @{c="BETA";f=0.35}, @{c="SCRM";f=0.05} )
+    "claire" = @( @{c="ALPHA";f=0.70}, @{c="BETA";f=0.20} )
+    "david"  = @( @{c="ALPHA";f=0.50}, @{c="BETA";f=0.40} )
+    "emma"   = @( @{c="CAMP";f=0.75},  @{c="HRXP";f=0.10} )
+    "felix"  = @( @{c="BETA";f=0.80} )
+    "grace"  = @( @{c="CAMP";f=0.85} )
+    "hugo"   = @( @{c="CAMP";f=0.75} )
+    "iris"   = @( @{c="SCRM";f=0.80} )
+    "julien" = @( @{c="SCRM";f=0.85} )
+}
+$userCreds = @{
+    "admin"  = @{ email="admin";                     password="admin" }
+    "alice"  = @{ email="alice.martin@corp.local";   password="demo1234" }
+    "bob"    = @{ email="bob.dupont@corp.local";     password="demo1234" }
+    "claire" = @{ email="claire.leroy@corp.local";   password="demo1234" }
+    "david"  = @{ email="david.simon@corp.local";    password="demo1234" }
+    "emma"   = @{ email="emma.garcia@corp.local";    password="demo1234" }
+    "felix"  = @{ email="felix.nguyen@corp.local";   password="demo1234" }
+    "grace"  = @{ email="grace.chen@corp.local";     password="demo1234" }
+    "hugo"   = @{ email="hugo.moreau@corp.local";    password="demo1234" }
+    "iris"   = @{ email="iris.blanc@corp.local";     password="demo1234" }
+    "julien" = @{ email="julien.roux@corp.local";    password="demo1234" }
+}
+foreach ($key in $projectAlloc.Keys) {
+    $creds    = $userCreds[$key]
+    $headers  = LoginAs $creds.email $creds.password
+    $userAllocList = $projectAlloc[$key]
+    Write-Host "  $key"
+    foreach ($month in @(3, 4, 5)) {
+        $billable  = GetBillable $headers 2026 $month
+        if ($billable -le 0) { continue }
+        $remaining = $billable
+        foreach ($a in $userAllocList) {
+            $pid = $projIDs[$a.c]
+            if (-not $pid) { continue }
+            $days = RoundHalf ($billable * $a.f)
+            if ($days -gt $remaining) { $days = RoundHalf $remaining }
+            if ($days -le 0) { continue }
+            if (DeclareTime $headers $pid 2026 $month $days) {
+                $remaining -= $days
+                Write-Host "    2026-$('{0:D2}' -f $month) $($a.c): $days j (billable=$billable)"
+            }
+        }
+    }
+}
 
 Write-Host "`nSeed complete!"

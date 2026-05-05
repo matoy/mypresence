@@ -104,6 +104,11 @@ services:
       # Useful if your organisation does not use desk booking
       # - DISABLE_FLOORPLANS=true
 
+      # Set to "true" to disable project management features:
+      # user project time entry page (/projects), project administration, and reporting
+      # Useful if your organisation does not use project-based time tracking
+      # - DISABLE_PROJECTS=true
+
       # Set to "true" to disable the REST API entirely:
       # PAT (Personal Access Token) management, Bearer token authentication,
       # all /api/* endpoints and the /api/docs documentation page
@@ -235,6 +240,8 @@ services:
       # - SAML_GROUP_STATUS_MANAGER=<object-id>  # Manage presence statuses
       # - SAML_GROUP_ACTIVITY_VIEWER=<object-id> # View all users activity
       # - SAML_GROUP_FLOORPLAN_MANAGER=<object-id> # Manage floor plans and seats
+      # - SAML_GROUP_PROJECTS_ADMIN=<object-id> # Manage projects and declare time
+      # - SAML_GROUP_PROJECTS_VIEWER=<object-id> # View project time entries and reports
       #
       # Notes:
       # - A user can match multiple groups and will receive all corresponding roles

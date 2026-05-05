@@ -74,6 +74,21 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 		userPresences = make(map[string]map[string]int64)
 	}
 
+	// A month is complete when every declarable day has at least one status set.
+	declarableDays := 0
+	declaredDays := 0
+	for _, d := range days {
+		if d.IsWeekend || (d.IsHoliday && !d.HolidayAllowImputed) {
+			continue
+		}
+		declarableDays++
+		halves := userPresences[d.Date]
+		if halves != nil && (halves["full"] > 0 || halves["AM"] > 0 || halves["PM"] > 0) {
+			declaredDays++
+		}
+	}
+	calendarComplete := declarableDays > 0 && declaredDays == declarableDays
+
 	// Get seat reservations and floorplans (skipped when floor plans are disabled)
 	var reservationDates map[string]bool
 	var floorplans []models.Floorplan
@@ -101,6 +116,7 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 		"CurrentUserID":    user.ID,
 		"ReservationDates": reservationDates,
 		"Floorplans":       floorplans,
+		"CalendarComplete": calendarComplete,
 	})
 }
 
@@ -125,10 +141,30 @@ func (h *CalendarHandler) SetPresences(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate date format
+	// Validate date format and collect date range for holiday lookup
+	if len(req.Dates) == 0 {
+		jsonError(w, "Aucune date fournie", http.StatusBadRequest)
+		return
+	}
+	minDate, maxDate := req.Dates[0], req.Dates[0]
 	for _, d := range req.Dates {
 		if _, err := time.Parse("2006-01-02", d); err != nil {
 			jsonError(w, "Date invalide: "+d, http.StatusBadRequest)
+			return
+		}
+		if d < minDate {
+			minDate = d
+		}
+		if d > maxDate {
+			maxDate = d
+		}
+	}
+
+	// Reject dates that fall on non-imputable holidays
+	holidayMap, _ := h.DB.GetHolidayMap(minDate, maxDate)
+	for _, d := range req.Dates {
+		if hol, ok := holidayMap[d]; ok && !hol.AllowImputed {
+			jsonError(w, "Jour férié non imputable: "+hol.Name+" ("+d+")", http.StatusUnprocessableEntity)
 			return
 		}
 	}

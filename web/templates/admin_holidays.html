@@ -1,9 +1,16 @@
 {{define "content"}}
 {{with .Data}}
-<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8" x-data="holidayAdmin()">
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8" x-data="holidayAdmin({{json .Holidays}})">
 
     <div class="flex items-center justify-between mb-6">
         <h1 class="text-2xl font-bold text-gray-900">{{index $.T "holidays.title"}}</h1>
+        <div class="flex items-center gap-3">
+            <span class="text-sm text-gray-400" x-text="filteredCount + ' / ' + totalCount"></span>
+            <button @click="showCreateModal = true; createError = ''; newDate = ''; newName = ''; newAllowImputed = false"
+                    class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
+                + {{index $.T "holidays.add"}}
+            </button>
+        </div>
     </div>
 
     {{if .Error}}
@@ -12,35 +19,33 @@
     </div>
     {{end}}
 
-    <!-- Add holiday form -->
-    <div class="bg-white rounded-xl shadow-md p-6 mb-6">
-        <h2 class="text-lg font-semibold text-gray-800 mb-3">{{index $.T "holidays.add"}}</h2>
+    <!-- Filters -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
         <div class="flex flex-wrap gap-3 items-end">
-            <div class="w-40">
-                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "admin.date"}}</label>
-                <input type="date" x-model="newDate"
+            <div class="flex-1 min-w-[180px]">
+                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "admin.search"}}</label>
+                <input type="text" x-model="filterText" placeholder="{{index $.T "holidays.name_placeholder"}}"
                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
             </div>
-            <div class="flex-1 min-w-[200px]">
-                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "admin.name"}}</label>
-                <input type="text" x-model="newName" placeholder="{{index $.T "holidays.name_placeholder"}}"
-                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm"
-                       @keydown.enter="createHoliday()">
+            <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "holidays.col_allow_imputed"}}</label>
+                <select x-model="filterAllowImputed"
+                        class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+                    <option value="all">{{index $.T "admin.all"}}</option>
+                    <option value="1">{{index $.T "admin.yes"}}</option>
+                    <option value="0">{{index $.T "admin.no"}}</option>
+                </select>
             </div>
-            <div class="flex items-center gap-2 py-2">
-                <input type="checkbox" x-model="newAllowImputed" id="allow_imputed"
-                       class="h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary">
-                <label for="allow_imputed" class="text-sm font-medium text-gray-700">
-                    {{index $.T "holidays.allow_imputed"}}
-                    <span class="text-xs text-gray-400 font-normal">{{index $.T "holidays.allow_imputed_hint"}}</span>
-                </label>
+            <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "admin.date"}}</label>
+                <input type="number" min="0" max="9999" x-model="filterYear" placeholder="2026"
+                       class="w-28 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
             </div>
-            <button @click="createHoliday()"
-                    class="px-6 py-2 bg-primary text-white rounded-lg font-medium hover:opacity-90 transition text-sm">
-                {{index $.T "admin.add"}}
+            <button @click="resetFilters()"
+                    class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
+                {{index $.T "admin.reset"}}
             </button>
         </div>
-        <p x-show="createError" x-text="createError" class="mt-2 text-sm text-red-600"></p>
     </div>
 
     <!-- Holidays list -->
@@ -63,10 +68,12 @@
             <tbody class="divide-y divide-gray-100">
                 {{range .Holidays}}
                 <tr class="hover:bg-gray-50 transition"
+                    x-show="matchesHoliday('{{.Date}}', {{json .Name}}, {{.AllowImputed}})"
+                    x-cloak
                     x-data="{
                         editing: false,
                         editDate: '{{.Date}}',
-                        editName: '{{.Name}}',
+                        editName: {{json .Name}},
                         editAllowImputed: {{.AllowImputed}},
                         async save() {
                             const resp = await fetch('/admin/holidays/{{.ID}}', {
@@ -78,9 +85,14 @@
                             else { const d = await resp.json(); alert(d.error || 'Error'); }
                         },
                         async del() {
-                            if (!confirm(window._t['holidays.delete_confirm'])) return;
+                            if (!confirm(_t['holidays.delete_confirm'])) return;
                             const resp = await fetch('/admin/holidays/{{.ID}}', {method: 'DELETE'});
                             if (resp.ok) { window.location.reload(); }
+                            else {
+                                let msg = 'Error';
+                                try { const d = await resp.json(); msg = d.error || msg; } catch(e) {}
+                                alert(msg);
+                            }
                         }
                     }">
                     <!-- Date cell -->
@@ -128,19 +140,19 @@
                         <div class="flex items-center justify-end gap-2">
                             <template x-if="!editing">
                                 <button @click="editing = true"
-                                        class="text-xs px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition font-medium">
+                                        class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
                                     {{index $.T "admin.edit"}}
                                 </button>
                             </template>
                             <template x-if="editing">
                                 <button @click="save()"
-                                        class="text-xs px-3 py-1.5 rounded-lg bg-primary text-white hover:opacity-90 transition font-medium">
+                                        class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
                                     {{index $.T "admin.save"}}
                                 </button>
                             </template>
                             <template x-if="editing">
                                 <button @click="editing = false"
-                                        class="text-xs px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 transition font-medium">
+                                        class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
                                     {{index $.T "admin.cancel"}}
                                 </button>
                             </template>
@@ -163,15 +175,89 @@
         {{index $.T "holidays.note"}}
     </p>
 
+    <!-- Create holiday modal -->
+    <div x-show="showCreateModal" x-cloak
+         class="fixed inset-0 z-50 flex items-center justify-center"
+         @keydown.escape.window="showCreateModal = false">
+        <div class="absolute inset-0 bg-black/40" @click="showCreateModal = false"></div>
+        <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 p-6" @click.stop>
+            <h2 class="text-lg font-bold text-gray-900 mb-4">{{index $.T "holidays.add"}}</h2>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "admin.date"}}</label>
+                    <input type="date" x-model="newDate"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "admin.name"}}</label>
+                    <input type="text" x-model="newName" placeholder="{{index $.T "holidays.name_placeholder"}}"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm"
+                           @keydown.enter="createHoliday()">
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" x-model="newAllowImputed" id="allow_imputed"
+                           class="h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary">
+                    <label for="allow_imputed" class="text-sm font-medium text-gray-700">
+                        {{index $.T "holidays.allow_imputed"}}
+                        <span class="text-xs text-gray-400 font-normal">{{index $.T "holidays.allow_imputed_hint"}}</span>
+                    </label>
+                </div>
+            </div>
+            <p x-show="createError" x-text="createError" class="mt-3 text-sm text-red-600"></p>
+            <div class="flex justify-end gap-3 mt-6">
+                <button @click="showCreateModal = false"
+                        class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
+                    {{index $.T "admin.cancel"}}
+                </button>
+                <button @click="createHoliday()"
+                        class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
+                    {{index $.T "admin.add"}}
+                </button>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 <script>
-function holidayAdmin() {
+function holidayAdmin(initialHolidays) {
     return {
+        holidays: initialHolidays || [],
+        showCreateModal: false,
         newDate: '',
         newName: '',
         newAllowImputed: false,
         createError: '',
+        filterText: '',
+        filterAllowImputed: 'all',
+        filterYear: '',
+
+        get totalCount() {
+            return this.holidays.length;
+        },
+
+        get filteredCount() {
+            return this.holidays.filter(h => this.matchesHoliday(h.date, h.name, h.allow_imputed)).length;
+        },
+
+        resetFilters() {
+            this.filterText = '';
+            this.filterAllowImputed = 'all';
+            this.filterYear = '';
+        },
+
+        matchesHoliday(date, name, allowImputed) {
+            const q = this.filterText.trim().toLowerCase();
+            if (q) {
+                const hay = `${date} ${name || ''}`.toLowerCase();
+                if (!hay.includes(q)) return false;
+            }
+            if (this.filterAllowImputed === '1' && !allowImputed) return false;
+            if (this.filterAllowImputed === '0' && allowImputed) return false;
+            if (String(this.filterYear || '').trim() !== '' && !String(date || '').startsWith(String(this.filterYear).trim() + '-')) return false;
+            return true;
+        },
+
         async createHoliday() {
             this.createError = '';
             if (!this.newDate || !this.newName) { this.createError = 'Date and name are required'; return; }
@@ -180,7 +266,7 @@ function holidayAdmin() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ date: this.newDate, name: this.newName, allow_imputed: this.newAllowImputed })
             });
-            if (resp.ok) { window.location.reload(); }
+            if (resp.ok) { this.showCreateModal = false; window.location.reload(); }
             else { const d = await resp.json(); this.createError = d.error || 'Error'; }
         }
     };

@@ -80,6 +80,20 @@ html.dark .bg-white          { background-color: #1f2937 !important; } /* gray-8
 html.dark .bg-gray-50        { background-color: #111827 !important; } /* gray-900 */
 html.dark .bg-gray-100       { background-color: #1f2937 !important; } /* gray-800 */
 html.dark .bg-gray-200       { background-color: #374151 !important; } /* gray-700 */
+html.dark .bg-green-50       { background-color: #052e16 !important; }
+html.dark .bg-green-100      { background-color: #14532d !important; } /* badge actif */
+html.dark .bg-red-100        { background-color: #7f1d1d !important; } /* badge désactivé/supprimé */
+html.dark .bg-yellow-100     { background-color: #78350f !important; } /* badge warning */
+html.dark .bg-indigo-100     { background-color: #312e81 !important; } /* badge rôle actif */
+html.dark .bg-gray-300       { background-color: #4b5563 !important; } /* gray-600 — badge Not set lisible */
+html.dark .from-green-50     { --tw-gradient-from: #052e16 !important; }
+html.dark .to-green-100      { --tw-gradient-to: #14532d !important; }
+html.dark .border-green-200  { border-color: #166534 !important; }
+html.dark .bg-blue-50        { background-color: #172554 !important; }
+html.dark .bg-purple-50      { background-color: #3b0764 !important; }
+html.dark .bg-indigo-50      { background-color: #1e1b4b !important; }
+html.dark .bg-red-50         { background-color: #450a0a !important; }
+html.dark .bg-yellow-50      { background-color: #422006 !important; }
 
 /* Text */
 html.dark .text-gray-900     { color: #f9fafb !important; }
@@ -88,15 +102,127 @@ html.dark .text-gray-700     { color: #e5e7eb !important; }
 html.dark .text-gray-600     { color: #d1d5db !important; }
 html.dark .text-gray-500     { color: #9ca3af !important; }
 html.dark .text-gray-400     { color: #6b7280 !important; }
+html.dark .text-green-600    { color: #86efac !important; }
+html.dark .text-green-700    { color: #bbf7d0 !important; }
+html.dark .text-green-800    { color: #bbf7d0 !important; } /* badges actif/create/enabled */
+html.dark .text-blue-600     { color: #93c5fd !important; }
+html.dark .text-blue-700     { color: #bfdbfe !important; }
+html.dark .text-purple-600   { color: #d8b4fe !important; }
+html.dark .text-purple-700   { color: #e9d5ff !important; }
+html.dark .text-indigo-600   { color: #a5b4fc !important; }
+html.dark .text-indigo-700   { color: #c7d2fe !important; }
+html.dark .text-red-600      { color: #fca5a5 !important; }
+html.dark .text-red-700      { color: #fecaca !important; }
+html.dark .text-red-800      { color: #fecaca !important; } /* badges supprimé/disabled */
+html.dark .text-yellow-700   { color: #fde68a !important; }
+html.dark .text-yellow-800   { color: #fde68a !important; } /* badges warning */
 
 /* Borders */
 html.dark .border-gray-100   { border-color: #374151 !important; }
 html.dark .border-gray-200   { border-color: #374151 !important; }
 html.dark .border-gray-300   { border-color: #4b5563 !important; }
+html.dark .border-indigo-300 { border-color: #6366f1 !important; } /* contour rôle actif */
 
 /* Hover states */
-html.dark .hover\:bg-gray-50:hover  { background-color: #374151 !important; }
-html.dark .hover\:bg-gray-100:hover { background-color: #4b5563 !important; }
+html.dark .hover\:bg-gray-50:hover   { background-color: #374151 !important; }
+html.dark .hover\:bg-gray-100:hover  { background-color: #4b5563 !important; }
+html.dark .hover\:bg-green-200:hover { background-color: #166534 !important; }
+html.dark .hover\:bg-red-200:hover   { background-color: #991b1b !important; }
+html.dark .hover\:bg-yellow-200:hover{ background-color: #92400e !important; }
+
+/* Interactive buttons and button-like links need more separation than cards */
+html.dark button.bg-gray-100,
+html.dark a.bg-gray-100,
+html.dark label.bg-gray-100,
+html.dark input[type="button"].bg-gray-100,
+html.dark input[type="submit"].bg-gray-100 {
+    background-color: #374151 !important; /* gray-700 */
+    color: #f9fafb !important;
+    border: 1px solid #4b5563 !important; /* gray-600 */
+}
+
+html.dark button.hover\:bg-gray-200:hover,
+html.dark a.hover\:bg-gray-200:hover,
+html.dark label.hover\:bg-gray-200:hover,
+html.dark input[type="button"].hover\:bg-gray-200:hover,
+html.dark input[type="submit"].hover\:bg-gray-200:hover,
+html.dark button.hover\:bg-gray-100:hover,
+html.dark a.hover\:bg-gray-100:hover,
+html.dark label.hover\:bg-gray-100:hover,
+html.dark input[type="button"].hover\:bg-gray-100:hover,
+html.dark input[type="submit"].hover\:bg-gray-100:hover {
+    background-color: #4b5563 !important; /* gray-600 */
+    color: #ffffff !important;
+    border-color: #6b7280 !important; /* gray-500 */
+}
+
+html.dark button.bg-gray-200,
+html.dark a.bg-gray-200,
+html.dark label.bg-gray-200,
+html.dark input[type="button"].bg-gray-200,
+html.dark input[type="submit"].bg-gray-200 {
+    background-color: #4b5563 !important; /* gray-600 */
+    color: #ffffff !important;
+    border: 1px solid #6b7280 !important; /* gray-500 */
+}
+
+html.dark button.bg-white,
+html.dark a.bg-white,
+html.dark label.bg-white,
+html.dark input[type="button"].bg-white,
+html.dark input[type="submit"].bg-white {
+    background-color: #1f2937 !important; /* gray-800 */
+    color: #e5e7eb !important;
+    border-color: #4b5563 !important;
+}
+
+html.dark button.hover\:bg-gray-50.bg-white:hover,
+html.dark a.hover\:bg-gray-50.bg-white:hover,
+html.dark label.hover\:bg-gray-50.bg-white:hover,
+html.dark input[type="button"].hover\:bg-gray-50.bg-white:hover,
+html.dark input[type="submit"].hover\:bg-gray-50.bg-white:hover {
+    background-color: #374151 !important; /* gray-700 */
+    color: #ffffff !important;
+}
+
+html.dark button.bg-red-100,
+html.dark a.bg-red-100 {
+    background-color: #7f1d1d !important;
+    color: #fecaca !important;
+    border: 1px solid #991b1b !important;
+}
+
+html.dark button.hover\:bg-red-200:hover,
+html.dark a.hover\:bg-red-200:hover {
+    background-color: #991b1b !important;
+    color: #fee2e2 !important;
+}
+
+html.dark button.bg-yellow-100,
+html.dark a.bg-yellow-100 {
+    background-color: #78350f !important;
+    color: #fde68a !important;
+    border: 1px solid #92400e !important;
+}
+
+html.dark button.hover\:bg-yellow-200:hover,
+html.dark a.hover\:bg-yellow-200:hover {
+    background-color: #92400e !important;
+    color: #fef3c7 !important;
+}
+
+html.dark button.bg-green-100,
+html.dark a.bg-green-100 {
+    background-color: #14532d !important;
+    color: #bbf7d0 !important;
+    border: 1px solid #166534 !important;
+}
+
+html.dark button.hover\:bg-green-200:hover,
+html.dark a.hover\:bg-green-200:hover {
+    background-color: #166534 !important;
+    color: #dcfce7 !important;
+}
 
 /* Dropdown / cards */
 html.dark .shadow-xl,
@@ -141,3 +267,13 @@ html.dark .focus\:border-gray-300:focus { border-color: #6b7280 !important; }
 
 /* Smooth transitions for Alpine.js */
 [x-cloak] { display: none !important; }
+
+/* Projects page: progress colors (light + dark) */
+.projects-progress-fill.is-over-cap  { background-color: #f87171 !important; } /* rouge — dépassement (ne devrait pas arriver) */
+
+html.dark .projects-progress-track {
+    background-color: #374151 !important; /* gray-700 */
+    border-color: #4b5563 !important;     /* gray-600 */
+}
+
+html.dark .projects-progress-fill.is-over-cap  { background-color: #ef4444 !important; }

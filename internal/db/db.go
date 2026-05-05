@@ -29,6 +29,7 @@ type DB struct {
 	presence  *sql.DB // statuses, presences, presence_logs, holidays
 	floorplan *sql.DB // floorplans, seats, seat_reservations
 	audit     *sql.DB // admin_logs
+	projects  *sql.DB // projects, project_time_entries
 }
 
 func openSQLite(path string) (*sql.DB, error) {
@@ -77,6 +78,14 @@ func Open(dataDir string) (*DB, error) {
 		_ = floorplanDB.Close()
 		return nil, fmt.Errorf("open audit.db: %w", err)
 	}
+	projectsDB, err := openSQLite(dataDir + "/projects.db")
+	if err != nil {
+		_ = coreDB.Close()
+		_ = presenceDB.Close()
+		_ = floorplanDB.Close()
+		_ = auditDB.Close()
+		return nil, fmt.Errorf("open projects.db: %w", err)
+	}
 
 	d := &DB{
 		dataDir:   dataDir,
@@ -84,6 +93,7 @@ func Open(dataDir string) (*DB, error) {
 		presence:  presenceDB,
 		floorplan: floorplanDB,
 		audit:     auditDB,
+		projects:  projectsDB,
 	}
 
 	if err := d.migrateCore(); err != nil {
@@ -101,6 +111,10 @@ func Open(dataDir string) (*DB, error) {
 	if err := d.migrateAudit(); err != nil {
 		d.Close()
 		return nil, fmt.Errorf("migrateAudit: %w", err)
+	}
+	if err := d.migrateProjects(); err != nil {
+		d.Close()
+		return nil, fmt.Errorf("migrateProjects: %w", err)
 	}
 
 	// Migrate from legacy single-file app.db once, if present.
@@ -120,7 +134,7 @@ func Open(dataDir string) (*DB, error) {
 	return d, nil
 }
 
-// Ping checks connectivity to all 4 databases.
+// Ping checks connectivity to all databases.
 func (d *DB) Ping() error {
 	if err := d.core.Ping(); err != nil {
 		return fmt.Errorf("core.db: %w", err)
@@ -134,6 +148,9 @@ func (d *DB) Ping() error {
 	if err := d.audit.Ping(); err != nil {
 		return fmt.Errorf("audit.db: %w", err)
 	}
+	if err := d.projects.Ping(); err != nil {
+		return fmt.Errorf("projects.db: %w", err)
+	}
 	return nil
 }
 
@@ -146,6 +163,8 @@ type DBCounts struct {
 	Presences      int64
 	Floorplans     int64
 	Seats          int64
+	Projects       int64
+	ProjectEntries int64
 }
 
 // Counts queries lightweight COUNT(*) rows from each database.
@@ -159,6 +178,8 @@ func (d *DB) Counts() DBCounts {
 	d.presence.QueryRow(`SELECT COUNT(*) FROM presences`).Scan(&c.Presences)                                    //nolint:errcheck
 	d.floorplan.QueryRow(`SELECT COUNT(*) FROM floorplans`).Scan(&c.Floorplans)                                 //nolint:errcheck
 	d.floorplan.QueryRow(`SELECT COUNT(*) FROM seats`).Scan(&c.Seats)                                           //nolint:errcheck
+	d.projects.QueryRow(`SELECT COUNT(*) FROM projects`).Scan(&c.Projects)                                      //nolint:errcheck
+	d.projects.QueryRow(`SELECT COUNT(*) FROM project_time_entries`).Scan(&c.ProjectEntries)                    //nolint:errcheck
 	return c
 }
 
@@ -175,6 +196,9 @@ func (d *DB) Close() {
 	}
 	if d.audit != nil {
 		_ = d.audit.Close()
+	}
+	if d.projects != nil {
+		_ = d.projects.Close()
 	}
 }
 
@@ -864,6 +888,7 @@ func (d *DB) UpdateUserRoles(id int64, roles string) error {
 		models.RoleBasic: true, models.RoleTeamManager: true,
 		models.RoleTeamLeader: true, models.RoleStatusManager: true,
 		models.RoleActivityViewer: true, models.RoleFloorplanManager: true,
+		models.RoleProjectsAdmin: true, models.RoleProjectsViewer: true,
 		models.RoleGlobal: true,
 	}
 	for _, r := range strings.Split(roles, ",") {

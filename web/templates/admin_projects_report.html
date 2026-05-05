@@ -1,0 +1,129 @@
+{{define "content"}}
+{{with .Data}}
+{{$currentMonth := .CurrentMonth}}
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-bold text-gray-900 inline-flex items-center gap-2">
+            <svg class="h-6 w-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 19h16M6 15l4-4 3 3 5-6"/>
+                <circle cx="6" cy="15" r="1" fill="currentColor"/>
+                <circle cx="10" cy="11" r="1" fill="currentColor"/>
+                <circle cx="13" cy="14" r="1" fill="currentColor"/>
+                <circle cx="18" cy="8" r="1" fill="currentColor"/>
+            </svg>
+            {{index $.T "projects.report.title"}}
+        </h1>
+    </div>
+
+    <!-- Filters -->
+    <form method="GET" action="/admin/projects-report"
+          class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
+        <div class="flex flex-wrap gap-3 items-end">
+            <div class="flex-1 min-w-[180px]">
+                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "projects.report.filter_text"}}</label>
+                <input type="text" name="q" value="{{.FilterText}}" placeholder="{{index $.T "projects.report.filter_text"}}"
+                       oninput="clearTimeout(this._t); this._t = setTimeout(() => this.form.requestSubmit(), 350)"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "projects.report.filter_status"}}</label>
+                <select name="active" onchange="this.form.requestSubmit()" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+                    <option value="">{{index $.T "projects.report.all"}}</option>
+                    <option value="1" {{if eq .FilterActive "1"}}selected{{end}}>{{index $.T "projects.report.active"}}</option>
+                    <option value="0" {{if eq .FilterActive "0"}}selected{{end}}>{{index $.T "projects.report.inactive"}}</option>
+                </select>
+            </div>
+            {{if .Teams}}
+            <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "admin.projects.team"}}</label>
+                <select name="team" onchange="this.form.requestSubmit()" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+                    <option value="">{{index $.T "projects.report.all"}}</option>
+                    {{range .Teams}}
+                    <option value="{{.ID}}" {{if eq .ID $.Data.FilterTeam}}selected{{end}}>{{.Name}}</option>
+                    {{end}}
+                </select>
+            </div>
+            {{end}}
+            <a href="/admin/projects-report"
+               class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
+                {{index $.T "admin.reset"}}
+            </a>
+        </div>
+    </form>
+
+    {{if not .Rows}}
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 px-6 py-10 text-center text-gray-400">
+        {{index $.T "projects.report.no_data"}}
+    </div>
+    {{else}}
+    {{range $row := .Rows}}
+    <div class="bg-white rounded-xl shadow-md overflow-hidden mb-6">
+        <!-- Project header -->
+        <div class="px-5 py-3 bg-gray-50 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-3">
+                <span class="font-mono text-xs font-semibold text-gray-500 bg-gray-200 px-2 py-0.5 rounded">{{$row.Project.Code}}</span>
+                <span class="font-bold text-gray-900">{{$row.Project.Name}}</span>
+                {{if $row.Project.TeamName}}
+                <span class="text-xs text-gray-400">· {{$row.Project.TeamName}}</span>
+                {{end}}
+                {{if $row.Project.Active}}
+                <span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">{{index $.T "projects.report.active"}}</span>
+                {{else}}
+                <span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-medium">{{index $.T "projects.report.inactive"}}</span>
+                {{end}}
+            </div>
+            <div class="text-sm text-gray-500">
+                {{$row.Project.StartDate}} → {{$row.Project.EndDate}}
+            </div>
+        </div>
+
+        {{if not $row.UserRows}}
+        <div class="px-5 py-4 text-sm text-gray-400">{{index $.T "projects.report.no_entries"}}</div>
+        {{else}}
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="text-xs text-gray-500 uppercase tracking-wide">
+                    <tr>
+                        <th class="px-4 py-2 text-left">{{index $.T "projects.report.user"}}</th>
+                        {{range $mk := $.Data.MonthKeys}}
+                        <th class="px-4 py-2 text-right{{if eq $mk $currentMonth}} font-bold text-gray-700{{end}}">{{$mk}}</th>
+                        {{end}}
+                        <th class="px-4 py-2 text-right font-bold text-gray-600" title="{{index $.T "projects.report.total_past_title"}}">{{index $.T "projects.report.total_past"}}</th>
+                        <th class="px-4 py-2 text-right font-bold text-gray-800" title="{{index $.T "projects.report.total_todate_title"}}">{{index $.T "projects.report.total_todate"}}</th>
+                        <th class="px-4 py-2 text-right font-bold text-gray-900" title="{{index $.T "projects.report.total_all_title"}}">{{index $.T "projects.report.total_all"}}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range $urow := $row.UserRows}}
+                    <tr class="border-t border-gray-100 hover:bg-gray-50">
+                        <td class="px-4 py-2 text-gray-800">{{$urow.User.Name}}</td>
+                        {{range $mk := $.Data.MonthKeys}}
+                        <td class="px-4 py-2 text-right text-gray-600">{{fmtF (index $urow.MonthlyDays $mk)}}</td>
+                        {{end}}
+                        <td class="px-4 py-2 text-right text-gray-600 font-medium">{{fmtF $urow.TotalPastDays}}</td>
+                        <td class="px-4 py-2 text-right text-gray-800 font-semibold">{{fmtF $urow.TotalToDateDays}}</td>
+                        <td class="px-4 py-2 text-right text-gray-900 font-bold">{{fmtF $urow.TotalDays}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+                <tfoot class="border-t-2 border-gray-200 bg-gray-50 font-semibold text-gray-700">
+                    <tr>
+                        <td class="px-4 py-2">{{index $.T "projects.report.total"}}</td>
+                        {{range $mk := $.Data.MonthKeys}}
+                        <td class="px-4 py-2 text-right">{{fmtF (index $row.MonthTotals $mk)}}</td>
+                        {{end}}
+                        <td class="px-4 py-2 text-right text-gray-600 font-bold">{{fmtF $row.TotalPastDays}}</td>
+                        <td class="px-4 py-2 text-right text-gray-800 font-bold">{{fmtF $row.TotalToDateDays}}</td>
+                        <td class="px-4 py-2 text-right text-gray-900 font-bold">{{fmtF $row.TotalDays}}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        {{end}}
+    </div>
+    {{end}}
+    {{end}}
+</div>
+{{end}}
+{{end}}

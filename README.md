@@ -112,12 +112,14 @@ Roles are cumulative (stored as a comma-separated string per user). The `global`
 | Role | Access |
 |------|--------|
 | `basic` | Personal calendar (own presences only) |
-| `team_leader` | View calendar and activity report for own team |
-| `team_manager` | Team management + edit any user’s presences |
+| `team_leader` | View calendar and activity report for own team; view project reports for own teams |
+| `team_manager` | Team management + edit any user's presences |
 | `status_manager` | Create / edit / delete presence statuses |
 | `activity_viewer` | View Activity Report (billable days) by team |
 | `floorplan_manager` | Create / edit floor plans and seats |
-| `global` | Full access — includes user/role management and public holidays |
+| `projects_admin` | Create / edit / delete projects; view full project reports |
+| `projects_viewer` | View project time entries and reports |
+| `global` | Full access — includes user/role management, public holidays, and project administration |
 
 Roles are assigned from **👤 Users & Roles** (`/admin/users`), accessible to the `global` role only.
 
@@ -129,11 +131,14 @@ Roles are assigned from **👤 Users & Roles** (`/admin/users`), accessible to t
 |-----|---------------|-------------|
 | `/` | Any logged-in user | Personal monthly calendar |
 | `/floorplan` | Any logged-in user | Floor plan viewer and desk reservation |
+| `/projects` | Any logged-in user | Declare and track time on projects |
 | `/settings/tokens` | Any logged-in user | Manage Personal Access Tokens (API keys) |
 | `/admin/teams` | `team_manager` or `team_leader` | Manage teams and members |
 | `/admin/statuses` | `status_manager` | Manage presence statuses |
 | `/admin/activity` | `activity_viewer` or `team_leader` | Activity report by team and period |
 | `/admin/floorplans` | `floorplan_manager` | Manage floor plans and seats |
+| `/admin/projects` | `projects_admin` | Create and manage projects |
+| `/admin/projects-report` | `projects_admin`, `projects_viewer`, or `team_leader` | Project time tracking and reporting |
 | `/admin/holidays` | `global` | Manage public holidays |
 | `/admin/users` | `global` | Manage users, roles and passwords |
 | `/admin/users/{id}/logs` | `global` | Presence audit log for a user |
@@ -145,6 +150,7 @@ Roles are assigned from **👤 Users & Roles** (`/admin/users`), accessible to t
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DISABLE_FLOORPLANS` | `false` | Set to `true` to disable the floor plan module (page, seat reservation, admin) |
+| `DISABLE_PROJECTS` | `false` | Set to `true` to disable the project management module (user time entry, admin, reporting) |
 | `DISABLE_API` | `false` | Set to `true` to disable the REST API entirely (PAT management, Bearer auth, `/api/docs`) |
 
 ---
@@ -218,6 +224,44 @@ The floor plan feature allows administrators to set up interactive office maps s
 - A seat can only be booked when the user has an **on-site** presence declared for that date.
 - Days without an on-site presence are silently skipped during bulk booking.
 - Each seat allows one reservation per `(seat, date, half)` combination.
+
+---
+
+## Project Management & Time Tracking
+
+The project management feature allows organizations to track employee time allocation across projects, with automatic billable days enforcement and role-based reporting.
+
+### Admin setup (`projects_admin` role required)
+
+1. Go to **📂 Projects (admin)** in the navigation.
+2. Create projects with:
+   - **Name**: Project title
+   - **Code**: Short identifier (e.g. `PROJ-001`)
+   - **Team**: Assign the project to a team (optional)
+   - **Active**: Enable/disable the project
+   - **Dates**: Start and end dates for the project timeline
+3. Projects appear on the user time entry page only after creation.
+
+### User workflow
+
+- Navigate to **📂 Projects** to declare time:
+  - View all active projects for the current month.
+  - Enter decimal days (e.g. `0.5` for half-day, `1` for full day) for each project.
+  - The app enforces a **billable days cap**: the total time declared cannot exceed billable days for the month (based on recorded presences).
+  - A progress bar shows declared vs. available billable days.
+  - **Save** each project entry individually.
+- Navigate to **📂 Projects (report)** (`projects_admin`, `projects_viewer`, or `team_leader`) to review:
+  - All project time entries per user, aggregated by month.
+  - **Filters**: text search (project name/code), active/inactive, team selection.
+  - **Team leaders** see only projects in their assigned teams.
+
+### Rules
+
+- Each user can declare up to the total **billable days** in a given month (calculated from presences with billable status).
+- Only **active** projects are visible on the user time entry page.
+- Projects outside the declared time entry period are hidden.
+- Time entries are stored as decimal values (supporting half-days, quarter-days, etc.).
+- Team leaders can view reports but only for their teams.
 
 ---
 

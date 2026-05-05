@@ -313,7 +313,7 @@ List all users.
 #### `PUT /api/users/{id}/roles`
 Update roles for a user.
 
-Valid roles: `basic`, `team_manager`, `team_leader`, `status_manager`, `activity_viewer`, `floorplan_manager`, `global`.
+Valid roles: `basic`, `team_manager`, `team_leader`, `status_manager`, `activity_viewer`, `floorplan_manager`, `projects_admin`, `projects_viewer`, `global`.
 
 **Request** — roles as a JSON array:
 ```json
@@ -385,6 +385,204 @@ Enable or disable a user account. Cannot be applied to your own account.
 
 #### `DELETE /admin/users/{id}`
 Permanently delete a user account. Cannot delete your own account.
+
+**Response 200**
+```json
+{ "status": "ok" }
+```
+
+---
+
+### Projects _(disabled if `DISABLE_PROJECTS=true`)_
+
+#### `GET /api/projects?year=&month=`
+Returns the current user's project declaration context for a month.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `year`  | int | Optional (default: current year) |
+| `month` | int | Optional (default: current month, 1-12) |
+
+**Response 200**
+```json
+{
+  "year": 2026,
+  "month": 5,
+  "projects": [
+    {
+      "id": 1,
+      "name": "Migration ERP",
+      "code": "ERP-01",
+      "team_id": 2,
+      "team_name": "Engineering",
+      "active": true,
+      "start_date": "2026-01-01",
+      "end_date": "2026-12-31",
+      "created_at": "2026-04-14T10:00:00Z"
+    }
+  ],
+  "entries": [
+    { "id": 10, "project_id": 1, "user_id": 5, "year": 2026, "month": 5, "days": 3.5 }
+  ],
+  "entry_map": { "1": 3.5 },
+  "billable_days": 12.5,
+  "total_declared": 3.5
+}
+```
+
+#### `GET /api/project-time?year=&month=`
+Returns the current user's project entries and month totals.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `year`  | int | Optional (default: current year) |
+| `month` | int | Optional (default: current month, 1-12) |
+
+**Response 200**
+```json
+{
+  "year": 2026,
+  "month": 5,
+  "entries": [
+    { "id": 10, "project_id": 1, "user_id": 5, "year": 2026, "month": 5, "days": 3.5 }
+  ],
+  "billable_days": 12.5,
+  "total_declared": 3.5
+}
+```
+
+#### `POST /api/project-time`
+Create or update a project time entry for the current user and month.
+If `days <= 0`, the entry is removed.
+The backend enforces the billable cap: total declared days cannot exceed billable days.
+
+**Request**
+```json
+{ "project_id": 1, "year": 2026, "month": 5, "days": 3.5 }
+```
+
+**Response 200**
+```json
+{ "status": "ok", "total_declared": 3.5, "billable": 12.5 }
+```
+
+**Error 422** - exceeds billable days cap
+
+#### `GET /api/projects-report?q=&active=&team=`
+Returns the project report payload (same scope as `/admin/projects-report`).
+Requires `projects_admin`, `projects_viewer`, or `team_leader`.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `q`      | string | Optional text filter on project code/name |
+| `active` | string | Optional: `1`, `0`, or empty |
+| `team`   | int    | Optional team filter |
+
+For `team_leader`, results are automatically restricted to their teams.
+
+**Response 200**
+```json
+{
+  "rows": [
+    {
+      "project": {
+        "id": 1,
+        "name": "Migration ERP",
+        "code": "ERP-01",
+        "team_id": 2,
+        "team_name": "Engineering",
+        "active": true,
+        "start_date": "2026-01-01",
+        "end_date": "2026-12-31"
+      },
+      "user_rows": [
+        {
+          "user": { "id": 5, "name": "Alice Dupont" },
+          "monthly_days": { "2026-03": 2, "2026-04": 3, "2026-05": 4 },
+          "total_days": 9
+        }
+      ],
+      "month_totals": { "2026-03": 2, "2026-04": 3, "2026-05": 4 },
+      "total_days": 9
+    }
+  ],
+  "month_keys": ["2026-03", "2026-04", "2026-05"],
+  "teams": [{ "id": 2, "name": "Engineering" }],
+  "filter_text": "",
+  "filter_active": "1",
+  "filter_team": 0
+}
+```
+
+---
+
+### Projects Admin _(requires `projects_admin` role)_
+
+#### `GET /api/admin/projects?q=&active=&team=`
+List projects and teams for admin management with optional filters.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `q`      | string | Optional text filter on project code/name |
+| `active` | string | Optional: `1`, `0`, or empty |
+| `team`   | int    | Optional team filter |
+
+**Response 200**
+```json
+{
+  "projects": [
+    {
+      "id": 1,
+      "name": "Migration ERP",
+      "code": "ERP-01",
+      "team_id": 2,
+      "team_name": "Engineering",
+      "active": true,
+      "start_date": "2026-01-01",
+      "end_date": "2026-12-31"
+    }
+  ],
+  "teams": [{ "id": 2, "name": "Engineering" }],
+  "filter_text": "",
+  "filter_active": "1",
+  "filter_team": 0
+}
+```
+
+#### `POST /api/admin/projects`
+Create a project.
+
+**Request**
+```json
+{
+  "name": "Migration ERP",
+  "code": "ERP-01",
+  "team_id": 2,
+  "active": true,
+  "start_date": "2026-01-01",
+  "end_date": "2026-12-31"
+}
+```
+
+**Response 200**
+```json
+{ "id": 1, "status": "ok" }
+```
+
+#### `PUT /api/admin/projects/{id}`
+Update a project.
+
+**Request**
+```json
+{
+  "name": "Migration ERP v2",
+  "code": "ERP-01",
+  "team_id": 2,
+  "active": false,
+  "start_date": "2026-01-01",
+  "end_date": "2026-12-31"
+}
+```
 
 **Response 200**
 ```json
