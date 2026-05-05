@@ -44,6 +44,7 @@
 </head>
 <body class="h-full bg-gray-50 font-sans">
     {{if .User}}
+    {{$hasAdminNav := or (and (not .DisableFloorplans) (.User.HasRole "floorplan_manager")) (or (.User.HasRole "team_manager") (.User.HasRole "team_leader")) (.User.HasRole "global") (.User.HasRole "status_manager") (and (not .DisableProjects) (.User.HasRole "projects_admin"))}}
     <!-- Navigation -->
     <nav class="bg-gradient-to-r from-primary to-secondary shadow-lg" x-data="{ mobileMenu: false }">
         <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
@@ -72,9 +73,10 @@
                         {{index .T "nav.floorplans"}}
                     </a>
                     {{end}}
-                    {{if or (.User.HasRole "team_manager") (.User.HasRole "team_leader")}}
-                    <a href="/admin/teams" class="text-white/80 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition {{if eq .Page "admin_teams"}}bg-white/20 text-white{{end}}">
-                        {{index .T "nav.teams"}}
+                    {{if not .DisableProjects}}
+                    <a href="/projects" class="inline-flex items-center gap-1.5 text-white/80 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition {{if eq .Page "projects"}}bg-white/20 text-white{{end}}">
+                        <span aria-hidden="true">📂</span>
+                        {{index .T "nav.projects"}}
                     </a>
                     {{end}}
                     {{if or (.User.HasRole "activity_viewer") (.User.HasRole "team_leader")}}
@@ -82,25 +84,83 @@
                         {{index .T "nav.activity"}}
                     </a>
                     {{end}}
-                    {{if .User.HasRole "status_manager"}}
-                    <a href="/admin/statuses" class="text-white/80 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition {{if eq .Page "admin_statuses"}}bg-white/20 text-white{{end}}">
-                        {{index .T "nav.statuses"}}
+                    {{if and (not .DisableProjects) (or (.User.HasRole "projects_admin") (.User.HasRole "projects_viewer") (.User.HasRole "team_leader"))}}
+                    <a href="/admin/projects-report" class="inline-flex items-center gap-1.5 text-white/80 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition {{if eq .Page "admin_projects_report"}}bg-white/20 text-white{{end}}">
+                        <svg class="h-4 w-4 opacity-90" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 19h16M6 15l4-4 3 3 5-6"/>
+                            <circle cx="6" cy="15" r="1" fill="currentColor"/>
+                            <circle cx="10" cy="11" r="1" fill="currentColor"/>
+                            <circle cx="13" cy="14" r="1" fill="currentColor"/>
+                            <circle cx="18" cy="8" r="1" fill="currentColor"/>
+                        </svg>
+                        {{index .T "nav.projects_report"}}
                     </a>
                     {{end}}
-                    {{if .User.HasRole "global"}}
-                    <a href="/admin/holidays" class="text-white/80 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition {{if eq .Page "admin_holidays"}}bg-white/20 text-white{{end}}">
-                        {{index .T "nav.holidays"}}
-                    </a>
-                    {{end}}
-                    {{if and (not .DisableFloorplans) (.User.HasRole "floorplan_manager")}}
-                    <a href="/admin/floorplans" class="text-white/80 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition {{if eq .Page "admin_floorplans"}}bg-white/20 text-white{{end}}">
-                        {{index .T "nav.floorplans_admin"}}
-                    </a>
-                    {{end}}
-                    {{if .User.HasRole "global"}}
-                    <a href="/admin/users" class="text-white/80 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition {{if eq .Page "admin_users"}}bg-white/20 text-white{{end}}">
-                        {{index .T "nav.users_roles"}}
-                    </a>
+                    {{if $hasAdminNav}}
+                    <div class="relative border-l border-white/30 pl-4"
+                         x-data="{ adminMenuOpen: false }"
+                         @click.outside="adminMenuOpen = false">
+                        <button @click="adminMenuOpen = !adminMenuOpen"
+                                class="flex items-center gap-2 text-white/80 hover:text-white transition px-2 py-1 rounded-md {{if or (eq .Page "admin_floorplans") (eq .Page "admin_teams") (eq .Page "admin_holidays") (eq .Page "admin_statuses") (eq .Page "admin_projects") (eq .Page "admin_users") (eq .Page "admin_user_logs")}}bg-white/20 text-white{{end}}">
+                            <span class="text-sm font-medium">Admin</span>
+                            <svg class="h-3.5 w-3.5 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+                        <div x-show="adminMenuOpen"
+                             x-transition:enter="transition ease-out duration-150"
+                             x-transition:enter-start="opacity-0 -translate-y-1"
+                             x-transition:enter-end="opacity-100 translate-y-0"
+                             x-transition:leave="transition ease-in duration-100"
+                             x-transition:leave-start="opacity-100"
+                             x-transition:leave-end="opacity-0"
+                             class="absolute right-0 top-full mt-2 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 min-w-[220px] z-50">
+                            {{if and (not .DisableFloorplans) (.User.HasRole "floorplan_manager")}}
+                            <a href="/admin/floorplans" class="flex items-center gap-2.5 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition {{if eq .Page "admin_floorplans"}}font-semibold{{end}}">
+                                {{index .T "nav.floorplans_admin"}}
+                            </a>
+                            {{end}}
+                            {{if and (not .DisableProjects) (.User.HasRole "projects_admin")}}
+                            <a href="/admin/projects" class="flex items-center gap-2.5 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition {{if eq .Page "admin_projects"}}font-semibold{{end}}">
+                                <svg class="h-4 w-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 19h16M6 15l4-4 3 3 5-6"/>
+                                    <circle cx="6" cy="15" r="1" fill="currentColor"/>
+                                    <circle cx="10" cy="11" r="1" fill="currentColor"/>
+                                    <circle cx="13" cy="14" r="1" fill="currentColor"/>
+                                    <circle cx="18" cy="8" r="1" fill="currentColor"/>
+                                </svg>
+                                {{index .T "nav.projects_admin"}}
+                            </a>
+                            {{end}}
+                            {{if or (.User.HasRole "team_manager") (.User.HasRole "team_leader")}}
+                            <a href="/admin/teams" class="flex items-center gap-2.5 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition {{if eq .Page "admin_teams"}}font-semibold{{end}}">
+                                {{index .T "nav.teams"}}
+                            </a>
+                            {{end}}
+                            {{if .User.HasRole "global"}}
+                            <a href="/admin/holidays" class="flex items-center gap-2.5 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition {{if eq .Page "admin_holidays"}}font-semibold{{end}}">
+                                {{index .T "nav.holidays"}}
+                            </a>
+                            {{end}}
+                            {{if .User.HasRole "status_manager"}}
+                            <a href="/admin/statuses" class="flex items-center gap-2.5 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition {{if eq .Page "admin_statuses"}}font-semibold{{end}}">
+                                {{index .T "nav.statuses"}}
+                            </a>
+                            {{end}}
+                            {{if .User.HasRole "global"}}
+                            <a href="/admin/users" class="flex items-center gap-2.5 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition {{if or (eq .Page "admin_users") (eq .Page "admin_user_logs")}}font-semibold{{end}}">
+                                {{index .T "nav.users_roles"}}
+                            </a>
+                            {{end}}
+                            {{if and (.User.HasRole "global") (not .RealAdmin)}}
+                            <div class="border-t border-gray-100 my-1"></div>
+                            <a href="/impersonate"
+                               class="flex items-center gap-2.5 px-4 py-2 text-sm text-amber-600 hover:bg-amber-50 transition {{if eq .Page "impersonate"}}font-semibold{{end}}">
+                                {{index .T "nav.impersonate"}}
+                            </a>
+                            {{end}}
+                        </div>
+                    </div>
                     {{end}}
                     <!-- User menu dropdown -->
                     <div class="relative border-l border-white/30 pl-4"
@@ -138,13 +198,6 @@
                             <a href="/settings/tokens"
                                class="flex items-center gap-2.5 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition">
                                 {{index .T "nav.api_tokens"}}
-                            </a>
-                            {{end}}
-                            {{if and (.User.HasRole "global") (not .RealAdmin)}}
-                            <div class="border-t border-gray-100 my-1"></div>
-                            <a href="/impersonate"
-                               class="flex items-center gap-2.5 px-4 py-2 text-sm text-amber-600 hover:bg-amber-50 transition">
-                                {{index .T "nav.impersonate"}}
                             </a>
                             {{end}}
                             <!-- Dark mode toggle -->
@@ -203,23 +256,58 @@
                 {{if not .DisableFloorplans}}
                 <a href="/floorplan" class="block text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">{{index .T "nav.floorplans"}}</a>
                 {{end}}
-                {{if or (.User.HasRole "team_manager") (.User.HasRole "team_leader")}}
-                <a href="/admin/teams" class="block text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">{{index .T "nav.teams"}}</a>
+                {{if not .DisableProjects}}
+                <a href="/projects" class="block text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">{{index .T "nav.projects"}}</a>
                 {{end}}
                 {{if or (.User.HasRole "activity_viewer") (.User.HasRole "team_leader")}}
                 <a href="/admin/activity" class="block text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">{{index .T "nav.activity"}}</a>
                 {{end}}
-                {{if .User.HasRole "status_manager"}}
-                <a href="/admin/statuses" class="block text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">{{index .T "nav.statuses"}}</a>
+                {{if and (not .DisableProjects) (or (.User.HasRole "projects_admin") (.User.HasRole "projects_viewer") (.User.HasRole "team_leader"))}}
+                <a href="/admin/projects-report" class="inline-flex items-center gap-1.5 text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">
+                    <svg class="h-4 w-4 opacity-90" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 19h16M6 15l4-4 3 3 5-6"/>
+                        <circle cx="6" cy="15" r="1" fill="currentColor"/>
+                        <circle cx="10" cy="11" r="1" fill="currentColor"/>
+                        <circle cx="13" cy="14" r="1" fill="currentColor"/>
+                        <circle cx="18" cy="8" r="1" fill="currentColor"/>
+                    </svg>
+                    {{index .T "nav.projects_report"}}
+                </a>
                 {{end}}
-                {{if .User.HasRole "global"}}
-                <a href="/admin/holidays" class="block text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">{{index .T "nav.holidays"}}</a>
-                {{end}}
-                {{if and (not .DisableFloorplans) (.User.HasRole "floorplan_manager")}}
-                <a href="/admin/floorplans" class="block text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">{{index .T "nav.floorplans_admin"}}</a>
-                {{end}}
-                {{if .User.HasRole "global"}}
-                <a href="/admin/users" class="block text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">{{index .T "nav.users_roles"}}</a>
+                {{if $hasAdminNav}}
+                <div class="border-t border-white/20 pt-2 mt-2">
+                    <p class="px-3 text-xs font-semibold text-white/50 uppercase tracking-wide">Admin</p>
+                    {{if and (not .DisableFloorplans) (.User.HasRole "floorplan_manager")}}
+                    <a href="/admin/floorplans" class="block text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">{{index .T "nav.floorplans_admin"}}</a>
+                    {{end}}
+                    {{if and (not .DisableProjects) (.User.HasRole "projects_admin")}}
+                    <a href="/admin/projects" class="inline-flex items-center gap-1.5 text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">
+                        <svg class="h-4 w-4 opacity-90" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 19h16M6 15l4-4 3 3 5-6"/>
+                            <circle cx="6" cy="15" r="1" fill="currentColor"/>
+                            <circle cx="10" cy="11" r="1" fill="currentColor"/>
+                            <circle cx="13" cy="14" r="1" fill="currentColor"/>
+                            <circle cx="18" cy="8" r="1" fill="currentColor"/>
+                        </svg>
+                        {{index .T "nav.projects_admin"}}
+                    </a>
+                    {{end}}
+                    {{if or (.User.HasRole "team_manager") (.User.HasRole "team_leader")}}
+                    <a href="/admin/teams" class="block text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">{{index .T "nav.teams"}}</a>
+                    {{end}}
+                    {{if .User.HasRole "global"}}
+                    <a href="/admin/holidays" class="block text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">{{index .T "nav.holidays"}}</a>
+                    {{end}}
+                    {{if .User.HasRole "status_manager"}}
+                    <a href="/admin/statuses" class="block text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">{{index .T "nav.statuses"}}</a>
+                    {{end}}
+                    {{if .User.HasRole "global"}}
+                    <a href="/admin/users" class="block text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">{{index .T "nav.users_roles"}}</a>
+                    {{end}}
+                    {{if and (.User.HasRole "global") (not .RealAdmin)}}
+                    <a href="/impersonate" class="block text-amber-400 hover:text-amber-200 px-3 py-2 rounded-md text-sm">{{index .T "nav.impersonate"}}</a>
+                    {{end}}
+                </div>
                 {{end}}
                 <div class="border-t border-white/20 pt-2 mt-2">
                     <span class="block text-white/60 text-sm px-3">{{.User.Name}}</span>
@@ -229,9 +317,6 @@
                     <a href="/settings/my-logs" class="block text-white/60 hover:text-white px-3 py-2 text-sm">{{index .T "nav.my_logs"}}</a>
                     {{if and (not .DisableAPI) (.User.CanUseTokens)}}
                     <a href="/settings/tokens" class="block text-white/60 hover:text-white px-3 py-2 text-sm">{{index .T "nav.api_tokens"}}</a>
-                    {{end}}
-                    {{if and (.User.HasRole "global") (not .RealAdmin)}}
-                    <a href="/impersonate" class="block text-amber-400 hover:text-amber-200 px-3 py-2 text-sm">{{index .T "nav.impersonate"}}</a>
                     {{end}}
                     <!-- Dark mode toggle -->
                     <div x-data="darkModeToggle()" class="px-3 py-2">

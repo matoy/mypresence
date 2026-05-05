@@ -57,6 +57,20 @@ var (
 	}, []string{"action"}) // action: set|clear
 )
 
+// ─── Project operations ───────────────────────────────────────────────────────
+
+var (
+	ProjectOpsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "mypresence_project_operations_total",
+		Help: "Total project operations by action and result.",
+	}, []string{"action", "result"}) // action: set_time|create|update|list|report  result: success|failure
+
+	ProjectDeclaredDaysTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "mypresence_project_declared_days_total",
+		Help: "Cumulative number of project days declared through set_time operations.",
+	})
+)
+
 // ─── Health gauges (collected on each scrape via callback) ───────────────────
 
 // HealthStats holds point-in-time health data derived from the /health check.
@@ -73,10 +87,10 @@ func RegisterHealthCollector(fn func() HealthStats) {
 }
 
 type healthCollector struct {
-	fn          func() HealthStats
-	descUp      *prometheus.Desc
-	descUptime  *prometheus.Desc
-	descDBUp    *prometheus.Desc
+	fn         func() HealthStats
+	descUp     *prometheus.Desc
+	descUptime *prometheus.Desc
+	descDBUp   *prometheus.Desc
 }
 
 func newHealthCollector(fn func() HealthStats) *healthCollector {
@@ -112,6 +126,8 @@ type DBStats struct {
 	Presences      float64
 	Floorplans     float64
 	Seats          float64
+	Projects       float64
+	ProjectEntries float64
 }
 
 // RegisterDBCollector constructs and registers a custom Prometheus collector
@@ -130,6 +146,8 @@ type dbCollector struct {
 	descPresences  *prometheus.Desc
 	descFloorplans *prometheus.Desc
 	descSeats      *prometheus.Desc
+	descProjects   *prometheus.Desc
+	descProjEntr   *prometheus.Desc
 }
 
 func newDBCollector(fn func() DBStats) *dbCollector {
@@ -142,6 +160,8 @@ func newDBCollector(fn func() DBStats) *dbCollector {
 		descPresences:  prometheus.NewDesc("mypresence_db_presences_total", "Total presence records stored.", nil, nil),
 		descFloorplans: prometheus.NewDesc("mypresence_db_floorplans_total", "Total floor plans.", nil, nil),
 		descSeats:      prometheus.NewDesc("mypresence_db_seats_total", "Total seats defined across all floor plans.", nil, nil),
+		descProjects:   prometheus.NewDesc("mypresence_db_projects_total", "Total projects.", nil, nil),
+		descProjEntr:   prometheus.NewDesc("mypresence_db_project_time_entries_total", "Total project time entries stored.", nil, nil),
 	}
 }
 
@@ -153,6 +173,8 @@ func (c *dbCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.descPresences
 	ch <- c.descFloorplans
 	ch <- c.descSeats
+	ch <- c.descProjects
+	ch <- c.descProjEntr
 }
 
 func (c *dbCollector) Collect(ch chan<- prometheus.Metric) {
@@ -164,6 +186,8 @@ func (c *dbCollector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(c.descPresences, prometheus.GaugeValue, s.Presences)
 	ch <- prometheus.MustNewConstMetric(c.descFloorplans, prometheus.GaugeValue, s.Floorplans)
 	ch <- prometheus.MustNewConstMetric(c.descSeats, prometheus.GaugeValue, s.Seats)
+	ch <- prometheus.MustNewConstMetric(c.descProjects, prometheus.GaugeValue, s.Projects)
+	ch <- prometheus.MustNewConstMetric(c.descProjEntr, prometheus.GaugeValue, s.ProjectEntries)
 }
 
 // ─── HTTP instrumentation middleware ─────────────────────────────────────────

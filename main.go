@@ -127,13 +127,14 @@ func main() {
 			return total
 		},
 		// Float64 variants for half-day support
-		"getCountF":    tmplGetCountF,
-		"getStrCountF": tmplGetStrCountF,
-		"sumMapF":      tmplSumMapF,
-		"fmtF":         tmplFmtF,
-		"percentF":     tmplPercentF,
-		"i2f":          tmplI2F,
-		"subF":         tmplSubF,
+		"getCountF":      tmplGetCountF,
+		"getStrCountF":   tmplGetStrCountF,
+		"sumMapF":        tmplSumMapF,
+		"fmtF":           tmplFmtF,
+		"percentF":       tmplPercentF,
+		"i2f":            tmplI2F,
+		"subF":           tmplSubF,
+		"activityRocket": tmplActivitySummaryRocket,
 		// Presence half-day helpers for templates
 		"presenceHalf":    tmplPresenceHalf,
 		"hasDatePresence": tmplHasDatePresence,
@@ -156,7 +157,7 @@ func main() {
 	}
 
 	templates := make(map[string]*template.Template)
-	pages := []string{"login", "calendar", "admin_teams", "admin_statuses", "admin_activity", "admin_holidays", "admin_users", "admin_user_new", "admin_user_logs", "floorplan", "admin_floorplans", "pat", "settings_change_password", "forgot_password", "reset_password", "impersonate"}
+	pages := []string{"login", "calendar", "admin_teams", "admin_statuses", "admin_activity", "admin_holidays", "admin_users", "admin_user_logs", "floorplan", "admin_floorplans", "pat", "settings_change_password", "forgot_password", "reset_password", "impersonate", "projects", "admin_projects", "admin_projects_report"}
 	for _, page := range pages {
 		t, err := template.New("").Funcs(funcMap).ParseFS(
 			templateFS,
@@ -215,12 +216,11 @@ func main() {
 			HideFooter:        cfg.HideFooter,
 			AppVersion:        config.Version,
 			DisableFloorplans: cfg.DisableFloorplans,
-			DisableAPI:        cfg.DisableAPI,
-			T:                 i18n.T(lang),
-			Lang:              lang,
-			SupportedLangs:    i18n.Supported,
-			CSRFToken:         csrfToken,
-			RealAdmin:         realAdmin,
+			DisableAPI:        cfg.DisableAPI, DisableProjects: cfg.DisableProjects, T: i18n.T(lang),
+			Lang:           lang,
+			SupportedLangs: i18n.Supported,
+			CSRFToken:      csrfToken,
+			RealAdmin:      realAdmin,
 		}
 		// Add logo flag to config map
 		configMap := pd.Config.(map[string]string)
@@ -249,7 +249,7 @@ func main() {
 	}
 	calHandler := &handlers.CalendarHandler{DB: database, Render: renderPage, DisableFloorplans: cfg.DisableFloorplans}
 	adminHandler := &handlers.AdminHandler{DB: database, Render: renderPage}
-	activityHandler := &handlers.ActivityHandler{DB: database, Render: renderPage}
+	activityHandler := &handlers.ActivityHandler{DB: database, Render: renderPage, DisableProjects: cfg.DisableProjects}
 	holidaysHandler := &handlers.HolidaysHandler{DB: database, Render: renderPage}
 	usersAdminHandler := &handlers.UsersAdminHandler{DB: database, Render: renderPage}
 	floorplanHandler := &handlers.FloorplanHandler{DB: database, DataDir: cfg.DataDir, Render: renderPage}
@@ -258,6 +258,10 @@ func main() {
 	var patHandler *handlers.PATHandler
 	if !cfg.DisableAPI {
 		patHandler = &handlers.PATHandler{DB: database, Render: renderPage}
+	}
+	var projectsHandler *handlers.ProjectsHandler
+	if !cfg.DisableProjects {
+		projectsHandler = &handlers.ProjectsHandler{DB: database, Render: renderPage}
 	}
 
 	// Initialize SAML if configured
@@ -279,6 +283,8 @@ func main() {
 			Presences:      float64(c.Presences),
 			Floorplans:     float64(c.Floorplans),
 			Seats:          float64(c.Seats),
+			Projects:       float64(c.Projects),
+			ProjectEntries: float64(c.ProjectEntries),
 		}
 	})
 
@@ -484,7 +490,6 @@ func main() {
 
 	usersMux := http.NewServeMux()
 	usersMux.HandleFunc("GET /admin/users", usersAdminHandler.UsersPage)
-	usersMux.HandleFunc("GET /admin/users/new", usersAdminHandler.NewUserPage)
 	usersMux.HandleFunc("POST /admin/users", usersAdminHandler.CreateUser)
 	usersMux.HandleFunc("GET /admin/users/{id}/logs", usersAdminHandler.UserLogsPage)
 	usersMux.HandleFunc("PUT /admin/users/{id}", usersAdminHandler.UpdateUser)
@@ -530,6 +535,36 @@ func main() {
 		mux.Handle("/admin/seats/", middleware.Auth(database, middleware.RequireRole(models.RoleFloorplanManager)(fpAdminMux)))
 		mux.Handle("/api/admin/", middleware.Auth(database, middleware.RequireRole(models.RoleFloorplanManager)(fpAdminMux)))
 	}
+
+	// Projects feature
+	if !cfg.DisableProjects {
+		// User time-declaration page (all authenticated users)
+		authMux.HandleFunc("GET /projects", projectsHandler.ProjectsPage)
+		authMux.HandleFunc("GET /api/projects", projectsHandler.ProjectsAPI)
+		authMux.HandleFunc("GET /api/project-time", projectsHandler.ProjectTimeAPI)
+		authMux.HandleFunc("POST /api/project-time", projectsHandler.SetProjectTime)
+
+		// Projects admin (create / edit projects)
+		projAdminMux := http.NewServeMux()
+		projAdminMux.HandleFunc("GET /admin/projects", projectsHandler.AdminProjectsPage)
+		projAdminMux.HandleFunc("POST /admin/projects", projectsHandler.CreateProject)
+		projAdminMux.HandleFunc("PUT /admin/projects/{id}", projectsHandler.UpdateProject)
+		projAdminMux.HandleFunc("GET /api/admin/projects", projectsHandler.AdminProjectsAPI)
+		projAdminMux.HandleFunc("POST /api/admin/projects", projectsHandler.CreateProject)
+		projAdminMux.HandleFunc("PUT /api/admin/projects/{id}", projectsHandler.UpdateProject)
+		mux.Handle("/admin/projects", middleware.Auth(database, middleware.RequireRole(models.RoleProjectsAdmin)(projAdminMux)))
+		mux.Handle("/admin/projects/", middleware.Auth(database, middleware.RequireRole(models.RoleProjectsAdmin)(projAdminMux)))
+		mux.Handle("/api/admin/projects", middleware.Auth(database, middleware.RequireRole(models.RoleProjectsAdmin)(projAdminMux)))
+		mux.Handle("/api/admin/projects/", middleware.Auth(database, middleware.RequireRole(models.RoleProjectsAdmin)(projAdminMux)))
+
+		// Projects report (projects_admin, projects_viewer, team_leader)
+		projReportMux := http.NewServeMux()
+		projReportMux.HandleFunc("GET /admin/projects-report", projectsHandler.ProjectsReportPage)
+		projReportMux.HandleFunc("GET /api/projects-report", projectsHandler.ProjectsReportAPI)
+		mux.Handle("/admin/projects-report", middleware.Auth(database, middleware.RequireRole(models.RoleProjectsAdmin, models.RoleProjectsViewer, models.RoleTeamLeader)(projReportMux)))
+		mux.Handle("/api/projects-report", middleware.Auth(database, middleware.RequireRole(models.RoleProjectsAdmin, models.RoleProjectsViewer, models.RoleTeamLeader)(projReportMux)))
+	}
+
 	mux.Handle("/", middleware.AuthWithOptions(database, !cfg.DisableAPI, authMux))
 
 	// Start server

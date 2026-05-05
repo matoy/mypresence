@@ -85,8 +85,7 @@ func TestResponseWriter_CapturesStatusCode(t *testing.T) {
 }
 
 func TestResponseWriter_DefaultStatusOK(t *testing.T) {
-	rec := httptest.NewRecorder()
-	rw := &responseWriter{ResponseWriter: rec, status: http.StatusOK}
+	rw := &responseWriter{status: http.StatusOK}
 	// Never called WriteHeader — default should remain 200
 	if rw.status != http.StatusOK {
 		t.Errorf("default status should be 200, got %d", rw.status)

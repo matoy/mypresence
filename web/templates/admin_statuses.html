@@ -1,46 +1,46 @@
 {{define "content"}}
 {{with .Data}}
-<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8" x-data="statusAdmin()">
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8" x-data="statusAdmin({{json .Statuses}})">
     <div class="flex items-center justify-between mb-6">
         <h1 class="text-2xl font-bold text-gray-900">{{index $.T "statuses.title"}}</h1>
-    </div>
-
-    <!-- Create Status Form -->
-    <div class="bg-white rounded-xl shadow-md p-6 mb-6">
-        <h2 class="text-lg font-semibold text-gray-800 mb-3">{{index $.T "statuses.add"}}</h2>
-        <div class="flex flex-wrap gap-3 items-end">
-            <div class="flex-1 min-w-[200px]">
-                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "admin.name"}}</label>
-                <input type="text" x-model="newName" placeholder="{{index $.T "statuses.name_placeholder"}}"
-                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50"
-                       @keydown.enter="createStatus()">
-            </div>
-            <div class="w-24">
-                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "admin.color"}}</label>
-                <input type="color" x-model="newColor"
-                       class="w-full h-10 rounded-lg border border-gray-300 cursor-pointer">
-            </div>
-            <div class="w-20">
-                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "admin.order"}}</label>
-                <input type="number" x-model.number="newOrder"
-                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50">
-            </div>
-            <div class="flex items-center gap-2 py-2">
-                <input type="checkbox" x-model="newBillable" id="billable"
-                       class="h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary">
-                <label for="billable" class="text-sm font-medium text-gray-700">{{index $.T "statuses.billable"}}</label>
-            </div>
-            <div class="flex items-center gap-2 py-2">
-                <input type="checkbox" x-model="newOnSite" id="on_site"
-                       class="h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary">
-                <label for="on_site" class="text-sm font-medium text-gray-700">{{index $.T "statuses.on_site"}}</label>
-            </div>
-            <button @click="createStatus()"
-                    class="px-6 py-2 bg-primary text-white rounded-lg font-medium hover:opacity-90 transition">
-                {{index $.T "admin.add"}}
+        <div class="flex items-center gap-3">
+            <span class="text-sm text-gray-400" x-text="filteredCount + ' / ' + totalCount"></span>
+            <button @click="openCreateModal()"
+                    class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
+                + {{index $.T "statuses.add"}}
             </button>
         </div>
-        <p x-show="createError" x-text="createError" class="mt-2 text-sm text-red-600"></p>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
+        <div class="flex flex-wrap gap-3 items-end">
+            <div class="flex-1 min-w-[200px]">
+                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "admin.search"}}</label>
+                <input type="text" x-model="filterText" placeholder="{{index $.T "statuses.name_placeholder"}}"
+                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "statuses.billable"}}</label>
+                <select x-model="filterBillable" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+                    <option value="all">{{index $.T "admin.all"}}</option>
+                    <option value="1">{{index $.T "admin.yes"}}</option>
+                    <option value="0">{{index $.T "admin.no"}}</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "statuses.on_site"}}</label>
+                <select x-model="filterOnSite" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+                    <option value="all">{{index $.T "admin.all"}}</option>
+                    <option value="1">{{index $.T "admin.yes"}}</option>
+                    <option value="0">{{index $.T "admin.no"}}</option>
+                </select>
+            </div>
+            <button @click="resetFilters()"
+                    class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
+                {{index $.T "admin.reset"}}
+            </button>
+        </div>
     </div>
 
     <!-- Statuses List -->
@@ -59,7 +59,9 @@
             <tbody class="divide-y divide-gray-100">
                 {{range .Statuses}}
                 <tr class="hover:bg-gray-50 transition"
-                    x-data="{ editing: false, editName: '{{.Name}}', editColor: '{{.Color}}', editBillable: {{.Billable}}, editOnSite: {{.OnSite}}, editOrder: {{.SortOrder}} }">
+                    x-show="matchesStatus({{json .Name}}, {{.Billable}}, {{.OnSite}})"
+                    x-cloak
+                    x-data="{ editing: false, editName: {{json .Name}}, editColor: {{json .Color}}, editBillable: {{.Billable}}, editOnSite: {{.OnSite}}, editOrder: {{.SortOrder}} }">
                     <td class="px-4 py-3">
                         <template x-if="!editing">
                             <div class="h-8 w-8 rounded-lg shadow-inner" style="background-color: {{.Color}}"></div>
@@ -144,12 +146,12 @@
                             <template x-if="editing">
                                 <div class="flex gap-1">
                                     <button @click="updateStatus({{.ID}}, editName, editColor, editBillable, editOnSite, editOrder); editing = false"
-                                            :title="_t['admin.save']" class="p-1.5 text-green-500 hover:text-green-700 transition">
+                                            :title="_t['admin.save']" class="p-1.5 text-gray-500 hover:text-gray-700 transition">
                                         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                                         </svg>
                                     </button>
-                                    <button @click="editing = false; editName='{{.Name}}'; editColor='{{.Color}}'; editBillable={{.Billable}}; editOnSite={{.OnSite}}; editOrder={{.SortOrder}}"
+                                        <button @click="editing = false; editName={{json .Name}}; editColor={{json .Color}}; editBillable={{.Billable}}; editOnSite={{.OnSite}}; editOrder={{.SortOrder}}"
                                             :title="_t['admin.cancel']" class="p-1.5 text-gray-400 hover:text-gray-600 transition">
                                         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -172,6 +174,59 @@
         {{if not .Statuses}}
         <div class="p-8 text-center text-gray-400">{{index $.T "statuses.none"}}</div>
         {{end}}
+    </div>
+
+    <!-- Create status modal -->
+    <div x-show="showCreateModal" x-cloak
+         class="fixed inset-0 z-50 flex items-center justify-center"
+         @keydown.escape.window="showCreateModal = false">
+        <div class="absolute inset-0 bg-black/40" @click="showCreateModal = false"></div>
+        <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 p-6" @click.stop>
+            <h2 class="text-lg font-bold text-gray-900 mb-4">{{index $.T "statuses.add"}}</h2>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "admin.name"}}</label>
+                    <input type="text" x-model="newName" placeholder="{{index $.T "statuses.name_placeholder"}}"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm"
+                           @keydown.enter="createStatus()">
+                </div>
+                <div class="grid grid-cols-3 gap-3 items-end">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "admin.color"}}</label>
+                        <input type="color" x-model="newColor"
+                               class="w-full h-10 rounded-lg border border-gray-300 cursor-pointer">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "admin.order"}}</label>
+                        <input type="number" x-model.number="newOrder"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+                    </div>
+                </div>
+                <div class="flex items-center gap-6">
+                    <label class="inline-flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" x-model="newBillable"
+                               class="h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary">
+                        <span class="text-sm font-medium text-gray-700">{{index $.T "statuses.billable"}}</span>
+                    </label>
+                    <label class="inline-flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" x-model="newOnSite"
+                               class="h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary">
+                        <span class="text-sm font-medium text-gray-700">{{index $.T "statuses.on_site"}}</span>
+                    </label>
+                </div>
+            </div>
+            <p x-show="createError" x-text="createError" class="mt-3 text-sm text-red-600"></p>
+            <div class="flex justify-end gap-3 mt-6">
+                <button @click="showCreateModal = false"
+                        class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
+                    {{index $.T "admin.cancel"}}
+                </button>
+                <button @click="createStatus()"
+                        class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
+                    {{index $.T "admin.add"}}
+                </button>
+            </div>
+        </div>
     </div>
 </div>
 {{end}}

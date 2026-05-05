@@ -1,0 +1,262 @@
+{{define "content"}}
+{{with .Data}}
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8" x-data="adminProjectsApp({{json .Projects}}, {{json .Teams}})">
+
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-bold text-gray-900 inline-flex items-center gap-2">
+            <svg class="h-6 w-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 19h16M6 15l4-4 3 3 5-6"/>
+                <circle cx="6" cy="15" r="1" fill="currentColor"/>
+                <circle cx="10" cy="11" r="1" fill="currentColor"/>
+                <circle cx="13" cy="14" r="1" fill="currentColor"/>
+                <circle cx="18" cy="8" r="1" fill="currentColor"/>
+            </svg>
+            {{index $.T "admin.projects.title"}}
+        </h1>
+        <div class="flex items-center gap-3">
+            <span class="text-sm text-gray-400">{{.ProjectCount}} / {{.ProjectTotal}}</span>
+            <button @click="openCreate()"
+                    class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
+                + {{index $.T "admin.projects.new"}}
+            </button>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <form method="GET" action="/admin/projects"
+          class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
+        <div class="flex flex-wrap gap-3 items-end">
+            <div class="flex-1 min-w-[180px]">
+                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "projects.report.filter_text"}}</label>
+                <input type="text" name="q" value="{{.FilterText}}" placeholder="{{index $.T "projects.report.filter_text"}}"
+                       oninput="clearTimeout(this._t); this._t = setTimeout(() => this.form.requestSubmit(), 350)"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "projects.report.filter_status"}}</label>
+                <select name="active" onchange="this.form.requestSubmit()" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+                    <option value="">{{index $.T "projects.report.all"}}</option>
+                    <option value="1" {{if eq .FilterActive "1"}}selected{{end}}>{{index $.T "projects.report.active"}}</option>
+                    <option value="0" {{if eq .FilterActive "0"}}selected{{end}}>{{index $.T "projects.report.inactive"}}</option>
+                </select>
+            </div>
+            {{if .Teams}}
+            <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "admin.projects.team"}}</label>
+                <select name="team" onchange="this.form.requestSubmit()" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+                    <option value="">{{index $.T "projects.report.all"}}</option>
+                    {{range .Teams}}
+                    <option value="{{.ID}}" {{if eq .ID $.Data.FilterTeam}}selected{{end}}>{{.Name}}</option>
+                    {{end}}
+                </select>
+            </div>
+            {{end}}
+            <a href="/admin/projects"
+               class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
+                {{index $.T "admin.reset"}}
+            </a>
+        </div>
+    </form>
+
+    <!-- Toast -->
+    <div x-show="toast" x-transition x-cloak
+         :class="toastError ? 'bg-red-50 border-red-200 text-red-700' : 'bg-green-50 border-green-200 text-green-700'"
+         class="border rounded-xl px-4 py-3 mb-4 text-sm" x-text="toast"></div>
+
+    <!-- Projects table -->
+    <div class="bg-white rounded-xl shadow-md overflow-hidden">
+        {{if not .Projects}}
+        <div class="px-6 py-10 text-center text-gray-400">{{index $.T "admin.projects.none"}}</div>
+        {{else}}
+        <table class="w-full text-sm">
+            <thead class="bg-gray-50 text-gray-500 uppercase text-xs tracking-wide">
+                <tr>
+                    <th class="px-4 py-3 text-left">{{index $.T "admin.projects.code"}}</th>
+                    <th class="px-4 py-3 text-left">{{index $.T "admin.projects.name"}}</th>
+                    <th class="px-4 py-3 text-left hidden md:table-cell">{{index $.T "admin.projects.team"}}</th>
+                    <th class="px-4 py-3 text-left hidden sm:table-cell">{{index $.T "admin.projects.start"}}</th>
+                    <th class="px-4 py-3 text-left hidden sm:table-cell">{{index $.T "admin.projects.end"}}</th>
+                    <th class="px-4 py-3 text-center">{{index $.T "admin.projects.active"}}</th>
+                    <th class="px-4 py-3"></th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Projects}}
+                <tr class="border-t border-gray-100 hover:bg-gray-50 transition">
+                    <td class="px-4 py-3 font-mono text-xs font-medium text-gray-600">{{.Code}}</td>
+                    <td class="px-4 py-3 font-medium text-gray-900">{{.Name}}</td>
+                    <td class="px-4 py-3 text-gray-500 hidden md:table-cell">{{.TeamName}}</td>
+                    <td class="px-4 py-3 text-gray-500 hidden sm:table-cell">{{.StartDate}}</td>
+                    <td class="px-4 py-3 text-gray-500 hidden sm:table-cell">{{.EndDate}}</td>
+                    <td class="px-4 py-3 text-center">
+                        {{if .Active}}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">✓</span>
+                        {{else}}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">✗</span>
+                        {{end}}
+                    </td>
+                    <td class="px-4 py-3 text-right">
+                        <button @click="openEdit({{.ID}})"
+                                class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
+                            {{index $.T "admin.edit"}}
+                        </button>
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+        {{end}}
+    </div>
+
+    <!-- Create / Edit modal -->
+    <div x-show="showModal" x-cloak
+         class="fixed inset-0 z-50 flex items-center justify-center"
+         @keydown.escape.window="showModal = false">
+        <div class="absolute inset-0 bg-black/40" @click="showModal = false"></div>
+        <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 p-6"
+             @click.stop>
+            <h2 class="text-lg font-bold text-gray-900 mb-4"
+                x-text="editId ? '{{index $.T "admin.projects.edit"}}' : '{{index $.T "admin.projects.new"}}'"></h2>
+
+            <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "admin.projects.name"}} *</label>
+                        <input type="text" x-model="form.name"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "admin.projects.code"}} *</label>
+                        <input type="text" x-model="form.code"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm font-mono">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "admin.projects.team"}}</label>
+                    <input type="text" x-model="teamSearch" @focus="showTeamList = true" @blur="setTimeout(() => showTeamList = false, 150)"
+                           :placeholder="form.team_id ? getTeamName(form.team_id) : '{{index $.T "admin.projects.team_placeholder"}}'"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+                    <div x-show="showTeamList && filteredTeams.length > 0" x-cloak
+                         class="absolute z-10 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto w-full max-w-sm">
+                        <div x-show="!teamSearch" @mousedown.prevent="form.team_id = 0; teamSearch = ''; showTeamList = false"
+                             class="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm text-gray-400">
+                            {{index $.T "admin.projects.no_team"}}
+                        </div>
+                        <template x-for="t in filteredTeams" :key="t.id">
+                            <div @mousedown.prevent="form.team_id = t.id; teamSearch = ''; showTeamList = false"
+                                 class="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm" x-text="t.name"></div>
+                        </template>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "admin.projects.start"}} *</label>
+                        <input type="date" x-model="form.start_date"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "admin.projects.end"}} *</label>
+                        <input type="date" x-model="form.end_date"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" x-model="form.active" id="proj_active"
+                           class="h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary">
+                    <label for="proj_active" class="text-sm text-gray-700">{{index $.T "admin.projects.active"}}</label>
+                </div>
+            </div>
+
+            <p x-show="formError" x-text="formError" class="mt-3 text-sm text-red-600"></p>
+
+            <div class="flex justify-end gap-3 mt-6">
+                <button @click="showModal = false"
+                        class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
+                    {{index $.T "admin.cancel"}}
+                </button>
+                <button @click="submit()"
+                        :disabled="saving"
+                        class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium"
+                        :class="{'opacity-50 cursor-wait': saving}">
+                    {{index $.T "admin.save"}}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function adminProjectsApp(initialProjects, teams) {
+    const today = new Date().toISOString().slice(0, 10);
+    const plus6m = new Date(Date.now() + 6*30*24*60*60*1000).toISOString().slice(0, 10);
+
+    return {
+        projects: initialProjects || [],
+        teams: teams || [],
+        showModal: false,
+        editId: null,
+        teamSearch: '',
+        showTeamList: false,
+        saving: false,
+        toast: '',
+        toastError: false,
+        formError: '',
+        form: { name: '', code: '', team_id: 0, active: true, start_date: today, end_date: plus6m },
+
+        get filteredTeams() {
+            if (!this.teamSearch) return this.teams;
+            const q = this.teamSearch.toLowerCase();
+            return this.teams.filter(t => t.name.toLowerCase().includes(q));
+        },
+
+        getTeamName(id) {
+            const t = this.teams.find(t => t.id === id);
+            return t ? t.name : '';
+        },
+
+        openCreate() {
+            this.editId = null;
+            this.teamSearch = '';
+            this.formError = '';
+            this.form = { name: '', code: '', team_id: 0, active: true, start_date: today, end_date: plus6m };
+            this.showModal = true;
+        },
+
+        openEdit(id) {
+            const p = this.projects.find(p => p.id === id);
+            if (!p) return;
+            this.editId = id;
+            this.teamSearch = '';
+            this.formError = '';
+            this.form = { name: p.name, code: p.code, team_id: p.team_id, active: p.active, start_date: p.start_date, end_date: p.end_date };
+            this.showModal = true;
+        },
+
+        async submit() {
+            if (!this.form.name || !this.form.code) { this.formError = 'Name and code are required'; return; }
+            if (this.form.start_date > this.form.end_date) { this.formError = 'Start must be before end date'; return; }
+            this.saving = true; this.formError = '';
+            const url = this.editId ? `/admin/projects/${this.editId}` : '/admin/projects';
+            const method = this.editId ? 'PUT' : 'POST';
+            try {
+                const resp = await fetch(url, { method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(this.form) });
+                const data = await resp.json();
+                if (!resp.ok) { this.formError = data.error || 'Error'; }
+                else {
+                    this.showModal = false;
+                    this.showToast('✓', false);
+                    setTimeout(() => location.reload(), 600);
+                }
+            } catch(e) { this.formError = 'Network error'; }
+            this.saving = false;
+        },
+
+        showToast(msg, isError) {
+            this.toast = msg; this.toastError = isError;
+            setTimeout(() => { this.toast = ''; }, 3000);
+        }
+    };
+}
+</script>
+{{end}}
+{{end}}

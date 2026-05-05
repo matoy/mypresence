@@ -21,19 +21,19 @@
     <div class="flex items-center gap-2">
         <span class="text-sm text-gray-500 whitespace-nowrap">{{index $.T "logs.period"}}</span>
         <a href="{{$base}}?days=7"
-           class="px-3 py-1.5 text-sm rounded-lg border transition {{if eq $days 7}}bg-blue-600 text-white border-blue-600 font-semibold{{else}}bg-white text-gray-600 border-gray-200 hover:bg-gray-50{{end}}">
+              class="px-3 py-1.5 text-sm rounded-lg border transition {{if eq $days 7}}bg-gray-200 text-gray-800 border-gray-300 font-semibold{{else}}bg-white text-gray-600 border-gray-200 hover:bg-gray-50{{end}}">
             {{index $.T "logs.7d"}}
         </a>
         <a href="{{$base}}?days=30"
-           class="px-3 py-1.5 text-sm rounded-lg border transition {{if eq $days 30}}bg-blue-600 text-white border-blue-600 font-semibold{{else}}bg-white text-gray-600 border-gray-200 hover:bg-gray-50{{end}}">
+              class="px-3 py-1.5 text-sm rounded-lg border transition {{if eq $days 30}}bg-gray-200 text-gray-800 border-gray-300 font-semibold{{else}}bg-white text-gray-600 border-gray-200 hover:bg-gray-50{{end}}">
             {{index $.T "logs.30d"}}
         </a>
         <a href="{{$base}}?days=90"
-           class="px-3 py-1.5 text-sm rounded-lg border transition {{if eq $days 90}}bg-blue-600 text-white border-blue-600 font-semibold{{else}}bg-white text-gray-600 border-gray-200 hover:bg-gray-50{{end}}">
+              class="px-3 py-1.5 text-sm rounded-lg border transition {{if eq $days 90}}bg-gray-200 text-gray-800 border-gray-300 font-semibold{{else}}bg-white text-gray-600 border-gray-200 hover:bg-gray-50{{end}}">
             {{index $.T "logs.90d"}}
         </a>
         <a href="{{$base}}?days=0"
-           class="px-3 py-1.5 text-sm rounded-lg border transition {{if eq $days 0}}bg-blue-600 text-white border-blue-600 font-semibold{{else}}bg-white text-gray-600 border-gray-200 hover:bg-gray-50{{end}}">
+              class="px-3 py-1.5 text-sm rounded-lg border transition {{if eq $days 0}}bg-gray-200 text-gray-800 border-gray-300 font-semibold{{else}}bg-white text-gray-600 border-gray-200 hover:bg-gray-50{{end}}">
             {{index $.T "logs.all"}}
         </a>
     </div>

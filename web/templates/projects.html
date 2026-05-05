@@ -1,0 +1,170 @@
+{{define "content"}}
+{{with .Data}}
+{{$year := .Year}}
+{{$month := .Month}}
+<div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8" x-data="projectsApp({{.BillableDays}}, {{.TotalDeclared}}, {{json .EntryMap}})">
+
+    <!-- Header + month nav -->
+    <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+        <h1 class="text-2xl font-bold text-gray-900">{{index $.T "projects.title"}}</h1>
+        <div class="flex items-center gap-2">
+            <a href="/projects?year={{.PrevYear}}&month={{.PrevMonth}}"
+               class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                </svg>
+            </a>
+            <span class="font-semibold text-gray-800 min-w-[160px] text-center">
+                {{index $.T (printf "cal.month.%d" .Month)}} {{.Year}}
+            </span>
+            <a href="/projects?year={{.NextYear}}&month={{.NextMonth}}"
+               class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                </svg>
+            </a>
+        </div>
+    </div>
+
+    <!-- Cap indicator -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
+        <div class="flex flex-wrap gap-6 items-center">
+            <div>
+                <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide">{{index $.T "projects.billable_cap"}}</p>
+                <p class="text-2xl font-bold text-gray-900" x-text="billable"></p>
+            </div>
+            <div>
+                <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide">{{index $.T "projects.declared"}}</p>
+                <p class="text-2xl font-bold text-gray-900" x-text="fmtDays(totalDeclared)"></p>
+            </div>
+            <div class="flex-1">
+                <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">{{index $.T "projects.remaining"}}</p>
+                <div class="flex items-center gap-2">
+                    <div class="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden projects-progress-track border border-transparent">
+                        <div class="h-full rounded-full transition-all projects-progress-fill"
+                             :class="totalDeclared > billable ? 'is-over-cap' : ''"
+                             :style="(() => { const pct = billable > 0 ? Math.min(100, totalDeclared/billable*100) : 0; const hue = totalDeclared > billable ? 0 : Math.round(25 + Math.pow(pct/100, 2) * 95); return `width:${pct}%; background-color:hsl(${hue},80%,45%)`; })()">
+                        </div>
+                    </div>
+                    <span x-show="billable > 0 && (totalDeclared + 0.001) >= billable" x-cloak>🚀</span>
+                </div>
+                <p class="text-sm text-gray-500 mt-1"
+                   x-text="billable > 0 && (totalDeclared + 0.001) >= billable ? '✓ {{index $.T "projects.fully_declared"}}' : fmtDays(Math.max(0, billable - totalDeclared)) + ' {{index $.T "projects.days_left"}}'">
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter -->
+    <div class="mb-4">
+        <input type="text" x-model="filter" placeholder="{{index $.T "projects.filter"}}"
+               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm bg-white">
+    </div>
+
+    <!-- Error/success toast -->
+    <div x-show="toast" x-transition x-cloak
+         :class="toastError ? 'bg-red-50 border-red-200 text-red-700' : 'bg-green-50 border-green-200 text-green-700'"
+         class="border rounded-xl px-4 py-3 mb-4 text-sm" x-text="toast"></div>
+
+    <!-- Project list -->
+    {{if not .Projects}}
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 px-6 py-10 text-center text-gray-400">
+        {{index $.T "projects.none"}}
+    </div>
+    {{else}}
+    <div class="bg-white rounded-xl shadow-md overflow-hidden">
+        <table class="w-full text-sm">
+            <thead class="bg-gray-50 text-gray-500 uppercase text-xs tracking-wide">
+                <tr>
+                    <th class="px-4 py-3 text-left">{{index $.T "admin.projects.code"}}</th>
+                    <th class="px-4 py-3 text-left">{{index $.T "admin.projects.name"}}</th>
+                    <th class="px-4 py-3 text-left hidden sm:table-cell">{{index $.T "admin.projects.team"}}</th>
+                    <th class="px-4 py-3 text-right w-36">{{index $.T "projects.days"}}</th>
+                    <th class="px-4 py-3 w-20"></th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Projects}}
+                <tr class="border-t border-gray-100 hover:bg-gray-50 transition"
+                    x-show="matchesFilter({{.ID}}, {{json .Code}}, {{json .Name}})">
+                    <td class="px-4 py-3 font-mono text-xs font-medium text-gray-600">{{.Code}}</td>
+                    <td class="px-4 py-3 font-medium text-gray-900">{{.Name}}</td>
+                    <td class="px-4 py-3 text-gray-500 hidden sm:table-cell">{{.TeamName}}</td>
+                    <td class="px-4 py-3 text-right">
+                        <input type="number" min="0" max="31" step="0.5"
+                               :value="entries[{{.ID}}] || 0"
+                               @change="entries[{{.ID}}] = parseFloat($event.target.value) || 0"
+                               class="w-24 text-right px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm"
+                               :class="{'border-red-400': entries[{{.ID}}] > 0 && totalDeclared > billable}">
+                    </td>
+                    <td class="px-4 py-3">
+                        <button @click="save({{.ID}}, {{$year}}, {{$month}})"
+                                class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium"
+                                :disabled="saving == {{.ID}}"
+                                :class="{'opacity-50 cursor-wait': saving == {{.ID}}}">
+                            {{index $.T "admin.save"}}
+                        </button>
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+    {{end}}
+</div>
+
+<script>
+function projectsApp(billable, totalDeclared, initialEntries) {
+    return {
+        billable: billable,
+        totalDeclared: totalDeclared,
+        entries: initialEntries || {},
+        filter: '',
+        saving: null,
+        toast: '',
+        toastError: false,
+
+        fmtDays(n) {
+            if (n === Math.floor(n)) return n.toFixed(0);
+            return n.toFixed(1);
+        },
+
+        matchesFilter(id, code, name) {
+            if (!this.filter) return true;
+            const q = this.filter.toLowerCase();
+            return code.toLowerCase().includes(q) || name.toLowerCase().includes(q);
+        },
+
+        async save(projectId, year, month) {
+            this.saving = projectId;
+            this.toast = '';
+            const days = parseFloat(this.entries[projectId]) || 0;
+            try {
+                const resp = await fetch('/api/project-time', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ project_id: projectId, year, month, days })
+                });
+                const data = await resp.json();
+                if (!resp.ok) {
+                    this.toastError = true;
+                    this.toast = data.error || 'Error';
+                } else {
+                    this.toastError = false;
+                    this.toast = '✓';
+                    this.totalDeclared = data.total_declared;
+                    this.billable = data.billable;
+                    this.entries[projectId] = days;
+                    setTimeout(() => { this.toast = ''; }, 2000);
+                }
+            } catch(e) {
+                this.toastError = true;
+                this.toast = 'Network error';
+            }
+            this.saving = null;
+        }
+    };
+}
+</script>
+{{end}}
+{{end}}

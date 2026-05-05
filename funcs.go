@@ -62,3 +62,21 @@ func tmplHasDatePresence(m map[string]map[string]int64, date string) bool {
 	}
 	return false
 }
+
+// tmplActivitySummaryRocket returns true when the achievement criteria are met:
+// - not set equals 0 (with tolerance)
+// - on-site ratio strictly greater than 60%
+// - project activity equals 100% (with tolerance)
+func tmplActivitySummaryRocket(notSet, onSiteDays, billableDays, projectActivity float64) bool {
+	if notSet > 0.001 {
+		return false
+	}
+	if billableDays <= 0 {
+		return false
+	}
+	onSiteRatio := (onSiteDays / billableDays) * 100.0
+	if onSiteRatio <= 60.0 {
+		return false
+	}
+	return projectActivity >= 99.999 && projectActivity <= 100.001
+}

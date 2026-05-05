@@ -13,6 +13,8 @@ const (
 	RoleStatusManager    = "status_manager"
 	RoleActivityViewer   = "activity_viewer"
 	RoleFloorplanManager = "floorplan_manager"
+	RoleProjectsAdmin    = "projects_admin"
+	RoleProjectsViewer   = "projects_viewer"
 	RoleGlobal           = "global"
 )
 
@@ -27,6 +29,8 @@ var AllRoles = []struct {
 	{RoleStatusManager, "Status admin"},
 	{RoleActivityViewer, "Activity admin"},
 	{RoleFloorplanManager, "Floorplan manager"},
+	{RoleProjectsAdmin, "Projects admin"},
+	{RoleProjectsViewer, "Projects viewer"},
 	{RoleGlobal, "Global (admin)"},
 }
 
@@ -269,4 +273,49 @@ type PageData struct {
 	CSRFToken string // HMAC-SHA256(secretKey, sessionToken); empty for unauthenticated pages
 	// Impersonation
 	RealAdmin *User // non-nil when an admin is currently impersonating another user
+	// Features
+	DisableProjects bool
+}
+
+// Project represents a billable project that users can log time against.
+type Project struct {
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	Code      string    `json:"code"`
+	TeamID    int64     `json:"team_id"`
+	TeamName  string    `json:"team_name"` // populated by JOIN
+	Active    bool      `json:"active"`
+	StartDate string    `json:"start_date"` // YYYY-MM-DD
+	EndDate   string    `json:"end_date"`   // YYYY-MM-DD
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// ProjectTimeEntry holds a user's declared days for one project in one month.
+type ProjectTimeEntry struct {
+	ID        int64   `json:"id"`
+	ProjectID int64   `json:"project_id"`
+	UserID    int64   `json:"user_id"`
+	Year      int     `json:"year"`
+	Month     int     `json:"month"`
+	Days      float64 `json:"days"`
+}
+
+// ProjectUserMonth aggregates time per user for the report view.
+type ProjectUserMonth struct {
+	User            User
+	MonthlyDays     map[string]float64 // "YYYY-MM" -> days
+	TotalPastDays   float64            // sum of months strictly before current month
+	TotalToDateDays float64            // sum of displayed months (past + current)
+	TotalDays       float64            // sum of all months including future
+}
+
+// ProjectReportRow combines a project with its user-level breakdown.
+type ProjectReportRow struct {
+	Project  Project
+	UserRows []ProjectUserMonth
+	// Column month totals: month key -> total days across all users
+	MonthTotals     map[string]float64
+	TotalPastDays   float64 // sum of months strictly before current month
+	TotalToDateDays float64 // sum of displayed months (past + current)
+	TotalDays       float64 // sum of all months including future
 }

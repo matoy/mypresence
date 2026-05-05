@@ -46,6 +46,8 @@ type Config struct {
 	SAMLGroupStatusManager    string // group ID → status_manager role
 	SAMLGroupActivityViewer   string // group ID → activity_viewer role
 	SAMLGroupFloorplanManager string // group ID → floorplan_manager role
+	SAMLGroupProjectsAdmin    string // group ID → projects_admin role
+	SAMLGroupProjectsViewer   string // group ID → projects_viewer role
 
 	// Internationalisation
 	DefaultLang string
@@ -56,6 +58,7 @@ type Config struct {
 	// Features
 	DisableFloorplans bool
 	DisableAPI        bool
+	DisableProjects   bool
 
 	// SMTP (password reset)
 	SMTPURL  string
@@ -98,6 +101,8 @@ func Load() *Config {
 		SAMLGroupStatusManager:    getEnv("SAML_GROUP_STATUS_MANAGER", ""),
 		SAMLGroupActivityViewer:   getEnv("SAML_GROUP_ACTIVITY_VIEWER", ""),
 		SAMLGroupFloorplanManager: getEnv("SAML_GROUP_FLOORPLAN_MANAGER", ""),
+		SAMLGroupProjectsAdmin:    getEnv("SAML_GROUP_PROJECTS_ADMIN", ""),
+		SAMLGroupProjectsViewer:   getEnv("SAML_GROUP_PROJECTS_VIEWER", ""),
 
 		DefaultLang: getEnv("DEFAULT_LANG", "en"),
 
@@ -105,6 +110,7 @@ func Load() *Config {
 
 		DisableFloorplans: getEnvBool("DISABLE_FLOORPLANS", false),
 		DisableAPI:        getEnvBool("DISABLE_API", false),
+		DisableProjects:   getEnvBool("DISABLE_PROJECTS", false),
 
 		SMTPURL:  getEnv("SMTP_URL", ""),
 		SMTPFrom: getEnv("SMTP_FROM", "noreply@presence.local"),

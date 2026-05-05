@@ -501,18 +501,58 @@ function calendarApp(statuses, currentUserId, isAdmin, presences) {
 // ============================================================
 // Admin: Teams management
 // ============================================================
-function teamsAdmin() {
+function teamsAdmin(initialTeams) {
     return {
+        teams: initialTeams || [],
         newTeamName: '',
+        createError: '',
+        showCreateModal: false,
+        filterText: '',
+        filterMembers: 'all',
+
+        get totalCount() {
+            return this.teams.length;
+        },
+
+        get filteredCount() {
+            return this.teams.filter(t => this.matchesTeam((t.Team && t.Team.name) || '', (t.Members || []).length)).length;
+        },
+
+        resetFilters() {
+            this.filterText = '';
+            this.filterMembers = 'all';
+        },
+
+        matchesTeam(name, memberCount) {
+            const q = this.filterText.trim().toLowerCase();
+            if (q && !(name || '').toLowerCase().includes(q)) return false;
+            if (this.filterMembers === 'with' && memberCount <= 0) return false;
+            if (this.filterMembers === 'empty' && memberCount > 0) return false;
+            return true;
+        },
 
         async createTeam() {
-            if (!this.newTeamName.trim()) return;
+            this.createError = '';
+            if (!this.newTeamName.trim()) {
+                this.createError = 'Name is required';
+                return;
+            }
             const r = await fetch('/admin/teams', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name: this.newTeamName.trim() })
             });
-            if (r.ok) window.location.reload();
+            if (r.ok) {
+                this.showCreateModal = false;
+                window.location.reload();
+                return;
+            }
+            try {
+                const d = await r.json();
+                this.createError = d.error || 'Error';
+            } catch (e) {
+                this.createError = 'Error';
+            }
         },
 
         async renameTeam(id, name) {
@@ -549,14 +589,53 @@ function teamsAdmin() {
 // ============================================================
 // Admin: Status management
 // ============================================================
-function statusAdmin() {
+function statusAdmin(initialStatuses) {
     return {
+        statuses: initialStatuses || [],
         newName: '',
         newColor: '#3b82f6',
         newOrder: 0,
         newBillable: false,
         newOnSite: false,
         createError: '',
+        showCreateModal: false,
+        filterText: '',
+        filterBillable: 'all',
+        filterOnSite: 'all',
+
+        get totalCount() {
+            return this.statuses.length;
+        },
+
+        get filteredCount() {
+            return this.statuses.filter(s => this.matchesStatus(s.name, s.billable, s.on_site)).length;
+        },
+
+        resetFilters() {
+            this.filterText = '';
+            this.filterBillable = 'all';
+            this.filterOnSite = 'all';
+        },
+
+        openCreateModal() {
+            this.newName = '';
+            this.newColor = '#3b82f6';
+            this.newOrder = 0;
+            this.newBillable = false;
+            this.newOnSite = false;
+            this.createError = '';
+            this.showCreateModal = true;
+        },
+
+        matchesStatus(name, billable, onSite) {
+            const q = this.filterText.trim().toLowerCase();
+            if (q && !(name || '').toLowerCase().includes(q)) return false;
+            if (this.filterBillable === '1' && !billable) return false;
+            if (this.filterBillable === '0' && billable) return false;
+            if (this.filterOnSite === '1' && !onSite) return false;
+            if (this.filterOnSite === '0' && onSite) return false;
+            return true;
+        },
 
         async createStatus() {
             this.createError = '';
@@ -566,7 +645,7 @@ function statusAdmin() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name: this.newName, color: this.newColor, sort_order: this.newOrder, billable: this.newBillable, on_site: this.newOnSite })
             });
-            if (resp.ok) { window.location.reload(); }
+            if (resp.ok) { this.showCreateModal = false; window.location.reload(); }
             else { const d = await resp.json(); this.createError = d.error || 'Error'; }
         },
 

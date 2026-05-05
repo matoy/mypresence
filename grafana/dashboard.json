@@ -1331,6 +1331,90 @@
       ]
     },
     {
+      "id": 38,
+      "type": "stat",
+      "title": "Project time ops (1h)",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 49
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "purple"
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "increase(mypresence_project_operations_total{action=\"set_time\",result=\"success\"}[1h])",
+          "legendFormat": "Project time ops",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 39,
+      "type": "stat",
+      "title": "Project days declared (1h)",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 49
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "indigo"
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "increase(mypresence_project_declared_days_total[1h])",
+          "legendFormat": "Declared days",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
       "id": 33,
       "type": "stat",
       "title": "Presence days set (1h)",
@@ -1831,6 +1915,80 @@
       ]
     },
     {
+      "id": 45,
+      "type": "stat",
+      "title": "Projects",
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 18,
+        "y": 62
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      },
+      "targets": [
+        {
+          "expr": "mypresence_db_projects_total",
+          "legendFormat": "Projects",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 49,
+      "type": "stat",
+      "title": "Project time entries",
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 21,
+        "y": 62
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      },
+      "targets": [
+        {
+          "expr": "mypresence_db_project_time_entries_total",
+          "legendFormat": "Project entries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
       "id": 48,
       "type": "timeseries",
       "title": "DB growth — users & presences over time",
@@ -2087,7 +2245,7 @@
     {
       "id": 73,
       "type": "logs",
-      "title": "Presence & admin operations",
+      "title": "Presence, project & admin operations",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 91 },
       "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
       "options": {
@@ -2101,7 +2259,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "{${loki_stream}} | json | msg =~ `(presence|admin|impersonate)\\..*`",
+          "expr": "{${loki_stream}} | json | msg =~ `(presence|admin|project|impersonate)\\..*`",
           "datasource": { "type": "loki", "uid": "${DS_LOKI}" }
         }
       ]

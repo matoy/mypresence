@@ -54,6 +54,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		SecretKey:         "test-secret-32-chars-padded-here!",
 		DisableFloorplans: false,
 		DisableAPI:        false,
+		DisableProjects:   false,
 	}
 
 	if err := database.SeedDefaults(cfg.AdminUser, cfg.AdminPassword); err != nil {
@@ -226,6 +227,7 @@ func buildRouter(database *db.DB, cfg *config.Config, dataDir string) http.Handl
 	holidaysH := &handlers.HolidaysHandler{DB: database, Render: renderPage}
 	resetH := &handlers.ResetPasswordHandler{DB: database, Config: cfg, Render: renderPage}
 	fpH := &handlers.FloorplanHandler{DB: database, DataDir: dataDir, Render: renderPage}
+	projectsH := &handlers.ProjectsHandler{DB: database, Render: renderPage}
 
 	mux := http.NewServeMux()
 
@@ -278,6 +280,10 @@ func buildRouter(database *db.DB, cfg *config.Config, dataDir string) http.Handl
 	authMux.HandleFunc("POST /api/tokens", patH.CreatePAT)
 	authMux.HandleFunc("DELETE /api/tokens/{id}", patH.RevokePAT)
 	authMux.HandleFunc("DELETE /api/admin/tokens/{id}", patH.AdminRevokePAT)
+	authMux.HandleFunc("GET /projects", projectsH.ProjectsPage)
+	authMux.HandleFunc("GET /api/projects", projectsH.ProjectsAPI)
+	authMux.HandleFunc("GET /api/project-time", projectsH.ProjectTimeAPI)
+	authMux.HandleFunc("POST /api/project-time", projectsH.SetProjectTime)
 
 	// Impersonation (CSRF-protected)
 	authMux.HandleFunc("GET /impersonate", settingsH.ImpersonatePage)
@@ -310,6 +316,7 @@ func buildRouter(database *db.DB, cfg *config.Config, dataDir string) http.Handl
 	// Admin sub-routes
 	teamMux := http.NewServeMux()
 	teamMux.HandleFunc("GET /api/teams", adminH.ListTeamsAPI)
+	teamMux.HandleFunc("GET /admin/teams", adminH.TeamsPage)
 	teamMux.HandleFunc("POST /admin/teams", adminH.CreateTeam)
 	teamMux.HandleFunc("PUT /admin/teams/{id}", adminH.UpdateTeam)
 	teamMux.HandleFunc("DELETE /admin/teams/{id}", adminH.DeleteTeam)
@@ -317,11 +324,13 @@ func buildRouter(database *db.DB, cfg *config.Config, dataDir string) http.Handl
 	teamMux.HandleFunc("DELETE /admin/teams/{id}/members/{userId}", adminH.RemoveTeamMember)
 
 	statusMux := http.NewServeMux()
+	statusMux.HandleFunc("GET /admin/statuses", adminH.StatusesPage)
 	statusMux.HandleFunc("POST /admin/statuses", adminH.CreateStatus)
 	statusMux.HandleFunc("PUT /admin/statuses/{id}", adminH.UpdateStatus)
 	statusMux.HandleFunc("DELETE /admin/statuses/{id}", adminH.DeleteStatus)
 
 	holidaysMux := http.NewServeMux()
+	holidaysMux.HandleFunc("GET /admin/holidays", holidaysH.HolidaysPage)
 	holidaysMux.HandleFunc("POST /admin/holidays", holidaysH.CreateHoliday)
 	holidaysMux.HandleFunc("PUT /admin/holidays/{id}", holidaysH.UpdateHoliday)
 	holidaysMux.HandleFunc("DELETE /admin/holidays/{id}", holidaysH.DeleteHoliday)
@@ -335,7 +344,20 @@ func buildRouter(database *db.DB, cfg *config.Config, dataDir string) http.Handl
 	usersMux.HandleFunc("DELETE /admin/users/{id}", usersH.DeleteUser)
 
 	activityMux := http.NewServeMux()
+	activityMux.HandleFunc("GET /admin/activity", activityH.ActivityPage)
 	activityMux.HandleFunc("GET /api/activity", activityH.ActivityAPI)
+
+	projAdminMux := http.NewServeMux()
+	projAdminMux.HandleFunc("GET /admin/projects", projectsH.AdminProjectsPage)
+	projAdminMux.HandleFunc("POST /admin/projects", projectsH.CreateProject)
+	projAdminMux.HandleFunc("PUT /admin/projects/{id}", projectsH.UpdateProject)
+	projAdminMux.HandleFunc("GET /api/admin/projects", projectsH.AdminProjectsAPI)
+	projAdminMux.HandleFunc("POST /api/admin/projects", projectsH.CreateProject)
+	projAdminMux.HandleFunc("PUT /api/admin/projects/{id}", projectsH.UpdateProject)
+
+	projReportMux := http.NewServeMux()
+	projReportMux.HandleFunc("GET /admin/projects-report", projectsH.ProjectsReportPage)
+	projReportMux.HandleFunc("GET /api/projects-report", projectsH.ProjectsReportAPI)
 
 	mux.Handle("/api/teams", middleware.Auth(database, middleware.RequireRole(models.RoleTeamManager)(teamMux)))
 	mux.Handle("/api/teams/", middleware.Auth(database, middleware.RequireRole(models.RoleTeamManager)(teamMux)))
@@ -348,6 +370,13 @@ func buildRouter(database *db.DB, cfg *config.Config, dataDir string) http.Handl
 	mux.Handle("/admin/users", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(usersMux)))
 	mux.Handle("/admin/users/", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(usersMux)))
 	mux.Handle("/api/activity", middleware.Auth(database, middleware.RequireRole(models.RoleActivityViewer)(activityMux)))
+	mux.Handle("/admin/activity", middleware.Auth(database, middleware.RequireRole(models.RoleActivityViewer, models.RoleTeamLeader)(activityMux)))
+	mux.Handle("/admin/projects", middleware.Auth(database, middleware.RequireRole(models.RoleProjectsAdmin)(projAdminMux)))
+	mux.Handle("/admin/projects/", middleware.Auth(database, middleware.RequireRole(models.RoleProjectsAdmin)(projAdminMux)))
+	mux.Handle("/api/admin/projects", middleware.Auth(database, middleware.RequireRole(models.RoleProjectsAdmin)(projAdminMux)))
+	mux.Handle("/api/admin/projects/", middleware.Auth(database, middleware.RequireRole(models.RoleProjectsAdmin)(projAdminMux)))
+	mux.Handle("/admin/projects-report", middleware.Auth(database, middleware.RequireRole(models.RoleProjectsAdmin, models.RoleProjectsViewer, models.RoleTeamLeader)(projReportMux)))
+	mux.Handle("/api/projects-report", middleware.Auth(database, middleware.RequireRole(models.RoleProjectsAdmin, models.RoleProjectsViewer, models.RoleTeamLeader)(projReportMux)))
 	fpRole := middleware.RequireRole(models.RoleFloorplanManager)
 	mux.Handle("/admin/floorplans", middleware.Auth(database, fpRole(fpAdminMux)))
 	mux.Handle("/admin/floorplans/", middleware.Auth(database, fpRole(fpAdminMux)))
@@ -610,6 +639,88 @@ func TestAdminRoutes_BearerPAT_WithoutToken_Unauthorized(t *testing.T) {
 
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("expected 401 with invalid PAT, got %d", resp.StatusCode)
+	}
+}
+
+func TestProjectsPage_AuthenticatedUser_Returns200(t *testing.T) {
+	e := newTestEnv(t)
+	e.loginAdmin(t)
+
+	resp := e.get("/projects")
+	defer drain(resp)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 on /projects, got %d", resp.StatusCode)
+	}
+}
+
+func TestAdminProjects_BasicUser_Forbidden(t *testing.T) {
+	e := newTestEnv(t)
+	id, err := e.db.CreateLocalUser("basic-projects@test.com", "Basic Projects", "password1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.injectSession(t, id)
+
+	resp := e.get("/admin/projects")
+	defer drain(resp)
+
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("expected 403 on /admin/projects for basic user, got %d", resp.StatusCode)
+	}
+}
+
+func TestAdminProjects_ProjectsAdmin_Allowed(t *testing.T) {
+	e := newTestEnv(t)
+	id, err := e.db.CreateLocalUser("projects-admin@test.com", "Projects Admin", "password1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.db.UpdateUserRoles(id, models.RoleProjectsAdmin); err != nil {
+		t.Fatal(err)
+	}
+	e.injectSession(t, id)
+
+	resp := e.get("/admin/projects")
+	defer drain(resp)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 on /admin/projects for projects_admin, got %d", resp.StatusCode)
+	}
+}
+
+func TestProjectsReport_TeamLeader_Allowed(t *testing.T) {
+	e := newTestEnv(t)
+	id, err := e.db.CreateLocalUser("team-leader@test.com", "Team Leader", "password1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.db.UpdateUserRoles(id, models.RoleTeamLeader); err != nil {
+		t.Fatal(err)
+	}
+	e.injectSession(t, id)
+
+	resp := e.get("/admin/projects-report")
+	defer drain(resp)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 on /admin/projects-report for team_leader, got %d", resp.StatusCode)
+	}
+}
+
+func TestProjectsReport_BasicUser_Forbidden(t *testing.T) {
+	e := newTestEnv(t)
+	id, err := e.db.CreateLocalUser("basic-report@test.com", "Basic Report", "password1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.injectSession(t, id)
+
+	resp := e.get("/admin/projects-report")
+	defer drain(resp)
+
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("expected 403 on /admin/projects-report for basic user, got %d", resp.StatusCode)
 	}
 }
 
