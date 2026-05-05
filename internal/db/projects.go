@@ -227,10 +227,6 @@ func (d *DB) GetProjectsReport(projectIDs []int64, monthKeys []string, userMap m
 	defer rows.Close() //nolint:errcheck
 
 	// Accumulate: projectID -> userID -> monthKey -> days
-	type key struct {
-		projectID, userID int64
-		monthKey          string
-	}
 	entryMap := make(map[int64]map[int64]map[string]float64) // project -> user -> month -> days
 	allTime := make(map[int64]map[int64]float64)             // project -> user -> total
 	for rows.Next() {
