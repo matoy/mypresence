@@ -2,6 +2,8 @@ package db
 
 import (
 	"testing"
+
+	"presence-app/internal/models"
 )
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -254,5 +256,109 @@ func TestGetUserProjectEntriesForMonth_Empty(t *testing.T) {
 	}
 	if len(entries) != 0 {
 		t.Errorf("expected 0 entries, got %d", len(entries))
+	}
+}
+
+// ─── ListProjectsByTeams ────────────────────────────────────────────────────
+
+func TestListProjectsByTeams_NilReturnsAll(t *testing.T) {
+	d := newTestDB(t)
+	seedProject(t, d, "All 1", "A1")
+	seedProject(t, d, "All 2", "A2")
+
+	projects, err := d.ListProjectsByTeams(nil)
+	if err != nil {
+		t.Fatalf("ListProjectsByTeams(nil): %v", err)
+	}
+	if len(projects) != 2 {
+		t.Fatalf("expected 2 projects, got %d", len(projects))
+	}
+}
+
+func TestListProjectsByTeams_EmptyReturnsNil(t *testing.T) {
+	d := newTestDB(t)
+	projects, err := d.ListProjectsByTeams([]int64{})
+	if err != nil {
+		t.Fatalf("ListProjectsByTeams(empty): %v", err)
+	}
+	if projects != nil {
+		t.Fatalf("expected nil projects for empty team list, got %#v", projects)
+	}
+}
+
+func TestListProjectsByTeams_FiltersByTeam(t *testing.T) {
+	d := newTestDB(t)
+	resA, err := d.core.Exec("INSERT INTO teams (name) VALUES ('Team A')")
+	if err != nil {
+		t.Fatalf("insert team A: %v", err)
+	}
+	teamA, _ := resA.LastInsertId()
+	resB, err := d.core.Exec("INSERT INTO teams (name) VALUES ('Team B')")
+	if err != nil {
+		t.Fatalf("insert team B: %v", err)
+	}
+	teamB, _ := resB.LastInsertId()
+
+	if _, err := d.CreateProject("P A", "PA", teamA, true, "2026-01-01", "2026-12-31"); err != nil {
+		t.Fatalf("CreateProject A: %v", err)
+	}
+	if _, err := d.CreateProject("P B", "PB", teamB, true, "2026-01-01", "2026-12-31"); err != nil {
+		t.Fatalf("CreateProject B: %v", err)
+	}
+
+	projects, err := d.ListProjectsByTeams([]int64{teamA})
+	if err != nil {
+		t.Fatalf("ListProjectsByTeams(filter): %v", err)
+	}
+	if len(projects) != 1 {
+		t.Fatalf("expected 1 project, got %d", len(projects))
+	}
+	if projects[0].Code != "PA" || projects[0].TeamID != teamA {
+		t.Fatalf("unexpected project: %+v", projects[0])
+	}
+}
+
+// ─── GetProjectsReport ──────────────────────────────────────────────────────
+
+func TestGetProjectsReport_EmptyProjectIDs(t *testing.T) {
+	d := newTestDB(t)
+	rows, err := d.GetProjectsReport(nil, []string{"2026-05"}, map[int64]models.User{})
+	if err != nil {
+		t.Fatalf("GetProjectsReport(nil): %v", err)
+	}
+	if rows != nil {
+		t.Fatalf("expected nil rows, got %#v", rows)
+	}
+}
+
+func TestGetProjectsReport_AggregatesMonthlyAndTotal(t *testing.T) {
+	d := newTestDB(t)
+	uid := seedUser(t, d, "report-user@test.com")
+	pid := seedProject(t, d, "Report Project", "RP")
+
+	if err := d.SetProjectTimeEntry(uid, pid, 2026, 5, 2.5); err != nil {
+		t.Fatalf("SetProjectTimeEntry 05: %v", err)
+	}
+	if err := d.SetProjectTimeEntry(uid, pid, 2026, 6, 1.0); err != nil {
+		t.Fatalf("SetProjectTimeEntry 06: %v", err)
+	}
+
+	monthKeys := []string{"2026-05", "2026-06"}
+	userMap := map[int64]models.User{uid: {ID: uid, Email: "report-user@test.com", Name: "Report User"}}
+	rows, err := d.GetProjectsReport([]int64{pid}, monthKeys, userMap)
+	if err != nil {
+		t.Fatalf("GetProjectsReport: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(rows))
+	}
+	if rows[0].TotalDays != 3.5 {
+		t.Fatalf("expected TotalDays=3.5, got %v", rows[0].TotalDays)
+	}
+	if rows[0].MonthTotals["2026-05"] != 2.5 || rows[0].MonthTotals["2026-06"] != 1.0 {
+		t.Fatalf("unexpected month totals: %#v", rows[0].MonthTotals)
+	}
+	if len(rows[0].UserRows) != 1 || rows[0].UserRows[0].TotalDays != 3.5 {
+		t.Fatalf("unexpected user rows: %#v", rows[0].UserRows)
 	}
 }
