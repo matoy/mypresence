@@ -2285,6 +2285,85 @@
           "datasource": { "type": "loki", "uid": "${DS_LOKI}" }
         }
       ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 107 },
+      "id": 75,
+      "title": "🔐 PAT / Floorplan / Admin Ops",
+      "type": "row"
+    },
+    {
+      "id": 76,
+      "type": "timeseries",
+      "title": "PAT operations rate (by action/result)",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 108 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "options": {
+        "legend": { "displayMode": "list" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": { "lineWidth": 2 }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (action, result) (rate(mypresence_pat_operations_total[5m]))",
+          "legendFormat": "{{action}} / {{result}}",
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }
+        }
+      ]
+    },
+    {
+      "id": 77,
+      "type": "timeseries",
+      "title": "Floorplan operations rate (by action/result)",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 108 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "options": {
+        "legend": { "displayMode": "list" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": { "lineWidth": 2 }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (action, result) (rate(mypresence_floorplan_operations_total[5m]))",
+          "legendFormat": "{{action}} / {{result}}",
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }
+        }
+      ]
+    },
+    {
+      "id": 78,
+      "type": "timeseries",
+      "title": "Admin operations rate (by entity/action/result)",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 108 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "options": {
+        "legend": { "displayMode": "list" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": { "lineWidth": 2 }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (entity, action, result) (rate(mypresence_admin_operations_total[5m]))",
+          "legendFormat": "{{entity}}.{{action}} / {{result}}",
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }
+        }
+      ]
     }
   ],
   "refresh": "30s",
