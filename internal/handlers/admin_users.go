@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"presence-app/internal/db"
+	"presence-app/internal/metrics"
 	"presence-app/internal/middleware"
 	"presence-app/internal/models"
 )
@@ -43,17 +44,20 @@ func (h *UsersAdminHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		metrics.AdminOpsTotal.WithLabelValues("user", "create", "failure").Inc()
 		jsonError(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
 	req.Email = strings.TrimSpace(req.Email)
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Email == "" || req.Name == "" || req.Password == "" {
+		metrics.AdminOpsTotal.WithLabelValues("user", "create", "failure").Inc()
 		jsonError(w, "All fields are required", http.StatusBadRequest)
 		return
 	}
 	uid, err := h.DB.CreateLocalUser(req.Email, req.Name, req.Password)
 	if err != nil {
+		metrics.AdminOpsTotal.WithLabelValues("user", "create", "failure").Inc()
 		jsonError(w, "Email already in use", http.StatusConflict)
 		return
 	}
@@ -62,6 +66,7 @@ func (h *UsersAdminHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		h.DB.LogAdminAction(currentUser.ID, "user", uid, "create", req.Email)
 		slog.Info("admin.user.create", "actor", currentUser.Email, "new_user", req.Email)
 	}
+	metrics.AdminOpsTotal.WithLabelValues("user", "create", "success").Inc()
 	jsonOK(w, map[string]interface{}{"id": uid, "status": "ok"})
 }
 
@@ -76,10 +81,12 @@ func (h *UsersAdminHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	req.Email = strings.TrimSpace(req.Email)
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Email == "" || req.Name == "" {
+		metrics.AdminOpsTotal.WithLabelValues("user", "update", "failure").Inc()
 		jsonError(w, "Email and name are required", http.StatusBadRequest)
 		return
 	}
 	if err := h.DB.UpdateLocalUser(id, req.Email, req.Name); err != nil {
+		metrics.AdminOpsTotal.WithLabelValues("user", "update", "failure").Inc()
 		jsonError(w, "Email already in use", http.StatusConflict)
 		return
 	}
@@ -88,6 +95,7 @@ func (h *UsersAdminHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		h.DB.LogAdminAction(currentUser.ID, "user", id, "update", req.Email+" "+req.Name)
 		slog.Info("admin.user.update", "actor", currentUser.Email, "target_id", id, "email", req.Email)
 	}
+	metrics.AdminOpsTotal.WithLabelValues("user", "update", "success").Inc()
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
@@ -99,14 +107,17 @@ func (h *UsersAdminHandler) SetPassword(w http.ResponseWriter, r *http.Request) 
 	}
 	json.NewDecoder(r.Body).Decode(&req) //nolint:errcheck
 	if req.Password == "" {
+		metrics.AdminOpsTotal.WithLabelValues("user", "set_password", "failure").Inc()
 		jsonError(w, "Password is required", http.StatusBadRequest)
 		return
 	}
 	if len(req.Password) < 8 {
+		metrics.AdminOpsTotal.WithLabelValues("user", "set_password", "failure").Inc()
 		jsonError(w, "Password must be at least 8 characters", http.StatusBadRequest)
 		return
 	}
 	if err := h.DB.SetUserPassword(id, req.Password); err != nil {
+		metrics.AdminOpsTotal.WithLabelValues("user", "set_password", "failure").Inc()
 		jsonError(w, "Error updating password", http.StatusInternalServerError)
 		return
 	}
@@ -114,6 +125,7 @@ func (h *UsersAdminHandler) SetPassword(w http.ResponseWriter, r *http.Request) 
 	if currentUser != nil {
 		h.DB.LogAdminAction(currentUser.ID, "user", id, "set_password", "")
 	}
+	metrics.AdminOpsTotal.WithLabelValues("user", "set_password", "success").Inc()
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
@@ -122,6 +134,7 @@ func (h *UsersAdminHandler) SetDisabled(w http.ResponseWriter, r *http.Request) 
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	currentUser := middleware.GetUser(r)
 	if currentUser != nil && currentUser.ID == id {
+		metrics.AdminOpsTotal.WithLabelValues("user", "set_disabled", "failure").Inc()
 		jsonError(w, "You cannot disable your own account", http.StatusBadRequest)
 		return
 	}
@@ -130,6 +143,7 @@ func (h *UsersAdminHandler) SetDisabled(w http.ResponseWriter, r *http.Request) 
 	}
 	json.NewDecoder(r.Body).Decode(&req) //nolint:errcheck
 	if err := h.DB.SetUserDisabled(id, req.Disabled); err != nil {
+		metrics.AdminOpsTotal.WithLabelValues("user", "set_disabled", "failure").Inc()
 		jsonError(w, "Error updating user", http.StatusInternalServerError)
 		return
 	}
@@ -141,6 +155,7 @@ func (h *UsersAdminHandler) SetDisabled(w http.ResponseWriter, r *http.Request) 
 		h.DB.LogAdminAction(currentUser.ID, "user", id, action, "")
 		slog.Info("admin.user.disabled", "actor", currentUser.Email, "target_id", id, "disabled", req.Disabled)
 	}
+	metrics.AdminOpsTotal.WithLabelValues("user", "set_disabled", "success").Inc()
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
@@ -149,11 +164,13 @@ func (h *UsersAdminHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	currentUser := middleware.GetUser(r)
 	if currentUser != nil && currentUser.ID == id {
+		metrics.AdminOpsTotal.WithLabelValues("user", "delete", "failure").Inc()
 		jsonError(w, "You cannot delete your own account", http.StatusBadRequest)
 		return
 	}
 	targetUser, _ := h.DB.GetUserByID(id)
 	if err := h.DB.DeleteLocalUser(id); err != nil {
+		metrics.AdminOpsTotal.WithLabelValues("user", "delete", "failure").Inc()
 		jsonError(w, "Error deleting user", http.StatusInternalServerError)
 		return
 	}
@@ -170,6 +187,7 @@ func (h *UsersAdminHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 			return ""
 		}())
 	}
+	metrics.AdminOpsTotal.WithLabelValues("user", "delete", "success").Inc()
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 

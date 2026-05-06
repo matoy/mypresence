@@ -71,6 +71,25 @@ var (
 	})
 )
 
+// ─── PAT, floorplan and admin operations ─────────────────────────────────────
+
+var (
+	PATOpsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "mypresence_pat_operations_total",
+		Help: "Total PAT operations by action and result.",
+	}, []string{"action", "result"}) // action: list|create|revoke|admin_revoke  result: success|failure
+
+	FloorplanOpsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "mypresence_floorplan_operations_total",
+		Help: "Total floorplan and reservation operations by action and result.",
+	}, []string{"action", "result"}) // action: list_floorplans|list_seats|reserve|cancel|bulk_reserve|bulk_cancel|admin_floorplan|admin_seat|admin_image
+
+	AdminOpsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "mypresence_admin_operations_total",
+		Help: "Total admin operations by entity/action/result.",
+	}, []string{"entity", "action", "result"}) // entity: team|status|user|role
+)
+
 // ─── Health gauges (collected on each scrape via callback) ───────────────────
 
 // HealthStats holds point-in-time health data derived from the /health check.

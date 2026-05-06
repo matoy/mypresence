@@ -72,6 +72,7 @@ func newTestEnv(t *testing.T) *testEnv {
 			}
 			return nil
 		},
+		Timeout: 15 * time.Second,
 	}
 
 	srv := httptest.NewServer(mux)
@@ -152,6 +153,7 @@ func (e *testEnv) noFollowClient() *http.Client {
 	return &http.Client{
 		Jar:           e.client.Jar,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+		Timeout:       15 * time.Second,
 	}
 }
 
@@ -1563,6 +1565,7 @@ func TestRateLimiter_BlocksAfterMaxFailures(t *testing.T) {
 	e := newTestEnv(t)
 	noFollow := &http.Client{
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+		Timeout:       15 * time.Second,
 	}
 	badLogin := func() *http.Response {
 		resp, err := noFollow.Post(e.url("/login"),
@@ -2388,6 +2391,7 @@ func TestAdminSetPassword_NewPasswordEnablesLogin(t *testing.T) {
 	// Log in with the new password
 	noFollow := &http.Client{
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+		Timeout:       15 * time.Second,
 	}
 	resp, _ := noFollow.Post(e.url("/login"),
 		"application/x-www-form-urlencoded",

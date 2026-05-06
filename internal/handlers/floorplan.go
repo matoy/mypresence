@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"presence-app/internal/db"
+	"presence-app/internal/metrics"
 	"presence-app/internal/middleware"
 	"presence-app/internal/models"
 )
@@ -95,21 +96,25 @@ func (h *FloorplanHandler) SeatsAPI(w http.ResponseWriter, r *http.Request) {
 		half = "full"
 	}
 	if fpID == 0 || date == "" {
+		metrics.FloorplanOpsTotal.WithLabelValues("list_seats", "failure").Inc()
 		jsonError(w, "Paramètres manquants", http.StatusBadRequest)
 		return
 	}
 
 	isOnSite, _ := h.DB.GetUserOnSiteStatus(user.ID, date)
 	if !isOnSite {
+		metrics.FloorplanOpsTotal.WithLabelValues("list_seats", "success").Inc()
 		jsonOK(w, map[string]interface{}{"seats": []interface{}{}, "on_site": false})
 		return
 	}
 
 	seats, err := h.DB.GetSeatsWithStatus(fpID, user.ID, date, half)
 	if err != nil {
+		metrics.FloorplanOpsTotal.WithLabelValues("list_seats", "failure").Inc()
 		jsonError(w, "Erreur", http.StatusInternalServerError)
 		return
 	}
+	metrics.FloorplanOpsTotal.WithLabelValues("list_seats", "success").Inc()
 	jsonOK(w, map[string]interface{}{"seats": seats, "on_site": true})
 }
 
@@ -122,10 +127,12 @@ func (h *FloorplanHandler) ReserveSeat(w http.ResponseWriter, r *http.Request) {
 		Half   string `json:"half"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		metrics.FloorplanOpsTotal.WithLabelValues("reserve", "failure").Inc()
 		jsonError(w, "Requête invalide", http.StatusBadRequest)
 		return
 	}
 	if req.SeatID == 0 || req.Date == "" {
+		metrics.FloorplanOpsTotal.WithLabelValues("reserve", "failure").Inc()
 		jsonError(w, "Paramètres manquants", http.StatusBadRequest)
 		return
 	}
@@ -136,14 +143,17 @@ func (h *FloorplanHandler) ReserveSeat(w http.ResponseWriter, r *http.Request) {
 	// Verify on-site presence
 	isOnSite, _ := h.DB.GetUserOnSiteStatus(user.ID, req.Date)
 	if !isOnSite {
+		metrics.FloorplanOpsTotal.WithLabelValues("reserve", "failure").Inc()
 		jsonError(w, "Vous devez être déclaré sur site pour réserver un siège", http.StatusForbidden)
 		return
 	}
 
 	if err := h.DB.ReserveSeat(req.SeatID, user.ID, req.Date, req.Half); err != nil {
+		metrics.FloorplanOpsTotal.WithLabelValues("reserve", "failure").Inc()
 		jsonError(w, err.Error(), http.StatusConflict)
 		return
 	}
+	metrics.FloorplanOpsTotal.WithLabelValues("reserve", "success").Inc()
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
@@ -152,9 +162,11 @@ func (h *FloorplanHandler) CancelReservation(w http.ResponseWriter, r *http.Requ
 	user := middleware.GetUser(r)
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err := h.DB.CancelReservation(id, user.ID); err != nil {
+		metrics.FloorplanOpsTotal.WithLabelValues("cancel", "failure").Inc()
 		jsonError(w, "Erreur", http.StatusInternalServerError)
 		return
 	}
+	metrics.FloorplanOpsTotal.WithLabelValues("cancel", "success").Inc()
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
@@ -193,17 +205,20 @@ func (h *FloorplanHandler) CreateFloorplan(w http.ResponseWriter, r *http.Reques
 		Name string `json:"name"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		metrics.FloorplanOpsTotal.WithLabelValues("admin_floorplan", "failure").Inc()
 		jsonError(w, "Requête invalide", http.StatusBadRequest)
 		return
 	}
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" {
+		metrics.FloorplanOpsTotal.WithLabelValues("admin_floorplan", "failure").Inc()
 		jsonError(w, "Name is required", http.StatusBadRequest)
 		return
 	}
 	fps, _ := h.DB.ListFloorplans()
 	id, err := h.DB.CreateFloorplan(req.Name, len(fps))
 	if err != nil {
+		metrics.FloorplanOpsTotal.WithLabelValues("admin_floorplan", "failure").Inc()
 		jsonError(w, "Erreur", http.StatusInternalServerError)
 		return
 	}
@@ -211,6 +226,7 @@ func (h *FloorplanHandler) CreateFloorplan(w http.ResponseWriter, r *http.Reques
 	if actor != nil {
 		slog.Info("admin.floorplan.create", "actor", actor.Email, "floorplan_id", id, "name", req.Name)
 	}
+	metrics.FloorplanOpsTotal.WithLabelValues("admin_floorplan", "success").Inc()
 	jsonOK(w, map[string]interface{}{"id": id, "name": req.Name})
 }
 
@@ -229,17 +245,20 @@ func (h *FloorplanHandler) AdminGetFloorplan(w http.ResponseWriter, r *http.Requ
 func (h *FloorplanHandler) AdminListSeats(w http.ResponseWriter, r *http.Request) {
 	fpID, _ := strconv.ParseInt(r.URL.Query().Get("floorplan_id"), 10, 64)
 	if fpID == 0 {
+		metrics.FloorplanOpsTotal.WithLabelValues("admin_seat", "failure").Inc()
 		jsonError(w, "floorplan_id required", http.StatusBadRequest)
 		return
 	}
 	seats, err := h.DB.ListSeats(fpID)
 	if err != nil {
+		metrics.FloorplanOpsTotal.WithLabelValues("admin_seat", "failure").Inc()
 		jsonError(w, "Erreur", http.StatusInternalServerError)
 		return
 	}
 	if seats == nil {
 		seats = []models.Seat{}
 	}
+	metrics.FloorplanOpsTotal.WithLabelValues("admin_seat", "success").Inc()
 	jsonOK(w, seats)
 }
 
@@ -253,10 +272,12 @@ func (h *FloorplanHandler) UpdateFloorplan(w http.ResponseWriter, r *http.Reques
 	json.NewDecoder(r.Body).Decode(&req) //nolint:errcheck
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" {
+		metrics.FloorplanOpsTotal.WithLabelValues("admin_floorplan", "failure").Inc()
 		jsonError(w, "Name is required", http.StatusBadRequest)
 		return
 	}
 	if err := h.DB.UpdateFloorplan(id, req.Name, req.SortOrder); err != nil {
+		metrics.FloorplanOpsTotal.WithLabelValues("admin_floorplan", "failure").Inc()
 		jsonError(w, "Erreur", http.StatusInternalServerError)
 		return
 	}
@@ -264,6 +285,7 @@ func (h *FloorplanHandler) UpdateFloorplan(w http.ResponseWriter, r *http.Reques
 	if actor != nil {
 		slog.Info("admin.floorplan.update", "actor", actor.Email, "floorplan_id", id, "name", req.Name)
 	}
+	metrics.FloorplanOpsTotal.WithLabelValues("admin_floorplan", "success").Inc()
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
@@ -280,6 +302,7 @@ func (h *FloorplanHandler) DeleteFloorplan(w http.ResponseWriter, r *http.Reques
 	if actor != nil {
 		slog.Info("admin.floorplan.delete", "actor", actor.Email, "floorplan_id", id)
 	}
+	metrics.FloorplanOpsTotal.WithLabelValues("admin_floorplan", "success").Inc()
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
@@ -292,6 +315,7 @@ func (h *FloorplanHandler) UploadFloorplanImage(w http.ResponseWriter, r *http.R
 	r.ParseMultipartForm(maxUploadBytes) //nolint:errcheck
 	file, header, err := r.FormFile("image")
 	if err != nil {
+		metrics.FloorplanOpsTotal.WithLabelValues("admin_image", "failure").Inc()
 		jsonError(w, "Fichier manquant", http.StatusBadRequest)
 		return
 	}
@@ -301,6 +325,7 @@ func (h *FloorplanHandler) UploadFloorplanImage(w http.ResponseWriter, r *http.R
 	ext := strings.ToLower(filepath.Ext(header.Filename))
 	allowedExts := map[string]bool{".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true}
 	if !allowedExts[ext] {
+		metrics.FloorplanOpsTotal.WithLabelValues("admin_image", "failure").Inc()
 		jsonError(w, "Format non supporté (PNG, JPG, GIF, WEBP)", http.StatusBadRequest)
 		return
 	}
@@ -319,6 +344,7 @@ func (h *FloorplanHandler) UploadFloorplanImage(w http.ResponseWriter, r *http.R
 	// "image/webp" or "application/octet-stream" for unknown binary data.
 	base := strings.SplitN(detectedType, ";", 2)[0]
 	if !allowedTypes[base] {
+		metrics.FloorplanOpsTotal.WithLabelValues("admin_image", "failure").Inc()
 		jsonError(w, "Contenu de fichier invalide (image uniquement)", http.StatusBadRequest)
 		return
 	}
@@ -331,6 +357,7 @@ func (h *FloorplanHandler) UploadFloorplanImage(w http.ResponseWriter, r *http.R
 	filename := fmt.Sprintf("floorplan_%d%s", id, ext)
 	dst, err := os.Create(filepath.Join(h.DataDir, filename))
 	if err != nil {
+		metrics.FloorplanOpsTotal.WithLabelValues("admin_image", "failure").Inc()
 		jsonError(w, "Erreur création fichier", http.StatusInternalServerError)
 		return
 	}
@@ -340,6 +367,7 @@ func (h *FloorplanHandler) UploadFloorplanImage(w http.ResponseWriter, r *http.R
 	fullReader := io.LimitReader(io.MultiReader(bytes.NewReader(sniff[:n]), file), maxUploadBytes)
 	if _, err := io.Copy(dst, fullReader); err != nil {
 		os.Remove(filepath.Join(h.DataDir, filename)) //nolint:errcheck
+		metrics.FloorplanOpsTotal.WithLabelValues("admin_image", "failure").Inc()
 		jsonError(w, "Erreur lors de l'écriture du fichier", http.StatusInternalServerError)
 		return
 	}
@@ -349,6 +377,7 @@ func (h *FloorplanHandler) UploadFloorplanImage(w http.ResponseWriter, r *http.R
 	if actor != nil {
 		slog.Info("admin.floorplan.image_upload", "actor", actor.Email, "floorplan_id", id, "file", filename)
 	}
+	metrics.FloorplanOpsTotal.WithLabelValues("admin_image", "success").Inc()
 	jsonOK(w, map[string]string{"status": "ok", "image_path": filename})
 }
 
@@ -361,6 +390,7 @@ func (h *FloorplanHandler) CreateSeat(w http.ResponseWriter, r *http.Request) {
 		YPct  float64 `json:"y_pct"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		metrics.FloorplanOpsTotal.WithLabelValues("admin_seat", "failure").Inc()
 		jsonError(w, "Requête invalide", http.StatusBadRequest)
 		return
 	}
@@ -370,6 +400,7 @@ func (h *FloorplanHandler) CreateSeat(w http.ResponseWriter, r *http.Request) {
 	}
 	seatID, err := h.DB.CreateSeat(fpID, req.Label, req.XPct, req.YPct)
 	if err != nil {
+		metrics.FloorplanOpsTotal.WithLabelValues("admin_seat", "failure").Inc()
 		jsonError(w, "Erreur", http.StatusInternalServerError)
 		return
 	}
@@ -377,6 +408,7 @@ func (h *FloorplanHandler) CreateSeat(w http.ResponseWriter, r *http.Request) {
 	if actor != nil {
 		slog.Info("admin.seat.create", "actor", actor.Email, "floorplan_id", fpID, "label", req.Label, "seat_id", seatID)
 	}
+	metrics.FloorplanOpsTotal.WithLabelValues("admin_seat", "success").Inc()
 	jsonOK(w, map[string]interface{}{"id": seatID, "label": req.Label, "x_pct": req.XPct, "y_pct": req.YPct})
 }
 
@@ -394,6 +426,7 @@ func (h *FloorplanHandler) UpdateSeat(w http.ResponseWriter, r *http.Request) {
 		req.Label = "?"
 	}
 	if err := h.DB.UpdateSeat(id, req.Label, req.XPct, req.YPct); err != nil {
+		metrics.FloorplanOpsTotal.WithLabelValues("admin_seat", "failure").Inc()
 		jsonError(w, "Erreur", http.StatusInternalServerError)
 		return
 	}
@@ -401,6 +434,7 @@ func (h *FloorplanHandler) UpdateSeat(w http.ResponseWriter, r *http.Request) {
 	if actor != nil {
 		slog.Info("admin.seat.update", "actor", actor.Email, "seat_id", id, "label", req.Label)
 	}
+	metrics.FloorplanOpsTotal.WithLabelValues("admin_seat", "success").Inc()
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
@@ -412,6 +446,7 @@ func (h *FloorplanHandler) DeleteSeat(w http.ResponseWriter, r *http.Request) {
 	if actor != nil {
 		slog.Info("admin.seat.delete", "actor", actor.Email, "seat_id", id)
 	}
+	metrics.FloorplanOpsTotal.WithLabelValues("admin_seat", "success").Inc()
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
@@ -423,12 +458,14 @@ func (h *FloorplanHandler) DeleteSeat(w http.ResponseWriter, r *http.Request) {
 func (h *FloorplanHandler) ListFloorplansAPI(w http.ResponseWriter, r *http.Request) {
 	floorplans, err := h.DB.ListFloorplans()
 	if err != nil {
+		metrics.FloorplanOpsTotal.WithLabelValues("list_floorplans", "failure").Inc()
 		jsonError(w, "Erreur", http.StatusInternalServerError)
 		return
 	}
 	if floorplans == nil {
 		floorplans = []models.Floorplan{}
 	}
+	metrics.FloorplanOpsTotal.WithLabelValues("list_floorplans", "success").Inc()
 	jsonOK(w, floorplans)
 }
 
@@ -437,17 +474,20 @@ func (h *FloorplanHandler) ListFloorplansAPI(w http.ResponseWriter, r *http.Requ
 func (h *FloorplanHandler) ListSeatsForFloorplanAPI(w http.ResponseWriter, r *http.Request) {
 	fpID, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if fpID == 0 {
+		metrics.FloorplanOpsTotal.WithLabelValues("list_seats", "failure").Inc()
 		jsonError(w, "ID manquant", http.StatusBadRequest)
 		return
 	}
 	seats, err := h.DB.ListSeats(fpID)
 	if err != nil {
+		metrics.FloorplanOpsTotal.WithLabelValues("list_seats", "failure").Inc()
 		jsonError(w, "Erreur", http.StatusInternalServerError)
 		return
 	}
 	if seats == nil {
 		seats = []models.Seat{}
 	}
+	metrics.FloorplanOpsTotal.WithLabelValues("list_seats", "success").Inc()
 	jsonOK(w, seats)
 }
 
@@ -462,20 +502,24 @@ func (h *FloorplanHandler) BulkReserveSeats(w http.ResponseWriter, r *http.Reque
 		Half   string   `json:"half"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		metrics.FloorplanOpsTotal.WithLabelValues("bulk_reserve", "failure").Inc()
 		jsonError(w, "Requête invalide", http.StatusBadRequest)
 		return
 	}
 	if req.SeatID == 0 || len(req.Dates) == 0 {
+		metrics.FloorplanOpsTotal.WithLabelValues("bulk_reserve", "failure").Inc()
 		jsonError(w, "Paramètres manquants", http.StatusBadRequest)
 		return
 	}
 	for _, d := range req.Dates {
 		if _, err := time.Parse("2006-01-02", d); err != nil {
+			metrics.FloorplanOpsTotal.WithLabelValues("bulk_reserve", "failure").Inc()
 			jsonError(w, "Date invalide: "+d, http.StatusBadRequest)
 			return
 		}
 	}
 	count := h.DB.BulkReserveSeat(req.SeatID, user.ID, req.Dates, req.Half)
+	metrics.FloorplanOpsTotal.WithLabelValues("bulk_reserve", "success").Inc()
 	jsonOK(w, map[string]interface{}{"booked": count})
 }
 
@@ -487,22 +531,27 @@ func (h *FloorplanHandler) CancelReservationsByDates(w http.ResponseWriter, r *h
 		Dates []string `json:"dates"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		metrics.FloorplanOpsTotal.WithLabelValues("bulk_cancel", "failure").Inc()
 		jsonError(w, "Requête invalide", http.StatusBadRequest)
 		return
 	}
 	if len(req.Dates) == 0 {
+		metrics.FloorplanOpsTotal.WithLabelValues("bulk_cancel", "failure").Inc()
 		jsonError(w, "Paramètres manquants", http.StatusBadRequest)
 		return
 	}
 	for _, d := range req.Dates {
 		if _, err := time.Parse("2006-01-02", d); err != nil {
+			metrics.FloorplanOpsTotal.WithLabelValues("bulk_cancel", "failure").Inc()
 			jsonError(w, "Date invalide: "+d, http.StatusBadRequest)
 			return
 		}
 	}
 	if err := h.DB.CancelUserReservationsForDates(user.ID, req.Dates); err != nil {
+		metrics.FloorplanOpsTotal.WithLabelValues("bulk_cancel", "failure").Inc()
 		jsonError(w, "Erreur", http.StatusInternalServerError)
 		return
 	}
+	metrics.FloorplanOpsTotal.WithLabelValues("bulk_cancel", "success").Inc()
 	jsonOK(w, map[string]string{"status": "ok"})
 }
