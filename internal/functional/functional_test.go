@@ -2395,16 +2395,23 @@ func TestAdminSetPassword_NewPasswordEnablesLogin(t *testing.T) {
 	e.loginAdmin(t)
 
 	id, _ := e.db.CreateLocalUser("pwdchg@test.com", "PwdChg", "oldpass1")
-	drain(e.putJSON("/admin/users/"+i64str(id)+"/password", map[string]string{"password": "freshpass1"}))
+	setPwdResp := e.putJSON("/admin/users/"+i64str(id)+"/password", map[string]string{"password": "freshpass1"})
+	defer drain(setPwdResp)
+	if setPwdResp.StatusCode != http.StatusOK {
+		t.Fatalf("set password: expected 200, got %d", setPwdResp.StatusCode)
+	}
 
 	// Log in with the new password
 	noFollow := &http.Client{
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 		Timeout:       15 * time.Second,
 	}
-	resp, _ := noFollow.Post(e.url("/login"),
+	resp, err := noFollow.Post(e.url("/login"),
 		"application/x-www-form-urlencoded",
 		strings.NewReader("username=pwdchg@test.com&password=freshpass1"))
+	if err != nil {
+		t.Fatalf("login with new password request failed: %v", err)
+	}
 	defer drain(resp)
 
 	if resp.StatusCode != http.StatusSeeOther {
@@ -2447,6 +2454,7 @@ func TestSetLang_SetsCookieAndRedirects(t *testing.T) {
 
 	noFollow := &http.Client{
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+		Timeout:       15 * time.Second,
 	}
 	resp, err := noFollow.Post(e.url("/set-lang"),
 		"application/x-www-form-urlencoded",
@@ -2479,6 +2487,7 @@ func TestSetLang_InvalidLang_UsesDefault(t *testing.T) {
 
 	noFollow := &http.Client{
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+		Timeout:       15 * time.Second,
 	}
 	resp, err := noFollow.Post(e.url("/set-lang"),
 		"application/x-www-form-urlencoded",
