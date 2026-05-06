@@ -429,6 +429,7 @@ func TestLogin_ValidCredentials_RedirectsToHome(t *testing.T) {
 	noFollowClient := &http.Client{
 		Jar:           jar,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+		Timeout:       15 * time.Second,
 	}
 	resp, err := noFollowClient.Post(e.url("/login"), "application/x-www-form-urlencoded",
 		strings.NewReader("username=admin&password=adminpass1"))
@@ -461,6 +462,7 @@ func TestLogin_InvalidCredentials_RedirectsToLoginWithError(t *testing.T) {
 	e := newTestEnv(t)
 	noFollowClient := &http.Client{
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+		Timeout:       15 * time.Second,
 	}
 	resp, err := noFollowClient.Post(e.url("/login"), "application/x-www-form-urlencoded",
 		strings.NewReader("username=admin&password=wrongpassword"))
@@ -491,6 +493,7 @@ func TestLogin_LocalUser_ValidCredentials(t *testing.T) {
 
 	noFollowClient := &http.Client{
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+		Timeout:       15 * time.Second,
 	}
 	resp, err := noFollowClient.Post(e.url("/login"), "application/x-www-form-urlencoded",
 		strings.NewReader("username=user@test.com&password=mypassword"))
@@ -511,6 +514,7 @@ func TestLogin_DisabledUser_Rejected(t *testing.T) {
 
 	noFollowClient := &http.Client{
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+		Timeout:       15 * time.Second,
 	}
 	resp, err := noFollowClient.Post(e.url("/login"), "application/x-www-form-urlencoded",
 		strings.NewReader("username=disabled@test.com&password=password1"))
@@ -542,6 +546,7 @@ func TestLogout_ClearsSessionAndRedirects(t *testing.T) {
 	noFollowClient := &http.Client{
 		Jar:           e.client.Jar,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+		Timeout:       15 * time.Second,
 	}
 	csrf := e.csrfToken()
 	logoutForm := url.Values{}
@@ -567,6 +572,7 @@ func TestLogout_ClearsSessionAndRedirects(t *testing.T) {
 	noFollowClient2 := &http.Client{
 		Jar:           e.client.Jar, // same jar (session cookie cleared)
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+		Timeout:       15 * time.Second,
 	}
 	resp3, _ := noFollowClient2.Get(e.url("/"))
 	defer drain(resp3)
@@ -582,6 +588,7 @@ func TestProtectedRoutes_WithoutSession_RedirectToLogin(t *testing.T) {
 	// Fresh client with no cookies
 	noAuthClient := &http.Client{
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+		Timeout:       15 * time.Second,
 	}
 
 	routes := []string{"/", "/settings/my-logs", "/settings/change-password", "/settings/tokens"}
@@ -616,6 +623,7 @@ func TestAdminRoutes_WithoutAdminRole_Forbidden(t *testing.T) {
 	noFollowClient := &http.Client{
 		Jar:           e.client.Jar,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+		Timeout:       15 * time.Second,
 	}
 
 	resp, err := noFollowClient.Get(e.url("/admin/users"))
@@ -1131,6 +1139,7 @@ func TestChangePasswordPage_NonLocalUser_Redirects(t *testing.T) {
 	noFollow := &http.Client{
 		Jar:           e.client.Jar,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+		Timeout:       15 * time.Second,
 	}
 	resp, _ := noFollow.Get(e.url("/settings/change-password"))
 	defer drain(resp)
@@ -1156,7 +1165,7 @@ func TestBearerPAT_ValidToken_AccessesProtectedRoute(t *testing.T) {
 	// Use a brand new client (no session cookie)
 	req, _ := http.NewRequest("GET", e.url("/api/presences?team_id=1&year=2026&month=4"), nil)
 	req.Header.Set("Authorization", "Bearer "+rawToken)
-	freshClient := &http.Client{}
+	freshClient := &http.Client{Timeout: 15 * time.Second}
 	resp2, err := freshClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -2205,7 +2214,7 @@ func TestBearerPAT_CanReadPresences(t *testing.T) {
 
 	req, _ := http.NewRequest("GET", e.url("/api/presences?team_id="+i64str(teamID)+"&year=2026&month=4"), nil)
 	req.Header.Set("Authorization", "Bearer "+rawToken)
-	resp, err := (&http.Client{}).Do(req)
+	resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2505,7 +2514,7 @@ func TestAPIDocs_ReturnsMarkdown(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	resp, err := http.Get(srv.URL + "/api/docs")
+	resp, err := (&http.Client{Timeout: 15 * time.Second}).Get(srv.URL + "/api/docs")
 	if err != nil {
 		t.Fatal(err)
 	}
