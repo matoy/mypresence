@@ -18,6 +18,30 @@ import (
 	"presence-app/internal/models"
 )
 
+var (
+	openDB       = db.Open
+	seedDefaults = func(database *db.DB, adminUser, adminPassword string) error {
+		return database.SeedDefaults(adminUser, adminPassword)
+	}
+	createSession = func(database *db.DB, userID int64) (string, error) {
+		return database.CreateSession(userID)
+	}
+	createLocalUser = func(database *db.DB, email, name, password string) (int64, error) {
+		return database.CreateLocalUser(email, name, password)
+	}
+	getUserByID = func(database *db.DB, id int64) (*models.User, error) {
+		return database.GetUserByID(id)
+	}
+	getUserByEmail = func(database *db.DB, email string) (*models.User, error) {
+		return database.GetUserByEmail(email)
+	}
+)
+
+type fataler interface {
+	Helper()
+	Fatalf(format string, args ...interface{})
+}
+
 // Env is a complete test environment with a real DB, a test server and an HTTP client.
 type Env struct {
 	DB     *db.DB
@@ -29,12 +53,15 @@ type Env struct {
 // NewEnv opens an isolated SQLite DB in a temp directory and seeds it with defaults.
 // The caller is responsible for registering routes onto Mux before calling this.
 func NewEnv(t *testing.T) *Env {
-	t.Helper()
-	dir := t.TempDir()
+	return newEnv(t, t.TempDir())
+}
 
-	database, err := db.Open(dir)
+func newEnv(tb fataler, dir string) *Env {
+	tb.Helper()
+
+	database, err := openDB(dir)
 	if err != nil {
-		t.Fatalf("testhelper: open db: %v", err)
+		tb.Fatalf("testhelper: open db: %v", err)
 	}
 
 	cfg := &config.Config{
@@ -45,11 +72,14 @@ func NewEnv(t *testing.T) *Env {
 		SecretKey:     "test-secret-32-chars-padded-here",
 	}
 
-	if err := database.SeedDefaults(cfg.AdminUser, cfg.AdminPassword); err != nil {
-		t.Fatalf("testhelper: seed: %v", err)
+	if err := seedDefaults(database, cfg.AdminUser, cfg.AdminPassword); err != nil {
+		database.Close() //nolint:errcheck
+		tb.Fatalf("testhelper: seed: %v", err)
 	}
 
-	t.Cleanup(func() { database.Close() })
+	if t, ok := tb.(*testing.T); ok {
+		t.Cleanup(func() { database.Close() })
+	}
 
 	jar, _ := cookiejar.New(nil)
 	client := &http.Client{
@@ -122,21 +152,29 @@ func (e *Env) DoJSON(method, path string, payload interface{}) *http.Response {
 
 // MustDecodeJSON decodes the JSON response body into v; fails the test on error.
 func MustDecodeJSON(t *testing.T, resp *http.Response, v interface{}) {
-	t.Helper()
+	mustDecodeJSON(t, resp, v)
+}
+
+func mustDecodeJSON(tb fataler, resp *http.Response, v interface{}) {
+	tb.Helper()
 	defer resp.Body.Close() //nolint:errcheck
 	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
-		t.Fatalf("decode JSON: %v", err)
+		tb.Fatalf("decode JSON: %v", err)
 	}
 }
 
 // LoginSession logs in as admin and stores the session cookie in the client jar.
 // Subsequent requests from the client will be authenticated.
 func (e *Env) LoginSession(t *testing.T, username, password string) {
-	t.Helper()
+	loginSession(t, e, username, password)
+}
+
+func loginSession(tb fataler, e *Env, username, password string) {
+	tb.Helper()
 	body := bytes.NewBufferString("username=" + username + "&password=" + password)
 	resp := e.DoForm("POST", "/login", body)
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusSeeOther {
-		t.Fatalf("login failed: status %d", resp.StatusCode)
+		tb.Fatalf("login failed: status %d", resp.StatusCode)
 	}
 	resp.Body.Close() //nolint:errcheck
 }
@@ -144,10 +182,14 @@ func (e *Env) LoginSession(t *testing.T, username, password string) {
 // InjectUser creates a fake session directly in the DB for the given user
 // and stores the session cookie in the client jar. Useful to bypass login form.
 func (e *Env) InjectUser(t *testing.T, user *models.User) string {
-	t.Helper()
-	token, err := e.DB.CreateSession(user.ID)
+	return injectUser(t, e, user)
+}
+
+func injectUser(tb fataler, e *Env, user *models.User) string {
+	tb.Helper()
+	token, err := createSession(e.DB, user.ID)
 	if err != nil {
-		t.Fatalf("injectUser: create session: %v", err)
+		tb.Fatalf("injectUser: create session: %v", err)
 	}
 	// Store the cookie so the client sends it automatically
 	if e.Server != nil {
@@ -165,24 +207,32 @@ func (e *Env) InjectUser(t *testing.T, user *models.User) string {
 
 // CreateBasicUser inserts a user with "basic" role and returns it.
 func (e *Env) CreateBasicUser(t *testing.T, email, name, password string) *models.User {
-	t.Helper()
-	id, err := e.DB.CreateLocalUser(email, name, password)
+	return createBasicUser(t, e, email, name, password)
+}
+
+func createBasicUser(tb fataler, e *Env, email, name, password string) *models.User {
+	tb.Helper()
+	id, err := createLocalUser(e.DB, email, name, password)
 	if err != nil {
-		t.Fatalf("CreateBasicUser: %v", err)
+		tb.Fatalf("CreateBasicUser: %v", err)
 	}
-	u, err := e.DB.GetUserByID(id)
+	u, err := getUserByID(e.DB, id)
 	if err != nil {
-		t.Fatalf("CreateBasicUser GetUserByID: %v", err)
+		tb.Fatalf("CreateBasicUser GetUserByID: %v", err)
 	}
 	return u
 }
 
 // CreateAdminUser returns the existing seeded admin user (global role).
 func (e *Env) GetAdminUser(t *testing.T) *models.User {
-	t.Helper()
-	u, err := e.DB.GetUserByEmail(e.Cfg.AdminUser)
+	return getAdminUser(t, e)
+}
+
+func getAdminUser(tb fataler, e *Env) *models.User {
+	tb.Helper()
+	u, err := getUserByEmail(e.DB, e.Cfg.AdminUser)
 	if err != nil {
-		t.Fatalf("GetAdminUser: %v", err)
+		tb.Fatalf("GetAdminUser: %v", err)
 	}
 	return u
 }
