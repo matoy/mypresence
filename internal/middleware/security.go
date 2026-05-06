@@ -52,13 +52,28 @@ const (
 type LoginRateLimiter struct {
 	mu       sync.Mutex
 	attempts map[string]*loginAttempt
+	stopCh   chan struct{}
+	stopOnce sync.Once
 }
 
 // NewLoginRateLimiter creates a ready-to-use limiter and starts background cleanup.
 func NewLoginRateLimiter() *LoginRateLimiter {
-	l := &LoginRateLimiter{attempts: make(map[string]*loginAttempt)}
+	l := &LoginRateLimiter{
+		attempts: make(map[string]*loginAttempt),
+		stopCh:   make(chan struct{}),
+	}
 	go l.cleanupLoop()
 	return l
+}
+
+// Close stops the background cleanup goroutine.
+func (l *LoginRateLimiter) Close() {
+	if l == nil {
+		return
+	}
+	l.stopOnce.Do(func() {
+		close(l.stopCh)
+	})
 }
 
 // Allow returns true if the request is allowed (not rate-limited).
@@ -125,16 +140,21 @@ func (l *LoginRateLimiter) Reset(r *http.Request) {
 func (l *LoginRateLimiter) cleanupLoop() {
 	ticker := time.NewTicker(10 * time.Minute)
 	defer ticker.Stop()
-	for range ticker.C {
-		l.mu.Lock()
-		for ip, a := range l.attempts {
-			expired := time.Since(a.firstFail) > loginWindow
-			blockExpired := a.blockedAt.IsZero() || time.Since(a.blockedAt) > loginBlockDuration
-			if expired && blockExpired {
-				delete(l.attempts, ip)
+	for {
+		select {
+		case <-ticker.C:
+			l.mu.Lock()
+			for ip, a := range l.attempts {
+				expired := time.Since(a.firstFail) > loginWindow
+				blockExpired := a.blockedAt.IsZero() || time.Since(a.blockedAt) > loginBlockDuration
+				if expired && blockExpired {
+					delete(l.attempts, ip)
+				}
 			}
+			l.mu.Unlock()
+		case <-l.stopCh:
+			return
 		}
-		l.mu.Unlock()
 	}
 }
 

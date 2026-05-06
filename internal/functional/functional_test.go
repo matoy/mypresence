@@ -61,7 +61,10 @@ func newTestEnv(t *testing.T) *testEnv {
 		t.Fatalf("seed: %v", err)
 	}
 
-	mux := buildRouter(database, cfg, dir)
+	rateLimiter := middleware.NewLoginRateLimiter()
+	t.Cleanup(rateLimiter.Close)
+
+	mux := buildRouter(database, cfg, dir, rateLimiter)
 
 	jar, _ := cookiejar.New(nil)
 	client := &http.Client{
@@ -205,7 +208,7 @@ func mustDecodeJSON(t *testing.T, resp *http.Response, v interface{}) {
 
 // buildRouter wires up a minimal but complete router – same logic as main.go
 // but without templates (render is stubbed to write a 200 OK).
-func buildRouter(database *db.DB, cfg *config.Config, dataDir string) http.Handler {
+func buildRouter(database *db.DB, cfg *config.Config, dataDir string, rateLimiter *middleware.LoginRateLimiter) http.Handler {
 	// Stub renderer: just returns 200 with a plain-text page name.
 	renderPage := func(w http.ResponseWriter, r *http.Request, page string, data interface{}) {
 		w.Header().Set("Content-Type", "text/html")
@@ -218,7 +221,7 @@ func buildRouter(database *db.DB, cfg *config.Config, dataDir string) http.Handl
 		DB:          database,
 		Config:      cfg,
 		Render:      renderPage,
-		RateLimiter: middleware.NewLoginRateLimiter(),
+		RateLimiter: rateLimiter,
 	}
 	calH := &handlers.CalendarHandler{DB: database, Render: renderPage, DisableFloorplans: false}
 	adminH := &handlers.AdminHandler{DB: database, Render: renderPage}
