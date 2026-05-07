@@ -16,6 +16,8 @@ import (
 	"presence-app/internal/config"
 	"presence-app/internal/db"
 	"presence-app/internal/models"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 var (
@@ -63,6 +65,8 @@ func newEnv(tb fataler, dir string) *Env {
 	if err != nil {
 		tb.Fatalf("testhelper: open db: %v", err)
 	}
+	// Use minimum bcrypt cost so password hashing doesn't bottleneck CI runners.
+	database.SetBcryptCost(bcrypt.MinCost)
 
 	cfg := &config.Config{
 		AdminUser:     "admin",

@@ -18,18 +18,15 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// bcryptCost is the work factor used for all password hashing.
-// OWASP Password Storage Cheat Sheet recommends ≥12 on modern hardware.
-const bcryptCost = 12
-
 // DB holds separate SQLite connections for each domain.
 type DB struct {
-	dataDir   string
-	core      *sql.DB // users, teams, user_teams, sessions, personal_access_tokens
-	presence  *sql.DB // statuses, presences, presence_logs, holidays
-	floorplan *sql.DB // floorplans, seats, seat_reservations
-	audit     *sql.DB // admin_logs
-	projects  *sql.DB // projects, project_time_entries
+	dataDir     string
+	core        *sql.DB // users, teams, user_teams, sessions, personal_access_tokens
+	presence    *sql.DB // statuses, presences, presence_logs, holidays
+	floorplan   *sql.DB // floorplans, seats, seat_reservations
+	audit       *sql.DB // admin_logs
+	projects    *sql.DB // projects, project_time_entries
+	bcryptCost  int     // OWASP recommends ≥12; lowered to bcrypt.MinCost in tests
 }
 
 func openSQLite(path string) (*sql.DB, error) {
@@ -88,12 +85,13 @@ func Open(dataDir string) (*DB, error) {
 	}
 
 	d := &DB{
-		dataDir:   dataDir,
-		core:      coreDB,
-		presence:  presenceDB,
-		floorplan: floorplanDB,
-		audit:     auditDB,
-		projects:  projectsDB,
+		dataDir:    dataDir,
+		core:       coreDB,
+		presence:   presenceDB,
+		floorplan:  floorplanDB,
+		audit:      auditDB,
+		projects:   projectsDB,
+		bcryptCost: 12, // OWASP Password Storage Cheat Sheet recommends ≥12 on modern hardware
 	}
 
 	if err := d.migrateCore(); err != nil {
@@ -153,6 +151,10 @@ func (d *DB) Ping() error {
 	}
 	return nil
 }
+
+// SetBcryptCost overrides the bcrypt work factor. Use bcrypt.MinCost (4) in
+// tests to avoid spending seconds per user creation on CI runners.
+func (d *DB) SetBcryptCost(cost int) { d.bcryptCost = cost }
 
 // DBCounts holds point-in-time record counts from all databases.
 type DBCounts struct {
@@ -484,7 +486,7 @@ func copyLegacyRows(src, dst *sql.DB, srcQuery, dstInsert string) error {
 
 // SeedDefaults creates the admin user and default statuses if they don't exist.
 func (d *DB) SeedDefaults(adminUser, adminPass string) error {
-	hash, err := bcrypt.GenerateFromPassword([]byte(adminPass), bcryptCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(adminPass), d.bcryptCost)
 	if err != nil {
 		return fmt.Errorf("hash admin password: %w", err)
 	}
@@ -902,7 +904,7 @@ func (d *DB) UpdateUserRoles(id int64, roles string) error {
 }
 
 func (d *DB) CreateLocalUser(email, name, password string) (int64, error) {
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), d.bcryptCost)
 	if err != nil {
 		return 0, fmt.Errorf("hash password: %w", err)
 	}
@@ -929,7 +931,7 @@ func (d *DB) CheckPassword(userID int64, storedHash, plainPassword string) bool 
 	}
 	// Legacy plain-text comparison — rehash automatically on successful match
 	if storedHash == plainPassword {
-		if hash, err := bcrypt.GenerateFromPassword([]byte(plainPassword), bcryptCost); err == nil {
+		if hash, err := bcrypt.GenerateFromPassword([]byte(plainPassword), d.bcryptCost); err == nil {
 			d.core.Exec("UPDATE users SET password_hash = ? WHERE id = ?", string(hash), userID) //nolint:errcheck
 		}
 		return true
@@ -943,7 +945,7 @@ func (d *DB) UpdateLocalUser(id int64, email, name string) error {
 }
 
 func (d *DB) SetUserPassword(id int64, password string) error {
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), d.bcryptCost)
 	if err != nil {
 		return fmt.Errorf("hash password: %w", err)
 	}
