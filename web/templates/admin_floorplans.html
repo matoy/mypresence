@@ -116,6 +116,7 @@
                                             <span x-text="seat.label.length<=3?seat.label:seat.label.substring(0,3)"></span>
                                             <!-- Hover: delete button (hidden while dragging) -->
                                             <button x-show="draggingSeat !== seat.id"
+                                                    @mousedown.stop
                                                     @click.stop="confirmDeleteSeat(seat)"
                                                     class="absolute -top-2 -right-2 hidden group-hover/seat:flex w-5 h-5 bg-red-500 text-white rounded-full text-xs items-center justify-center shadow">×</button>
                                         </div>
