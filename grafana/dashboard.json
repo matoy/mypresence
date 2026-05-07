@@ -2402,20 +2402,20 @@
         "type": "textbox",
         "name": "loki_stream",
         "label": "Loki stream selector",
-        "description": "LogQL label selector placed inside {}. Example: job=\"mypresence\" or service_name=\"myPresence-app\"",
+        "description": "LogQL label selector placed inside {}. Example: service_name=\"mypresence-app\"",
         "current": {
           "selected": true,
-          "text": "job=\"mypresence\"",
-          "value": "job=\"mypresence\""
+          "text": "service_name=\"mypresence-app\"",
+          "value": "service_name=\"mypresence-app\""
         },
         "options": [
           {
             "selected": true,
-            "text": "job=\"mypresence\"",
-            "value": "job=\"mypresence\""
+            "text": "service_name=\"mypresence-app\"",
+            "value": "service_name=\"mypresence-app\""
           }
         ],
-        "query": "job=\"mypresence\"",
+        "query": "service_name=\"mypresence-app\"",
         "hide": 0
       }
     ]
