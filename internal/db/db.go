@@ -20,13 +20,13 @@ import (
 
 // DB holds separate SQLite connections for each domain.
 type DB struct {
-	dataDir     string
-	core        *sql.DB // users, teams, user_teams, sessions, personal_access_tokens
-	presence    *sql.DB // statuses, presences, presence_logs, holidays
-	floorplan   *sql.DB // floorplans, seats, seat_reservations
-	audit       *sql.DB // admin_logs
-	projects    *sql.DB // projects, project_time_entries
-	bcryptCost  int     // OWASP recommends ≥12; lowered to bcrypt.MinCost in tests
+	dataDir    string
+	core       *sql.DB // users, teams, user_teams, sessions, personal_access_tokens
+	presence   *sql.DB // statuses, presences, presence_logs, holidays
+	floorplan  *sql.DB // floorplans, seats, seat_reservations
+	audit      *sql.DB // admin_logs
+	projects   *sql.DB // projects, project_time_entries
+	bcryptCost int     // OWASP recommends ≥12; lowered to bcrypt.MinCost in tests
 }
 
 func openSQLite(path string) (*sql.DB, error) {
