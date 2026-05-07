@@ -22,6 +22,8 @@ import (
 	"presence-app/internal/i18n"
 	"presence-app/internal/middleware"
 	"presence-app/internal/models"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -45,6 +47,8 @@ func newTestEnv(t *testing.T) *testEnv {
 		t.Fatalf("open db: %v", err)
 	}
 	t.Cleanup(func() { database.Close() })
+	// Use minimum bcrypt cost so password hashing doesn't bottleneck CI runners.
+	database.SetBcryptCost(bcrypt.MinCost)
 
 	cfg := &config.Config{
 		AdminUser:         "admin",
