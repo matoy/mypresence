@@ -11,17 +11,23 @@ require (
 )
 
 require (
+	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/beevik/etree v1.6.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/crewjam/httperr v0.2.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/go-sql-driver/mysql v1.10.0 // indirect
 	github.com/golang-jwt/jwt/v4 v4.4.3 // indirect
+	github.com/golang-sql/civil v0.0.0-20220223132316-b832511892a9 // indirect
+	github.com/golang-sql/sqlexp v0.1.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/jonboulle/clockwork v0.5.0 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
+	github.com/lib/pq v1.12.3 // indirect
 	github.com/mattermost/xml-roundtrip-validator v0.1.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/microsoft/go-mssqldb v1.10.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
@@ -29,7 +35,9 @@ require (
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/russellhaering/goxmldsig v1.6.0 // indirect
+	github.com/shopspring/decimal v1.4.0 // indirect
 	golang.org/x/sys v0.43.0 // indirect
+	golang.org/x/text v0.36.0 // indirect
 	google.golang.org/protobuf v1.36.5 // indirect
 	modernc.org/libc v1.55.3 // indirect
 	modernc.org/mathutil v1.6.0 // indirect

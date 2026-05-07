@@ -3,13 +3,15 @@ package db
 import (
 	"testing"
 	"time"
+
+	"presence-app/internal/config"
 )
 
 // newTestDB opens an isolated in-memory-style SQLite DB in a temp directory.
 func newTestDB(t *testing.T) *DB {
 	t.Helper()
 	dir := t.TempDir()
-	db, err := Open(dir)
+	db, err := Open(&config.Config{DBDriver: "sqlite", DataDir: dir})
 	if err != nil {
 		t.Fatalf("open test db: %v", err)
 	}
@@ -293,7 +295,7 @@ func TestCleanExpiredSessions_RemovesExpired(t *testing.T) {
 
 	// Insert a session that expired in the past
 	_, err := d.core.Exec(
-		`INSERT INTO sessions (id, user_id, expires_at) VALUES ('deadbeef', ?, datetime('now', '-1 hour'))`,
+		`INSERT INTO sessions (id, user_id, expires_at) VALUES ('deadbeef', ?, '2000-01-01 00:00:00')`,
 		userID,
 	)
 	if err != nil {
@@ -355,7 +357,7 @@ func TestCleanExpiredResetTokens_RemovesExpired(t *testing.T) {
 	}
 
 	// Expire it
-	d.core.Exec(`UPDATE password_reset_tokens SET expires_at = datetime('now', '-1 hour')`) //nolint:errcheck
+	d.core.Exec(`UPDATE password_reset_tokens SET expires_at = '2000-01-01 00:00:00'`) //nolint:errcheck
 
 	var before int
 	d.core.QueryRow("SELECT COUNT(*) FROM password_reset_tokens").Scan(&before) //nolint:errcheck

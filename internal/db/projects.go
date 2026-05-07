@@ -9,29 +9,41 @@ import (
 
 // migrateProjects creates the projects schema if it doesn't exist.
 func (d *DB) migrateProjects() error {
-	_, err := d.projects.Exec(`
-CREATE TABLE IF NOT EXISTS projects (
-  id         INTEGER PRIMARY KEY AUTOINCREMENT,
-  name       TEXT NOT NULL,
-  code       TEXT NOT NULL,
-  team_id    INTEGER NOT NULL DEFAULT 0,
-  active     BOOLEAN NOT NULL DEFAULT 1,
-  start_date TEXT NOT NULL,
-  end_date   TEXT NOT NULL,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-CREATE TABLE IF NOT EXISTS project_time_entries (
-  id         INTEGER PRIMARY KEY AUTOINCREMENT,
-  project_id INTEGER NOT NULL,
-  user_id    INTEGER NOT NULL,
+	dl := d.dialect
+	ai := dl.autoincrement()
+	real_ := dl.realType()
+	dt := dl.datetimeType()
+
+	stmts := []string{
+		dl.createTableIfNotExists("projects", fmt.Sprintf(`
+  id         %s,
+  name       %s NOT NULL,
+  code       %s NOT NULL,
+  team_id    BIGINT NOT NULL DEFAULT 0,
+  active     %s NOT NULL DEFAULT %s,
+  start_date %s NOT NULL,
+  end_date   %s NOT NULL,
+  created_at %s DEFAULT CURRENT_TIMESTAMP
+`, ai, dl.varcharType(128), dl.varcharType(32), dl.boolType(), dl.boolDefault(true), dl.varcharType(10), dl.varcharType(10), dt)),
+
+		dl.createTableIfNotExists("project_time_entries", fmt.Sprintf(`
+  id         %s,
+  project_id BIGINT NOT NULL,
+  user_id    BIGINT NOT NULL,
   year       INTEGER NOT NULL,
   month      INTEGER NOT NULL,
-  days       REAL    NOT NULL DEFAULT 0,
+  days       %s    NOT NULL DEFAULT 0,
   UNIQUE(project_id, user_id, year, month),
   FOREIGN KEY (project_id) REFERENCES projects(id)
-);
-`)
-	return err
+`, ai, real_)),
+	}
+
+	for _, stmt := range stmts {
+		if _, err := d.projects.Exec(dl.rebind(stmt)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ─── Projects CRUD ────────────────────────────────────────────────────────────
@@ -72,8 +84,8 @@ func (d *DB) ListActiveProjectsForMonth(year, month int) ([]models.Project, erro
 	rows, err := d.projects.Query(`
 SELECT id, name, code, team_id, active, start_date, end_date, created_at
 FROM projects
-WHERE active = 1 AND end_date >= ?
-ORDER BY name`, firstDay)
+WHERE active = ? AND end_date >= ?
+ORDER BY name`, true, firstDay)
 	if err != nil {
 		return nil, err
 	}
@@ -118,13 +130,9 @@ FROM projects WHERE id = ?`, id).Scan(
 
 // CreateProject inserts a new project and returns its ID.
 func (d *DB) CreateProject(name, code string, teamID int64, active bool, startDate, endDate string) (int64, error) {
-	res, err := d.projects.Exec(`
+	return d.projects.InsertGetID(`
 INSERT INTO projects (name, code, team_id, active, start_date, end_date)
 VALUES (?, ?, ?, ?, ?, ?)`, name, code, teamID, active, startDate, endDate)
-	if err != nil {
-		return 0, err
-	}
-	return res.LastInsertId()
 }
 
 // UpdateProject updates an existing project.
@@ -172,17 +180,20 @@ WHERE user_id = ? AND year = ? AND month = ?`, userID, year, month).Scan(&total)
 // days=0 removes the entry.
 func (d *DB) SetProjectTimeEntry(userID, projectID int64, year, month int, days float64) error {
 	if days <= 0 {
-		_, err := d.projects.Exec(`
+		_, err := d.projects.Exec(d.dialect.rebind(`
 DELETE FROM project_time_entries
-WHERE user_id = ? AND project_id = ? AND year = ? AND month = ?`,
+WHERE user_id = ? AND project_id = ? AND year = ? AND month = ?`),
 			userID, projectID, year, month)
 		return err
 	}
-	_, err := d.projects.Exec(`
-INSERT INTO project_time_entries (project_id, user_id, year, month, days)
-VALUES (?, ?, ?, ?, ?)
-ON CONFLICT(project_id, user_id, year, month) DO UPDATE SET days = excluded.days`,
-		projectID, userID, year, month, days)
+	stmt := d.dialect.upsertOnConflict(
+		"project_time_entries",
+		[]string{"project_id", "user_id", "year", "month", "days"},
+		"?, ?, ?, ?, ?",
+		"project_id, user_id, year, month",
+		"days = excluded.days",
+	)
+	_, err := d.projects.Exec(d.dialect.rebind(stmt), projectID, userID, year, month, days)
 	return err
 }
 
@@ -195,7 +206,7 @@ func (d *DB) GetUserBillableDaysForMonth(userID int64, year, month int) (float64
 SELECT COALESCE(SUM(CASE WHEN p.half = 'full' THEN 1.0 ELSE 0.5 END), 0)
 FROM presences p
 JOIN statuses s ON p.status_id = s.id
-WHERE p.user_id = ? AND p.date LIKE ? AND s.billable = 1`, userID, datePrefix).Scan(&total)
+WHERE p.user_id = ? AND p.date LIKE ? AND s.billable = ?`, userID, datePrefix, true).Scan(&total)
 	return total, err
 }
 

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"presence-app/internal/config"
 	"presence-app/internal/db"
 	"presence-app/internal/middleware"
 	"presence-app/internal/models"
@@ -17,7 +18,7 @@ import (
 func newCRUDTestDB(t *testing.T) *db.DB {
 	t.Helper()
 	dir := t.TempDir()
-	database, err := db.Open(dir)
+	database, err := db.Open(&config.Config{DBDriver: "sqlite", DataDir: dir})
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}

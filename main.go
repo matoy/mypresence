@@ -52,7 +52,7 @@ func main() {
 	}
 
 	// Open database
-	database, err := db.Open(cfg.DataDir)
+	database, err := db.Open(cfg)
 	if err != nil {
 		slog.Error("database error", "error", err)
 		os.Exit(1)

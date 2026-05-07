@@ -42,7 +42,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	t.Helper()
 
 	dir := t.TempDir()
-	database, err := db.Open(dir)
+	database, err := db.Open(&config.Config{DBDriver: "sqlite", DataDir: dir})
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
