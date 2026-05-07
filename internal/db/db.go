@@ -13,23 +13,32 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
+	"presence-app/internal/config"
 	"presence-app/internal/models"
 
+	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/lib/pq"
+	_ "github.com/microsoft/go-mssqldb"
 	_ "modernc.org/sqlite"
 )
 
-// DB holds separate SQLite connections for each domain.
+// DB holds separate connections for each domain (all point to the same *sql.DB
+// when using a network backend; separate SQLite files when using SQLite).
 type DB struct {
 	dataDir    string
-	core       *sql.DB // users, teams, user_teams, sessions, personal_access_tokens
-	presence   *sql.DB // statuses, presences, presence_logs, holidays
-	floorplan  *sql.DB // floorplans, seats, seat_reservations
-	audit      *sql.DB // admin_logs
-	projects   *sql.DB // projects, project_time_entries
-	bcryptCost int     // OWASP recommends ≥12; lowered to bcrypt.MinCost in tests
+	driver     string    // "sqlite", "postgres", "mysql", "sqlserver"
+	dialect    dialect   // SQL dialect helpers
+	shared     *sql.DB   // non-nil when using a single shared connection (network DBs)
+	core       *rebindDB // users, teams, user_teams, sessions, personal_access_tokens
+	presence   *rebindDB // statuses, presences, presence_logs, holidays
+	floorplan  *rebindDB // floorplans, seats, seat_reservations
+	audit      *rebindDB // admin_logs
+	projects   *rebindDB // projects, project_time_entries
+	bcryptCost int       // OWASP recommends ≥12; lowered to bcrypt.MinCost in tests
 }
 
-func openSQLite(path string) (*sql.DB, error) {
+// openSQLiteConn opens a single SQLite file with WAL mode and foreign keys.
+func openSQLiteConn(path string) (*sql.DB, error) {
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, err
@@ -51,31 +60,50 @@ func openSQLite(path string) (*sql.DB, error) {
 	return db, nil
 }
 
-// Open opens or creates the 4 domain databases and runs schema migrations.
-func Open(dataDir string) (*DB, error) {
-	coreDB, err := openSQLite(dataDir + "/core.db")
+// Open opens or creates the databases and runs schema migrations.
+// For SQLite (default) it uses 5 separate domain files in dataDir.
+// For other drivers (postgres, mysql, sqlserver) it uses a single shared connection.
+func Open(cfg *config.Config) (*DB, error) {
+	driver := strings.ToLower(cfg.DBDriver)
+	if driver == "" {
+		driver = "sqlite"
+	}
+
+	dl := newDialect(driver)
+
+	switch driver {
+	case "postgres", "mysql", "sqlserver":
+		return openNetwork(cfg, driver, dl)
+	default:
+		return openSQLiteMulti(cfg.DataDir, dl)
+	}
+}
+
+// openSQLiteMulti opens the legacy 5-file SQLite layout.
+func openSQLiteMulti(dataDir string, dl dialect) (*DB, error) {
+	coreDB, err := openSQLiteConn(dataDir + "/core.db")
 	if err != nil {
 		return nil, fmt.Errorf("open core.db: %w", err)
 	}
-	presenceDB, err := openSQLite(dataDir + "/presence.db")
+	presenceDB, err := openSQLiteConn(dataDir + "/presence.db")
 	if err != nil {
 		_ = coreDB.Close()
 		return nil, fmt.Errorf("open presence.db: %w", err)
 	}
-	floorplanDB, err := openSQLite(dataDir + "/floorplan.db")
+	floorplanDB, err := openSQLiteConn(dataDir + "/floorplan.db")
 	if err != nil {
 		_ = coreDB.Close()
 		_ = presenceDB.Close()
 		return nil, fmt.Errorf("open floorplan.db: %w", err)
 	}
-	auditDB, err := openSQLite(dataDir + "/audit.db")
+	auditDB, err := openSQLiteConn(dataDir + "/audit.db")
 	if err != nil {
 		_ = coreDB.Close()
 		_ = presenceDB.Close()
 		_ = floorplanDB.Close()
 		return nil, fmt.Errorf("open audit.db: %w", err)
 	}
-	projectsDB, err := openSQLite(dataDir + "/projects.db")
+	projectsDB, err := openSQLiteConn(dataDir + "/projects.db")
 	if err != nil {
 		_ = coreDB.Close()
 		_ = presenceDB.Close()
@@ -86,33 +114,19 @@ func Open(dataDir string) (*DB, error) {
 
 	d := &DB{
 		dataDir:    dataDir,
-		core:       coreDB,
-		presence:   presenceDB,
-		floorplan:  floorplanDB,
-		audit:      auditDB,
-		projects:   projectsDB,
-		bcryptCost: 12, // OWASP Password Storage Cheat Sheet recommends ≥12 on modern hardware
+		driver:     "sqlite",
+		dialect:    dl,
+		core:       newRebindDB(coreDB, dl),
+		presence:   newRebindDB(presenceDB, dl),
+		floorplan:  newRebindDB(floorplanDB, dl),
+		audit:      newRebindDB(auditDB, dl),
+		projects:   newRebindDB(projectsDB, dl),
+		bcryptCost: 12,
 	}
 
-	if err := d.migrateCore(); err != nil {
+	if err := d.migrate(); err != nil {
 		d.Close()
-		return nil, fmt.Errorf("migrateCore: %w", err)
-	}
-	if err := d.migratePresence(); err != nil {
-		d.Close()
-		return nil, fmt.Errorf("migratePresence: %w", err)
-	}
-	if err := d.migrateFloorplan(); err != nil {
-		d.Close()
-		return nil, fmt.Errorf("migrateFloorplan: %w", err)
-	}
-	if err := d.migrateAudit(); err != nil {
-		d.Close()
-		return nil, fmt.Errorf("migrateAudit: %w", err)
-	}
-	if err := d.migrateProjects(); err != nil {
-		d.Close()
-		return nil, fmt.Errorf("migrateProjects: %w", err)
+		return nil, err
 	}
 
 	// Migrate from legacy single-file app.db once, if present.
@@ -132,8 +146,117 @@ func Open(dataDir string) (*DB, error) {
 	return d, nil
 }
 
+// openNetwork opens a single shared connection to a network database backend
+// (PostgreSQL, MySQL/MariaDB, SQL Server) and wires all domain fields to it.
+func openNetwork(cfg *config.Config, driver string, dl dialect) (*DB, error) {
+	dsn, err := buildDSN(cfg, driver)
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := sql.Open(driver, dsn)
+	if err != nil {
+		return nil, fmt.Errorf("open %s: %w", driver, err)
+	}
+	conn.SetMaxOpenConns(25)
+	conn.SetMaxIdleConns(5)
+	conn.SetConnMaxLifetime(5 * time.Minute)
+
+	if err := conn.Ping(); err != nil {
+		_ = conn.Close()
+		return nil, fmt.Errorf("ping %s: %w", driver, err)
+	}
+
+	wrapped := newRebindDB(conn, dl)
+	d := &DB{
+		driver:     driver,
+		dialect:    dl,
+		shared:     conn,
+		core:       wrapped,
+		presence:   wrapped,
+		floorplan:  wrapped,
+		audit:      wrapped,
+		projects:   wrapped,
+		bcryptCost: 12,
+	}
+
+	if err := d.migrate(); err != nil {
+		d.Close()
+		return nil, err
+	}
+
+	return d, nil
+}
+
+// buildDSN constructs the connection string for the given driver from config.
+func buildDSN(cfg *config.Config, driver string) (string, error) {
+	host := cfg.DBHost
+	name := cfg.DBName
+	user := cfg.DBUser
+	pass := cfg.DBPassword
+	sslMode := cfg.DBSSLMode
+	if sslMode == "" {
+		sslMode = "disable"
+	}
+
+	switch driver {
+	case "postgres":
+		port := cfg.DBPort
+		if port == "" {
+			port = "5432"
+		}
+		return fmt.Sprintf("host=%s port=%s dbname=%s user=%s password=%s sslmode=%s",
+			host, port, name, user, pass, sslMode), nil
+	case "mysql":
+		port := cfg.DBPort
+		if port == "" {
+			port = "3306"
+		}
+		tls := "false"
+		if sslMode == "require" || sslMode == "verify-full" {
+			tls = "true"
+		} else if sslMode == "skip-verify" {
+			tls = "skip-verify"
+		}
+		return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&tls=%s&charset=utf8mb4",
+			user, pass, host, port, name, tls), nil
+	case "sqlserver":
+		port := cfg.DBPort
+		if port == "" {
+			port = "1433"
+		}
+		return fmt.Sprintf("sqlserver://%s:%s@%s:%s?database=%s",
+			user, pass, host, port, name), nil
+	default:
+		return "", fmt.Errorf("unsupported driver: %s", driver)
+	}
+}
+
+// migrate runs all schema migrations on every domain DB.
+func (d *DB) migrate() error {
+	if err := d.migrateCore(); err != nil {
+		return fmt.Errorf("migrateCore: %w", err)
+	}
+	if err := d.migratePresence(); err != nil {
+		return fmt.Errorf("migratePresence: %w", err)
+	}
+	if err := d.migrateFloorplan(); err != nil {
+		return fmt.Errorf("migrateFloorplan: %w", err)
+	}
+	if err := d.migrateAudit(); err != nil {
+		return fmt.Errorf("migrateAudit: %w", err)
+	}
+	if err := d.migrateProjects(); err != nil {
+		return fmt.Errorf("migrateProjects: %w", err)
+	}
+	return nil
+}
+
 // Ping checks connectivity to all databases.
 func (d *DB) Ping() error {
+	if d.shared != nil {
+		return d.shared.Ping()
+	}
 	if err := d.core.Ping(); err != nil {
 		return fmt.Errorf("core.db: %w", err)
 	}
@@ -173,20 +296,25 @@ type DBCounts struct {
 // Errors are silently ignored; missing tables return 0.
 func (d *DB) Counts() DBCounts {
 	var c DBCounts
-	d.core.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&c.Users)                                                //nolint:errcheck
-	d.core.QueryRow(`SELECT COUNT(*) FROM sessions WHERE expires_at > datetime('now')`).Scan(&c.ActiveSessions) //nolint:errcheck
-	d.core.QueryRow(`SELECT COUNT(*) FROM teams`).Scan(&c.Teams)                                                //nolint:errcheck
-	d.presence.QueryRow(`SELECT COUNT(*) FROM statuses`).Scan(&c.Statuses)                                      //nolint:errcheck
-	d.presence.QueryRow(`SELECT COUNT(*) FROM presences`).Scan(&c.Presences)                                    //nolint:errcheck
-	d.floorplan.QueryRow(`SELECT COUNT(*) FROM floorplans`).Scan(&c.Floorplans)                                 //nolint:errcheck
-	d.floorplan.QueryRow(`SELECT COUNT(*) FROM seats`).Scan(&c.Seats)                                           //nolint:errcheck
-	d.projects.QueryRow(`SELECT COUNT(*) FROM projects`).Scan(&c.Projects)                                      //nolint:errcheck
-	d.projects.QueryRow(`SELECT COUNT(*) FROM project_time_entries`).Scan(&c.ProjectEntries)                    //nolint:errcheck
+	d.core.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&c.Users)                                                                     //nolint:errcheck
+	d.core.QueryRow(d.dialect.rebind(`SELECT COUNT(*) FROM sessions WHERE expires_at > ` + d.dialect.now())).Scan(&c.ActiveSessions) //nolint:errcheck
+	d.core.QueryRow(`SELECT COUNT(*) FROM teams`).Scan(&c.Teams)                                                                     //nolint:errcheck
+	d.presence.QueryRow(`SELECT COUNT(*) FROM statuses`).Scan(&c.Statuses)                                                           //nolint:errcheck
+	d.presence.QueryRow(`SELECT COUNT(*) FROM presences`).Scan(&c.Presences)                                                         //nolint:errcheck
+	d.floorplan.QueryRow(`SELECT COUNT(*) FROM floorplans`).Scan(&c.Floorplans)                                                      //nolint:errcheck
+	d.floorplan.QueryRow(`SELECT COUNT(*) FROM seats`).Scan(&c.Seats)                                                                //nolint:errcheck
+	d.projects.QueryRow(`SELECT COUNT(*) FROM projects`).Scan(&c.Projects)                                                           //nolint:errcheck
+	d.projects.QueryRow(`SELECT COUNT(*) FROM project_time_entries`).Scan(&c.ProjectEntries)                                         //nolint:errcheck
 	return c
 }
 
 // Close closes all database connections.
 func (d *DB) Close() {
+	// In shared mode (network backends) all domain fields point to the same connection.
+	if d.shared != nil {
+		_ = d.shared.Close()
+		return
+	}
 	if d.core != nil {
 		_ = d.core.Close()
 	}
@@ -207,111 +335,152 @@ func (d *DB) Close() {
 // --- Schema migrations ---
 
 func (d *DB) migrateCore() error {
-	_, err := d.core.Exec(`
-CREATE TABLE IF NOT EXISTS users (
-id INTEGER PRIMARY KEY AUTOINCREMENT,
-email TEXT UNIQUE NOT NULL,
-name TEXT NOT NULL,
-role TEXT NOT NULL DEFAULT 'basic',
-password_hash TEXT,
-disabled BOOLEAN NOT NULL DEFAULT 0,
-created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-CREATE TABLE IF NOT EXISTS teams (
-id INTEGER PRIMARY KEY AUTOINCREMENT,
-name TEXT UNIQUE NOT NULL,
-created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-CREATE TABLE IF NOT EXISTS user_teams (
-user_id INTEGER NOT NULL,
-team_id INTEGER NOT NULL,
+	dl := d.dialect
+	ai := dl.autoincrement()
+	bool_ := dl.boolType()
+	dt := dl.datetimeType()
+	text := dl.textType()
+	// For SQLite use TEXT; for others use VARCHAR for indexed/unique columns
+	emailType := "TEXT"
+	if !dl.isSQLite() {
+		emailType = dl.varcharType(255)
+	}
+	nameType := "TEXT"
+	if !dl.isSQLite() {
+		nameType = dl.varcharType(255)
+	}
+
+	stmts := []string{
+		dl.createTableIfNotExists("users", fmt.Sprintf(`
+id %s,
+email %s UNIQUE NOT NULL,
+name %s NOT NULL,
+role %s NOT NULL DEFAULT 'basic',
+password_hash %s,
+disabled %s NOT NULL DEFAULT %s,
+created_at %s DEFAULT CURRENT_TIMESTAMP
+`, ai, emailType, nameType, dl.varcharType(64), text, bool_, dl.boolDefault(false), dt)),
+
+		dl.createTableIfNotExists("teams", fmt.Sprintf(`
+id %s,
+name %s UNIQUE NOT NULL,
+created_at %s DEFAULT CURRENT_TIMESTAMP
+`, ai, nameType, dt)),
+
+		dl.createTableIfNotExists("user_teams", `
+user_id BIGINT NOT NULL,
+team_id BIGINT NOT NULL,
 PRIMARY KEY (user_id, team_id),
 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
 FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
-);
-CREATE TABLE IF NOT EXISTS sessions (
-id TEXT PRIMARY KEY,
-user_id INTEGER NOT NULL,
-expires_at DATETIME NOT NULL,
+`),
+
+		dl.createTableIfNotExists("sessions", fmt.Sprintf(`
+id %s PRIMARY KEY,
+user_id BIGINT NOT NULL,
+expires_at %s NOT NULL,
 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-CREATE TABLE IF NOT EXISTS personal_access_tokens (
-id INTEGER PRIMARY KEY AUTOINCREMENT,
-user_id INTEGER NOT NULL,
-description TEXT NOT NULL DEFAULT '',
-token_hash TEXT NOT NULL UNIQUE,
-token_prefix TEXT NOT NULL,
-expires_at DATETIME,
-last_used_at DATETIME,
-created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+`, dl.varcharType(64), dt)),
+
+		dl.createTableIfNotExists("personal_access_tokens", fmt.Sprintf(`
+id %s,
+user_id BIGINT NOT NULL,
+description %s NOT NULL DEFAULT '',
+token_hash %s NOT NULL UNIQUE,
+token_prefix %s NOT NULL,
+expires_at %s,
+last_used_at %s,
+created_at %s DEFAULT CURRENT_TIMESTAMP,
 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-CREATE TABLE IF NOT EXISTS password_reset_tokens (
-id INTEGER PRIMARY KEY AUTOINCREMENT,
-user_id INTEGER NOT NULL,
-token_hash TEXT NOT NULL UNIQUE,
-expires_at DATETIME NOT NULL,
-created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+`, ai, text, dl.varcharType(64), dl.varcharType(16), dt, dt, dt)),
+
+		dl.createTableIfNotExists("password_reset_tokens", fmt.Sprintf(`
+id %s,
+user_id BIGINT NOT NULL,
+token_hash %s NOT NULL UNIQUE,
+expires_at %s NOT NULL,
+created_at %s DEFAULT CURRENT_TIMESTAMP,
 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-`)
-	if err != nil {
-		return err
+`, ai, dl.varcharType(64), dt, dt)),
 	}
-	d.core.Exec(`UPDATE users SET role = 'global' WHERE role = 'admin'`)                                                     //nolint:errcheck
-	d.core.Exec(`ALTER TABLE users ADD COLUMN disabled BOOLEAN NOT NULL DEFAULT 0`)                                          //nolint:errcheck
-	d.core.Exec(`UPDATE users SET role = REPLACE(role, 'stats_viewer', 'activity_viewer') WHERE role LIKE '%stats_viewer%'`) //nolint:errcheck
-	d.core.Exec(`UPDATE users SET role = REPLACE(role, 'cra_viewer', 'activity_viewer') WHERE role LIKE '%cra_viewer%'`)     //nolint:errcheck
+
+	for _, stmt := range stmts {
+		if _, err := d.core.Exec(dl.rebind(stmt)); err != nil {
+			return err
+		}
+	}
+
+	// Additive migrations (safe to run multiple times — errors ignored)
+	d.core.Exec(`UPDATE users SET role = 'global' WHERE role = 'admin'`)                                                                      //nolint:errcheck
+	d.core.Exec(dl.rebind(dl.addColumnIfNotExists("users", "disabled", fmt.Sprintf("%s NOT NULL DEFAULT %s", bool_, dl.boolDefault(false))))) //nolint:errcheck
+	d.core.Exec(`UPDATE users SET role = REPLACE(role, 'stats_viewer', 'activity_viewer') WHERE role LIKE '%stats_viewer%'`)                  //nolint:errcheck
+	d.core.Exec(`UPDATE users SET role = REPLACE(role, 'cra_viewer', 'activity_viewer') WHERE role LIKE '%cra_viewer%'`)                      //nolint:errcheck
 	return nil
 }
 
 func (d *DB) migratePresence() error {
-	_, err := d.presence.Exec(`
-CREATE TABLE IF NOT EXISTS statuses (
-id INTEGER PRIMARY KEY AUTOINCREMENT,
-name TEXT NOT NULL,
-color TEXT NOT NULL DEFAULT '#3b82f6',
-billable BOOLEAN NOT NULL DEFAULT 0,
-on_site BOOLEAN NOT NULL DEFAULT 0,
+	dl := d.dialect
+	ai := dl.autoincrement()
+	bool_ := dl.boolType()
+	dt := dl.datetimeType()
+
+	stmts := []string{
+		dl.createTableIfNotExists("statuses", fmt.Sprintf(`
+id %s,
+name %s NOT NULL,
+color %s NOT NULL DEFAULT '#3b82f6',
+billable %s NOT NULL DEFAULT %s,
+on_site %s NOT NULL DEFAULT %s,
 sort_order INTEGER NOT NULL DEFAULT 0,
-created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-CREATE TABLE IF NOT EXISTS presences (
-id INTEGER PRIMARY KEY AUTOINCREMENT,
-user_id INTEGER NOT NULL,
-date TEXT NOT NULL,
-half TEXT NOT NULL DEFAULT 'full',
-status_id INTEGER NOT NULL,
+created_at %s DEFAULT CURRENT_TIMESTAMP
+`, ai, dl.varcharType(128), dl.varcharType(16), bool_, dl.boolDefault(false), bool_, dl.boolDefault(false), dt)),
+
+		dl.createTableIfNotExists("presences", fmt.Sprintf(`
+id %s,
+user_id BIGINT NOT NULL,
+date %s NOT NULL,
+half %s NOT NULL DEFAULT 'full',
+status_id BIGINT NOT NULL,
 UNIQUE(user_id, date, half),
 FOREIGN KEY (status_id) REFERENCES statuses(id)
-);
-CREATE TABLE IF NOT EXISTS holidays (
-id INTEGER PRIMARY KEY AUTOINCREMENT,
-date TEXT UNIQUE NOT NULL,
-name TEXT NOT NULL,
-allow_imputed BOOLEAN NOT NULL DEFAULT 0
-);
-CREATE TABLE IF NOT EXISTS presence_logs (
-id INTEGER PRIMARY KEY AUTOINCREMENT,
-user_id INTEGER NOT NULL,
-actor_id INTEGER NOT NULL,
-action TEXT NOT NULL,
-date TEXT NOT NULL,
-half TEXT NOT NULL DEFAULT 'full',
-status_id INTEGER,
-created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-`)
-	if err != nil {
-		return err
+`, ai, dl.varcharType(10), dl.varcharType(4))),
+
+		dl.createTableIfNotExists("holidays", fmt.Sprintf(`
+id %s,
+date %s UNIQUE NOT NULL,
+name %s NOT NULL,
+allow_imputed %s NOT NULL DEFAULT %s
+`, ai, dl.varcharType(10), dl.varcharType(128), bool_, dl.boolDefault(false))),
+
+		dl.createTableIfNotExists("presence_logs", fmt.Sprintf(`
+id %s,
+user_id BIGINT NOT NULL,
+actor_id BIGINT NOT NULL,
+action %s NOT NULL,
+date %s NOT NULL,
+half %s NOT NULL DEFAULT 'full',
+status_id BIGINT,
+created_at %s DEFAULT CURRENT_TIMESTAMP
+`, ai, dl.varcharType(16), dl.varcharType(10), dl.varcharType(4), dt)),
 	}
-	d.presence.Exec(`ALTER TABLE statuses ADD COLUMN on_site BOOLEAN NOT NULL DEFAULT 0`)     //nolint:errcheck
-	d.presence.Exec(`ALTER TABLE presence_logs ADD COLUMN half TEXT NOT NULL DEFAULT 'full'`) //nolint:errcheck
-	var halfColExists int
-	d.presence.QueryRow("SELECT COUNT(*) FROM pragma_table_info('presences') WHERE name='half'").Scan(&halfColExists) //nolint:errcheck
-	if halfColExists == 0 {
-		//nolint:errcheck
-		d.presence.Exec(`CREATE TABLE presences_new (
+
+	for _, stmt := range stmts {
+		if _, err := d.presence.Exec(dl.rebind(stmt)); err != nil {
+			return err
+		}
+	}
+
+	// Additive migrations
+	d.presence.Exec(dl.rebind(dl.addColumnIfNotExists("statuses", "on_site", fmt.Sprintf("%s NOT NULL DEFAULT %s", bool_, dl.boolDefault(false))))) //nolint:errcheck
+	d.presence.Exec(dl.rebind(dl.addColumnIfNotExists("presence_logs", "half", fmt.Sprintf("%s NOT NULL DEFAULT 'full'", dl.varcharType(4)))))      //nolint:errcheck
+
+	// SQLite-only migration: recreate presences table if 'half' column is missing
+	// (Not needed for network databases which always get the full schema above)
+	if dl.isSQLite() {
+		var halfColExists int
+		d.presence.QueryRow("SELECT COUNT(*) FROM pragma_table_info('presences') WHERE name='half'").Scan(&halfColExists) //nolint:errcheck
+		if halfColExists == 0 {
+			d.presence.Exec(`CREATE TABLE presences_new (
 id INTEGER PRIMARY KEY AUTOINCREMENT,
 user_id INTEGER NOT NULL,
 date TEXT NOT NULL,
@@ -320,55 +489,73 @@ status_id INTEGER NOT NULL,
 UNIQUE(user_id, date, half),
 FOREIGN KEY (status_id) REFERENCES statuses(id)
 )`) //nolint:errcheck
-		d.presence.Exec(`INSERT INTO presences_new (id, user_id, date, half, status_id) SELECT id, user_id, date, 'full', status_id FROM presences`) //nolint:errcheck
-		d.presence.Exec(`DROP TABLE presences`)                                                                                                      //nolint:errcheck
-		d.presence.Exec(`ALTER TABLE presences_new RENAME TO presences`)                                                                             //nolint:errcheck
+			d.presence.Exec(`INSERT INTO presences_new (id, user_id, date, half, status_id) SELECT id, user_id, date, 'full', status_id FROM presences`) //nolint:errcheck
+			d.presence.Exec(`DROP TABLE presences`)                                                                                                      //nolint:errcheck
+			d.presence.Exec(`ALTER TABLE presences_new RENAME TO presences`)                                                                             //nolint:errcheck
+		}
 	}
 	return nil
 }
 
 func (d *DB) migrateFloorplan() error {
-	_, err := d.floorplan.Exec(`
-CREATE TABLE IF NOT EXISTS floorplans (
-id INTEGER PRIMARY KEY AUTOINCREMENT,
-name TEXT NOT NULL,
-image_path TEXT NOT NULL DEFAULT '',
+	dl := d.dialect
+	ai := dl.autoincrement()
+	real_ := dl.realType()
+	dt := dl.datetimeType()
+
+	stmts := []string{
+		dl.createTableIfNotExists("floorplans", fmt.Sprintf(`
+id %s,
+name %s NOT NULL,
+image_path %s NOT NULL DEFAULT '',
 sort_order INTEGER NOT NULL DEFAULT 0
-);
-CREATE TABLE IF NOT EXISTS seats (
-id INTEGER PRIMARY KEY AUTOINCREMENT,
-floorplan_id INTEGER NOT NULL,
-label TEXT NOT NULL,
-x_pct REAL NOT NULL DEFAULT 0,
-y_pct REAL NOT NULL DEFAULT 0,
+`, ai, dl.varcharType(128), dl.varcharType(255))),
+
+		dl.createTableIfNotExists("seats", fmt.Sprintf(`
+id %s,
+floorplan_id BIGINT NOT NULL,
+label %s NOT NULL,
+x_pct %s NOT NULL DEFAULT 0,
+y_pct %s NOT NULL DEFAULT 0,
 FOREIGN KEY (floorplan_id) REFERENCES floorplans(id) ON DELETE CASCADE
-);
-CREATE TABLE IF NOT EXISTS seat_reservations (
-id INTEGER PRIMARY KEY AUTOINCREMENT,
-seat_id INTEGER NOT NULL,
-user_id INTEGER NOT NULL,
-date TEXT NOT NULL,
-half TEXT NOT NULL DEFAULT 'full',
-created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+`, ai, dl.varcharType(64), real_, real_)),
+
+		dl.createTableIfNotExists("seat_reservations", fmt.Sprintf(`
+id %s,
+seat_id BIGINT NOT NULL,
+user_id BIGINT NOT NULL,
+date %s NOT NULL,
+half %s NOT NULL DEFAULT 'full',
+created_at %s DEFAULT CURRENT_TIMESTAMP,
 UNIQUE(seat_id, date, half),
 FOREIGN KEY (seat_id) REFERENCES seats(id) ON DELETE CASCADE
-);
-`)
-	return err
+`, ai, dl.varcharType(10), dl.varcharType(4), dt)),
+	}
+
+	for _, stmt := range stmts {
+		if _, err := d.floorplan.Exec(dl.rebind(stmt)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (d *DB) migrateAudit() error {
-	_, err := d.audit.Exec(`
-CREATE TABLE IF NOT EXISTS admin_logs (
-id INTEGER PRIMARY KEY AUTOINCREMENT,
-actor_id INTEGER NOT NULL,
-entity_type TEXT NOT NULL,
-entity_id INTEGER NOT NULL DEFAULT 0,
-action TEXT NOT NULL,
-details TEXT NOT NULL DEFAULT '',
-created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-`)
+	dl := d.dialect
+	ai := dl.autoincrement()
+	dt := dl.datetimeType()
+
+	stmt := dl.createTableIfNotExists("admin_logs", fmt.Sprintf(`
+id %s,
+actor_id BIGINT NOT NULL,
+entity_type %s NOT NULL,
+entity_id BIGINT NOT NULL DEFAULT 0,
+action %s NOT NULL,
+details %s NOT NULL DEFAULT '',
+created_at %s DEFAULT CURRENT_TIMESTAMP
+`, ai, dl.varcharType(32), dl.varcharType(32), dl.textType(), dt))
+
+	_, err := d.audit.Exec(dl.rebind(stmt))
 	return err
 }
 
@@ -384,7 +571,7 @@ func (d *DB) migrateLegacy(legacyPath string) error {
 	}
 
 	type tableJob struct {
-		dst       *sql.DB
+		dst       *rebindDB
 		srcQuery  string
 		dstInsert string
 	}
@@ -432,7 +619,7 @@ func (d *DB) migrateLegacy(legacyPath string) error {
 	}
 
 	for _, job := range jobs {
-		if err := copyLegacyRows(legacy, job.dst, job.srcQuery, job.dstInsert); err != nil {
+		if err := copyLegacyRows(legacy, job.dst.DB, job.srcQuery, job.dstInsert); err != nil {
 			log.Printf("migrate warning: %v", err)
 		}
 	}
@@ -491,25 +678,26 @@ func (d *DB) SeedDefaults(adminUser, adminPass string) error {
 		return fmt.Errorf("hash admin password: %w", err)
 	}
 	hashedPass := string(hash)
-	_, err = d.core.Exec(`
-INSERT OR IGNORE INTO users (email, name, role, password_hash)
-VALUES (?, ?, 'global', ?)
-`, adminUser, "Administrator", hashedPass)
+	_, err = d.core.Exec(d.dialect.rebind(d.dialect.insertOrIgnore(
+		"users",
+		[]string{"email", "name", "role", "password_hash"},
+		"?, ?, 'global', ?",
+	)), adminUser, "Administrator", hashedPass)
 	if err != nil {
 		return err
 	}
 	// Only update the hash if the stored value is not already a bcrypt hash,
 	// to avoid an expensive rehash on every startup.
 	var stored string
-	d.core.QueryRow("SELECT COALESCE(password_hash,'') FROM users WHERE email = ?", adminUser).Scan(&stored) //nolint:errcheck
+	d.core.QueryRow(d.dialect.rebind("SELECT COALESCE(password_hash,'') FROM users WHERE email = ?"), adminUser).Scan(&stored) //nolint:errcheck
 	if !strings.HasPrefix(stored, "$2") {
-		_, err = d.core.Exec(`UPDATE users SET role = 'global', password_hash = ? WHERE email = ?`, hashedPass, adminUser)
+		_, err = d.core.Exec(d.dialect.rebind(`UPDATE users SET role = 'global', password_hash = ? WHERE email = ?`), hashedPass, adminUser)
 		if err != nil {
 			return err
 		}
 	} else {
 		// Ensure the role is correct even if hash is already bcrypt
-		_, err = d.core.Exec(`UPDATE users SET role = 'global' WHERE email = ?`, adminUser)
+		_, err = d.core.Exec(d.dialect.rebind(`UPDATE users SET role = 'global' WHERE email = ?`), adminUser)
 		if err != nil {
 			return err
 		}
@@ -535,7 +723,7 @@ VALUES (?, ?, 'global', ?)
 		}
 		for _, s := range defaults {
 			_, err := d.presence.Exec(
-				"INSERT INTO statuses (name, color, billable, on_site, sort_order) VALUES (?, ?, ?, ?, ?)",
+				d.dialect.rebind("INSERT INTO statuses (name, color, billable, on_site, sort_order) VALUES (?, ?, ?, ?, ?)"),
 				s.name, s.color, s.billable, s.onSite, s.order,
 			)
 			if err != nil {
@@ -578,11 +766,11 @@ func (d *DB) GetSessionUser(token string) (*models.User, error) {
 	sum := sha256.Sum256([]byte(token))
 	tokenHash := hex.EncodeToString(sum[:])
 	var u models.User
-	err := d.core.QueryRow(`
+	err := d.core.QueryRow(d.dialect.rebind(`
 SELECT u.id, u.email, u.name, u.role, COALESCE(u.password_hash,''), u.disabled, u.created_at
 FROM sessions s JOIN users u ON s.user_id = u.id
-WHERE s.id = ? AND s.expires_at > datetime('now') AND u.disabled = 0
-`, tokenHash).Scan(&u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt)
+WHERE s.id = ? AND s.expires_at > `+d.dialect.now()+` AND u.disabled = `+d.dialect.boolDefault(false)+`
+`), tokenHash).Scan(&u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -598,7 +786,7 @@ func (d *DB) DeleteSession(token string) error {
 }
 
 func (d *DB) CleanExpiredSessions() {
-	d.core.Exec("DELETE FROM sessions WHERE expires_at < datetime('now')") //nolint:errcheck
+	d.core.Exec(d.dialect.rebind("DELETE FROM sessions WHERE expires_at < " + d.dialect.now())) //nolint:errcheck
 }
 
 // DeleteUserSessions deletes all active sessions for a user.
@@ -631,14 +819,13 @@ func (d *DB) CreatePAT(userID int64, description string, expiresAt *time.Time) (
 		expiresSQL = expiresAt.UTC().Format("2006-01-02 15:04:05")
 	}
 
-	result, err := d.core.Exec(
+	id, err := d.core.InsertGetID(
 		`INSERT INTO personal_access_tokens (user_id, description, token_hash, token_prefix, expires_at) VALUES (?, ?, ?, ?, ?)`,
 		userID, description, tokenHash, prefix, expiresSQL,
 	)
 	if err != nil {
 		return "", nil, err
 	}
-	id, _ := result.LastInsertId()
 	pat := &models.PersonalAccessToken{
 		ID:          id,
 		UserID:      userID,
@@ -747,19 +934,19 @@ func (d *DB) GetUserByPAT(token string) (*models.User, error) {
 	tokenHash := hex.EncodeToString(sum[:])
 
 	var u models.User
-	err := d.core.QueryRow(`
+	err := d.core.QueryRow(d.dialect.rebind(`
 SELECT u.id, u.email, u.name, u.role, COALESCE(u.password_hash,''), u.disabled, u.created_at
 FROM personal_access_tokens t
 JOIN users u ON t.user_id = u.id
 WHERE t.token_hash = ?
-  AND (t.expires_at IS NULL OR t.expires_at > datetime('now'))
-  AND u.disabled = 0
-`, tokenHash).Scan(&u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt)
+  AND (t.expires_at IS NULL OR t.expires_at > `+d.dialect.now()+`)
+  AND u.disabled = `+d.dialect.boolDefault(false)+`
+`), tokenHash).Scan(&u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
 	u.IsLocal = u.PasswordHash != ""
-	go d.core.Exec(`UPDATE personal_access_tokens SET last_used_at = datetime('now') WHERE token_hash = ?`, tokenHash) //nolint
+	go d.core.Exec(d.dialect.rebind(`UPDATE personal_access_tokens SET last_used_at = `+d.dialect.now()+` WHERE token_hash = ?`), tokenHash) //nolint
 	return &u, nil
 }
 
@@ -824,7 +1011,7 @@ func (d *DB) UsePasswordResetToken(rawToken string) (*models.User, error) {
 
 // CleanExpiredResetTokens removes expired password reset tokens.
 func (d *DB) CleanExpiredResetTokens() {
-	d.core.Exec(`DELETE FROM password_reset_tokens WHERE expires_at < datetime('now')`) //nolint:errcheck
+	d.core.Exec(d.dialect.rebind(`DELETE FROM password_reset_tokens WHERE expires_at < ` + d.dialect.now())) //nolint:errcheck
 }
 
 // --- User management ---
@@ -856,10 +1043,16 @@ func (d *DB) GetUserByID(id int64) (*models.User, error) {
 }
 
 func (d *DB) UpsertUser(email, name string) (*models.User, error) {
-	_, err := d.core.Exec(`
-INSERT INTO users (email, name, role) VALUES (?, ?, 'basic')
-ON CONFLICT(email) DO UPDATE SET name = excluded.name
-`, email, name)
+	var stmt string
+	switch d.driver {
+	case "mysql":
+		stmt = `INSERT INTO users (email, name, role) VALUES (?, ?, 'basic') ON DUPLICATE KEY UPDATE name = VALUES(name)`
+	case "sqlserver":
+		stmt = `MERGE INTO users AS target USING (SELECT ? AS email, ? AS name) AS source ON (target.email = source.email) WHEN MATCHED THEN UPDATE SET target.name = source.name WHEN NOT MATCHED THEN INSERT (email, name, role) VALUES (source.email, source.name, 'basic');`
+	default: // sqlite, postgres
+		stmt = `INSERT INTO users (email, name, role) VALUES (?, ?, 'basic') ON CONFLICT(email) DO UPDATE SET name = excluded.name`
+	}
+	_, err := d.core.Exec(d.dialect.rebind(stmt), email, name)
 	if err != nil {
 		return nil, err
 	}
@@ -908,14 +1101,10 @@ func (d *DB) CreateLocalUser(email, name, password string) (int64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("hash password: %w", err)
 	}
-	res, err := d.core.Exec(
+	return d.core.InsertGetID(
 		`INSERT INTO users (email, name, role, password_hash) VALUES (?, ?, 'basic', ?)`,
 		email, name, string(hash),
 	)
-	if err != nil {
-		return 0, err
-	}
-	return res.LastInsertId()
 }
 
 // CheckPassword compares a submitted plaintext password against a stored hash.
@@ -984,11 +1173,7 @@ func (d *DB) ListTeams() ([]models.Team, error) {
 }
 
 func (d *DB) CreateTeam(name string) (int64, error) {
-	res, err := d.core.Exec("INSERT INTO teams (name) VALUES (?)", name)
-	if err != nil {
-		return 0, err
-	}
-	return res.LastInsertId()
+	return d.core.InsertGetID("INSERT INTO teams (name) VALUES (?)", name)
 }
 
 func (d *DB) UpdateTeam(id int64, name string) error {
@@ -1027,7 +1212,11 @@ ORDER BY u.name
 }
 
 func (d *DB) AddTeamMember(teamID, userID int64) error {
-	_, err := d.core.Exec("INSERT OR IGNORE INTO user_teams (team_id, user_id) VALUES (?, ?)", teamID, userID)
+	_, err := d.core.Exec(d.dialect.rebind(d.dialect.insertOrIgnore(
+		"user_teams",
+		[]string{"team_id", "user_id"},
+		"?, ?",
+	)), teamID, userID)
 	return err
 }
 
@@ -1081,14 +1270,10 @@ func (d *DB) ListStatuses() ([]models.Status, error) {
 }
 
 func (d *DB) CreateStatus(s models.Status) (int64, error) {
-	res, err := d.presence.Exec(
+	return d.presence.InsertGetID(
 		"INSERT INTO statuses (name, color, billable, on_site, sort_order) VALUES (?, ?, ?, ?, ?)",
 		s.Name, s.Color, s.Billable, s.OnSite, s.SortOrder,
 	)
-	if err != nil {
-		return 0, err
-	}
-	return res.LastInsertId()
 }
 
 func (d *DB) UpdateStatus(s models.Status) error {
@@ -1171,10 +1356,13 @@ func (d *DB) SetPresences(userID int64, dates []string, statusID int64, half str
 				return err
 			}
 		}
-		if _, err := tx.Exec(`
-INSERT INTO presences (user_id, date, half, status_id) VALUES (?, ?, ?, ?)
-ON CONFLICT(user_id, date, half) DO UPDATE SET status_id = excluded.status_id
-`, userID, date, half, statusID); err != nil {
+		if _, err := tx.Exec(d.dialect.rebind(d.dialect.upsertOnConflict(
+			"presences",
+			[]string{"user_id", "date", "half", "status_id"},
+			"?, ?, ?, ?",
+			"user_id, date, half",
+			"status_id = excluded.status_id",
+		)), userID, date, half, statusID); err != nil {
 			return err
 		}
 	}
@@ -1314,14 +1502,10 @@ func (d *DB) GetHolidayMap(startDate, endDate string) (map[string]models.Holiday
 }
 
 func (d *DB) CreateHoliday(date, name string, allowImputed bool) (int64, error) {
-	res, err := d.presence.Exec(
+	return d.presence.InsertGetID(
 		"INSERT INTO holidays (date, name, allow_imputed) VALUES (?, ?, ?)",
 		date, name, allowImputed,
 	)
-	if err != nil {
-		return 0, err
-	}
-	return res.LastInsertId()
 }
 
 func (d *DB) UpdateHoliday(id int64, date, name string, allowImputed bool) error {
@@ -1678,11 +1862,7 @@ func (d *DB) GetFloorplan(id int64) (*models.Floorplan, error) {
 }
 
 func (d *DB) CreateFloorplan(name string, sortOrder int) (int64, error) {
-	res, err := d.floorplan.Exec("INSERT INTO floorplans (name, sort_order) VALUES (?, ?)", name, sortOrder)
-	if err != nil {
-		return 0, err
-	}
-	return res.LastInsertId()
+	return d.floorplan.InsertGetID("INSERT INTO floorplans (name, sort_order) VALUES (?, ?)", name, sortOrder)
 }
 
 func (d *DB) UpdateFloorplan(id int64, name string, sortOrder int) error {
@@ -1718,11 +1898,7 @@ func (d *DB) ListSeats(floorplanID int64) ([]models.Seat, error) {
 }
 
 func (d *DB) CreateSeat(floorplanID int64, label string, xPct, yPct float64) (int64, error) {
-	res, err := d.floorplan.Exec("INSERT INTO seats (floorplan_id, label, x_pct, y_pct) VALUES (?, ?, ?, ?)", floorplanID, label, xPct, yPct)
-	if err != nil {
-		return 0, err
-	}
-	return res.LastInsertId()
+	return d.floorplan.InsertGetID("INSERT INTO seats (floorplan_id, label, x_pct, y_pct) VALUES (?, ?, ?, ?)", floorplanID, label, xPct, yPct)
 }
 
 func (d *DB) UpdateSeat(id int64, label string, xPct, yPct float64) error {
@@ -1825,8 +2001,8 @@ func (d *DB) GetUserOnSiteStatus(userID int64, date string) (bool, error) {
 	err := d.presence.QueryRow(`
 SELECT COUNT(*) FROM presences p
 JOIN statuses s ON p.status_id = s.id
-WHERE p.user_id = ? AND p.date = ? AND s.on_site = 1
-`, userID, date).Scan(&count)
+WHERE p.user_id = ? AND p.date = ? AND s.on_site = ?
+`, userID, date, true).Scan(&count)
 	return count > 0, err
 }
 

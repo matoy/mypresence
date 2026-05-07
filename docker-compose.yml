@@ -17,7 +17,6 @@ services:
     container_name: mypresence-app
     restart: unless-stopped
     healthcheck:
-      # Tente d'ouvrir un descripteur de fichier vers le port
       test: ["CMD-SHELL", "nc -z 127.0.0.1 8080 || exit 1"]
       interval: 10s
       timeout: 5s
@@ -25,6 +24,20 @@ services:
       start_period: 10s
     ports:
       - "8080:8080"
+    # ── Uncomment the depends_on block matching the chosen DB_DRIVER ──────────
+    # depends_on:
+    #   postgres:           # PostgreSQL
+    #     condition: service_healthy
+    # ---
+    # depends_on:
+    #   mariadb:            # MySQL / MariaDB
+    #     condition: service_healthy
+    # ---
+    # depends_on:
+    #   sqlserver:          # SQL Server — waits for the DB server to be ready
+    #     condition: service_healthy
+    #   sqlserver-init:     # SQL Server — waits for the init container to finish
+    #     condition: service_completed_successfully
     volumes:
       # Persistent volume for the SQLite database and files
       # Contains: app.db (database), logo.png (optional)
@@ -155,6 +168,71 @@ services:
       # - APP_URL=https://mypresence.example.com
 
       # =====================================================================
+      # DATABASE BACKEND
+      # =====================================================================
+      #
+      # By default, myPresence uses SQLite (no extra configuration needed).
+      # To switch to another backend, set DB_DRIVER and the connection variables below.
+      #
+      # Supported drivers:
+      #   sqlite      — embedded file database (default, no server required)
+      #   postgres    — PostgreSQL 14+
+      #   mysql       — MySQL 8+ or MariaDB 10.6+
+      #   sqlserver   — Microsoft SQL Server 2019+
+      #
+      # ── SQLite (default) ──────────────────────────────────────────────
+      #
+      # Nothing to configure. The database files are stored in DATA_DIR.
+      - DB_DRIVER=sqlite
+      #
+      # ── PostgreSQL ────────────────────────────────────────────────────
+      #
+      # Prerequisites: create the database and user before starting:
+      #   CREATE DATABASE mypresence;
+      #   CREATE USER mypresence WITH PASSWORD 'strongpassword';
+      #   GRANT ALL PRIVILEGES ON DATABASE mypresence TO mypresence;
+      #
+      # - DB_DRIVER=postgres
+      # - DB_HOST=postgres          # hostname or IP of the PostgreSQL server
+      # - DB_PORT=5432               # default PostgreSQL port
+      # - DB_NAME=mypresence         # database name
+      # - DB_USER=mypresence         # database user
+      # - DB_PASSWORD=strongpassword # database password
+      # - DB_SSL_MODE=disable        # disable | require | verify-full
+      
+      # ── MySQL / MariaDB ───────────────────────────────────────────────
+      #
+      # Prerequisites: create the database and user before starting:
+      #   CREATE DATABASE mypresence CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+      #   CREATE USER 'mypresence'@'%' IDENTIFIED BY 'strongpassword';
+      #   GRANT ALL PRIVILEGES ON mypresence.* TO 'mypresence'@'%';
+      #   FLUSH PRIVILEGES;
+      #
+      # - DB_DRIVER=mysql
+      # - DB_HOST=mariadb            # hostname or IP of the MySQL/MariaDB server
+      # - DB_PORT=3306               # default MySQL/MariaDB port
+      # - DB_NAME=mypresence         # database name
+      # - DB_USER=mypresence         # database user
+      # - DB_PASSWORD=strongpassword # database password
+      # - DB_SSL_MODE=disable        # disable | require | skip-verify | verify-full
+      #
+      # ── Microsoft SQL Server ──────────────────────────────────────────
+      #
+      # Prerequisites: create the database and user before starting:
+      #   CREATE DATABASE mypresence;
+      #   CREATE LOGIN mypresence WITH PASSWORD = 'StrongP@ssword1';
+      #   USE mypresence;
+      #   CREATE USER mypresence FOR LOGIN mypresence;
+      #   GRANT CONTROL ON DATABASE::mypresence TO mypresence;
+      #
+      # - DB_DRIVER=sqlserver
+      # - DB_HOST=sqlserver          # hostname or IP of the SQL Server instance
+      # - DB_PORT=1433               # default SQL Server port
+      # - DB_NAME=mypresence         # database name
+      # - DB_USER=mypresence         # SQL Server login
+      # - DB_PASSWORD=StrongP@ssword1 # SQL Server password
+
+      # =====================================================================
       # SAML2 / SSO AUTHENTICATION (Microsoft Entra ID example)
       # =====================================================================
       #
@@ -248,6 +326,121 @@ services:
       # - If no group matches, the user falls back to the "basic" role
       # - Roles are re-evaluated at every login
 
+  # ===========================================================================
+  # OPTIONAL DATABASE SERVICES
+  # ===========================================================================
+  # Uncomment ONE section below matching the DB_DRIVER you set above.
+  # Also uncomment the corresponding depends_on block in the mypresence service
+  # and the matching volume at the bottom of this file.
+  # ===========================================================================
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL 17
+  # ---------------------------------------------------------------------------
+  # The official image creates the database and user automatically on first boot
+  # using POSTGRES_DB, POSTGRES_USER and POSTGRES_PASSWORD.
+  #
+  # postgres:
+  #   image: postgres:17-alpine
+  #   container_name: mypresence-postgres
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U mypresence -d mypresence"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #     start_period: 15s
+  #   environment:
+  #     POSTGRES_DB: mypresence
+  #     POSTGRES_USER: mypresence
+  #     POSTGRES_PASSWORD: strongpassword   # ⚠️  change in production
+  #   volumes:
+  #     - mypresence-postgres:/var/lib/postgresql/data
+  # 
+  # ---------------------------------------------------------------------------
+  # MariaDB 11 LTS  (compatible MySQL 8)
+  # ---------------------------------------------------------------------------
+  # The official image creates the database and user automatically on first boot
+  # using MARIADB_DATABASE, MARIADB_USER and MARIADB_PASSWORD.
+  #
+  # mariadb:
+  #   image: mariadb:lts
+  #   container_name: mypresence-mariadb
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "healthcheck.sh --connect --innodb_initialized"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #     start_period: 15s
+  #   environment:
+  #     MARIADB_DATABASE: mypresence
+  #     MARIADB_USER: mypresence
+  #     MARIADB_PASSWORD: strongpassword      # ⚠️  change in production
+  #     MARIADB_ROOT_PASSWORD: rootpassword   # ⚠️  change in production
+  #   volumes:
+  #     - mypresence-mariadb:/var/lib/mysql
+
+  # ---------------------------------------------------------------------------
+  # Microsoft SQL Server 2022
+  # ---------------------------------------------------------------------------
+  # SQL Server does not auto-create databases from env vars.
+  # A companion one-shot container (sqlserver-init) runs once after SQL Server
+  # is healthy and creates the database, login and user when they are missing.
+  #
+  # sqlserver:
+  #   image: mcr.microsoft.com/mssql/server:2022-latest
+  #   container_name: mypresence-sqlserver
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'StrongP@ssword1' -C -Q 'SELECT 1' 2>/dev/null || exit 1"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 10
+  #     start_period: 30s
+  #   environment:
+  #     ACCEPT_EULA: "Y"
+  #     SA_PASSWORD: "StrongP@ssword1"   # ⚠️  change in production (≥8 chars, mixed case + digit + symbol)
+  #     MSSQL_PID: "Express"             # Express (free) | Standard | Enterprise
+  #   volumes:
+  #     - mypresence-sqlserver:/var/opt/mssql
+  
+  # sqlserver-init:
+  #   image: mcr.microsoft.com/mssql/server:2022-latest
+  #   container_name: mypresence-sqlserver-init
+  #   restart: on-failure                # retries until sqlcmd succeeds
+  #   depends_on:
+  #     sqlserver:
+  #       condition: service_healthy
+  #   entrypoint: /bin/bash
+  #   command:
+  #     - -c
+  #     - |
+  #       until /opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -P 'StrongP@ssword1' -C -Q 'SELECT 1' >/dev/null 2>&1; do
+  #         echo 'Waiting for SQL Server to accept connections...' && sleep 3
+  #       done
+  #       /opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -P 'StrongP@ssword1' -C \
+  #         -Q "IF NOT EXISTS(SELECT 1 FROM sys.databases WHERE name=N'mypresence') CREATE DATABASE mypresence" &&
+  #       /opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -P 'StrongP@ssword1' -C -d mypresence \
+  #         -Q "IF NOT EXISTS(SELECT 1 FROM sys.server_principals WHERE name=N'mypresence') CREATE LOGIN mypresence WITH PASSWORD=N'StrongP@ssword1'; IF NOT EXISTS(SELECT 1 FROM sys.database_principals WHERE name=N'mypresence') BEGIN CREATE USER mypresence FOR LOGIN mypresence; ALTER ROLE db_owner ADD MEMBER mypresence END"
+
+# =============================================================================
+# NAMED VOLUMES — uncomment the block matching the chosen database backend.
+# (SQLite uses a bind-mount by default and does not need a named volume.)
+# =============================================================================
+#
+# volumes:
+#   mypresence-postgres:   # PostgreSQL
+#     driver: local
+
+# volumes:
+#   mypresence-mariadb:    # MySQL / MariaDB
+#     driver: local
+#
+# volumes:
+#   mypresence-sqlserver:  # SQL Server
+#     driver: local
+
 #volumes:
 #  mypresence-data:
 #    driver: local
@@ -258,11 +451,11 @@ services:
 #
 # To mount a custom logo directly:
 #   volumes:
-#     - mypresence-data:/data
+#     - ./mypresence-data:/data
 #     - ./my-logo.png:/data/logo.png:ro
 #
 # To access the SQLite database:
-#   docker exec -it mypresence-app cat /data/app.db > backup.db
+#   docker exec -it mypresence-app ls /data/
 #
 # To view logs:
 #   docker compose logs -f mypresence

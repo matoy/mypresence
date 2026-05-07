@@ -12,6 +12,15 @@ type Config struct {
 	DataDir   string
 	SecretKey string
 
+	// Database backend
+	DBDriver   string // sqlite (default), postgres, mysql, sqlserver
+	DBHost     string
+	DBPort     string
+	DBName     string
+	DBUser     string
+	DBPassword string
+	DBSSLMode  string // postgres: disable|require|verify-full; mysql: true|false|skip-verify
+
 	// Branding
 	AppName        string
 	PrimaryColor   string
@@ -72,6 +81,14 @@ func Load() *Config {
 		Port:      getEnv("PORT", "8080"),
 		DataDir:   getEnv("DATA_DIR", "/data"),
 		SecretKey: getEnv("SECRET_KEY", "change-me-in-production-use-random-32-chars"),
+
+		DBDriver:   getEnv("DB_DRIVER", "sqlite"),
+		DBHost:     getEnv("DB_HOST", "localhost"),
+		DBPort:     getEnv("DB_PORT", ""),
+		DBName:     getEnv("DB_NAME", "mypresence"),
+		DBUser:     getEnv("DB_USER", ""),
+		DBPassword: getEnv("DB_PASSWORD", ""),
+		DBSSLMode:  getEnv("DB_SSL_MODE", "disable"),
 
 		AppName:        getEnv("APP_NAME", "Presence"),
 		PrimaryColor:   getEnv("PRIMARY_COLOR", "#3b82f6"),

@@ -21,7 +21,9 @@ import (
 )
 
 var (
-	openDB       = db.Open
+	openDB = func(dir string) (*db.DB, error) {
+		return db.Open(&config.Config{DBDriver: "sqlite", DataDir: dir})
+	}
 	seedDefaults = func(database *db.DB, adminUser, adminPassword string) error {
 		return database.SeedDefaults(adminUser, adminPassword)
 	}
