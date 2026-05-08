@@ -24,12 +24,12 @@ var AllRoles = []struct {
 	Label string
 }{
 	{RoleBasic, "Basic"},
-	{RoleTeamManager, "Teams admin"},
+	{RoleTeamManager, "Team manager"},
 	{RoleTeamLeader, "Team leader"},
-	{RoleStatusManager, "Status admin"},
-	{RoleActivityViewer, "Activity admin"},
+	{RoleStatusManager, "Status manager"},
+	{RoleActivityViewer, "Activity manager"},
 	{RoleFloorplanManager, "Floorplan manager"},
-	{RoleProjectsAdmin, "Projects admin"},
+	{RoleProjectsAdmin, "Projects manager"},
 	{RoleProjectsViewer, "Projects viewer"},
 	{RoleGlobal, "Global (admin)"},
 }
