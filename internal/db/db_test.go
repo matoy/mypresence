@@ -1,10 +1,14 @@
 package db
 
 import (
+	"strings"
 	"testing"
 	"time"
 
+	"golang.org/x/crypto/bcrypt"
+
 	"presence-app/internal/config"
+	"presence-app/internal/models"
 )
 
 // newTestDB opens an isolated in-memory-style SQLite DB in a temp directory.
@@ -639,3 +643,629 @@ func TestListAllPATs_ReturnsAllUsers(t *testing.T) {
 		}
 	}
 }
+
+// -----------------------------------------------------------------------
+// CreateLocalUser / CheckPassword / SetUserPassword
+// -----------------------------------------------------------------------
+
+func TestCreateLocalUser_StoresHashedPassword(t *testing.T) {
+	d := newTestDB(t)
+	d.SetBcryptCost(bcrypt.MinCost)
+
+	id, err := d.CreateLocalUser("local@test.com", "Local User", "secret")
+	if err != nil {
+		t.Fatalf("CreateLocalUser: %v", err)
+	}
+	if id <= 0 {
+		t.Errorf("expected positive ID, got %d", id)
+	}
+	var hash string
+	d.core.QueryRow("SELECT COALESCE(password_hash,'') FROM users WHERE id=?", id).Scan(&hash) //nolint:errcheck
+	if !strings.HasPrefix(hash, "$2") {
+		t.Errorf("expected bcrypt hash, got %q", hash)
+	}
+}
+
+func TestCheckPassword_BcryptHash_Correct(t *testing.T) {
+	d := newTestDB(t)
+	d.SetBcryptCost(bcrypt.MinCost)
+
+	id, _ := d.CreateLocalUser("pass@test.com", "Pass User", "correct")
+	var hash string
+	d.core.QueryRow("SELECT COALESCE(password_hash,'') FROM users WHERE id=?", id).Scan(&hash) //nolint:errcheck
+
+	if !d.CheckPassword(id, hash, "correct") {
+		t.Error("CheckPassword should return true for correct password")
+	}
+	if d.CheckPassword(id, hash, "wrong") {
+		t.Error("CheckPassword should return false for wrong password")
+	}
+}
+
+func TestCheckPassword_EmptyHash_ReturnsFalse(t *testing.T) {
+	d := newTestDB(t)
+	if d.CheckPassword(1, "", "password") {
+		t.Error("empty hash should return false")
+	}
+	if d.CheckPassword(1, "$2y$...", "") {
+		t.Error("empty password should return false")
+	}
+}
+
+func TestCheckPassword_LegacyPlaintext_Rehashes(t *testing.T) {
+	d := newTestDB(t)
+	d.SetBcryptCost(bcrypt.MinCost)
+
+	uid := seedUser(t, d, "legacy@test.com")
+	// Set a plaintext "hash" (legacy migration scenario)
+	d.core.Exec("UPDATE users SET password_hash = 'plaintextpass' WHERE id = ?", uid) //nolint:errcheck
+
+	if !d.CheckPassword(uid, "plaintextpass", "plaintextpass") {
+		t.Error("legacy plaintext match should return true")
+	}
+	// After a successful match the hash must be upgraded to bcrypt
+	var newHash string
+	d.core.QueryRow("SELECT COALESCE(password_hash,'') FROM users WHERE id=?", uid).Scan(&newHash) //nolint:errcheck
+	if !strings.HasPrefix(newHash, "$2") {
+		t.Error("plaintext hash should be auto-rehashed to bcrypt after a successful match")
+	}
+}
+
+func TestSetUserPassword_ChangesPassword(t *testing.T) {
+	d := newTestDB(t)
+	d.SetBcryptCost(bcrypt.MinCost)
+
+	id, _ := d.CreateLocalUser("pwdchange@test.com", "Pwd", "oldpass")
+	if err := d.SetUserPassword(id, "newpass"); err != nil {
+		t.Fatalf("SetUserPassword: %v", err)
+	}
+	var hash string
+	d.core.QueryRow("SELECT COALESCE(password_hash,'') FROM users WHERE id=?", id).Scan(&hash) //nolint:errcheck
+	if !d.CheckPassword(id, hash, "newpass") {
+		t.Error("new password should be accepted after SetUserPassword")
+	}
+	if d.CheckPassword(id, hash, "oldpass") {
+		t.Error("old password should be rejected after SetUserPassword")
+	}
+}
+
+// -----------------------------------------------------------------------
+// SetUserDisabled / GetUserByID / GetUserByEmail / ListUsers
+// -----------------------------------------------------------------------
+
+func TestSetUserDisabled_TogglesFlag(t *testing.T) {
+	d := newTestDB(t)
+	uid := seedUser(t, d, "disable@test.com")
+
+	if err := d.SetUserDisabled(uid, true); err != nil {
+		t.Fatalf("SetUserDisabled(true): %v", err)
+	}
+	u, err := d.GetUserByID(uid)
+	if err != nil {
+		t.Fatalf("GetUserByID after disable: %v", err)
+	}
+	if !u.Disabled {
+		t.Error("user should be disabled")
+	}
+
+	if err := d.SetUserDisabled(uid, false); err != nil {
+		t.Fatalf("SetUserDisabled(false): %v", err)
+	}
+	u, err = d.GetUserByID(uid)
+	if err != nil {
+		t.Fatalf("GetUserByID after re-enable: %v", err)
+	}
+	if u.Disabled {
+		t.Error("user should be re-enabled")
+	}
+}
+
+func TestGetUserByEmail_ReturnsUser(t *testing.T) {
+	d := newTestDB(t)
+	uid := seedUser(t, d, "byemail@test.com")
+
+	u, err := d.GetUserByEmail("byemail@test.com")
+	if err != nil {
+		t.Fatalf("GetUserByEmail: %v", err)
+	}
+	if u.ID != uid {
+		t.Errorf("got wrong user ID %d, want %d", u.ID, uid)
+	}
+}
+
+func TestGetUserByEmail_NotFound_ReturnsError(t *testing.T) {
+	d := newTestDB(t)
+	if _, err := d.GetUserByEmail("nobody@nowhere.com"); err == nil {
+		t.Error("expected error for missing email")
+	}
+}
+
+func TestGetUserByID_NotFound_ReturnsError(t *testing.T) {
+	d := newTestDB(t)
+	if _, err := d.GetUserByID(99999); err == nil {
+		t.Error("expected error for missing user ID")
+	}
+}
+
+func TestListUsers_ReturnsAll(t *testing.T) {
+	d := newTestDB(t)
+	seedUser(t, d, "u1@test.com")
+	seedUser(t, d, "u2@test.com")
+
+	users, err := d.ListUsers()
+	if err != nil {
+		t.Fatalf("ListUsers: %v", err)
+	}
+	if len(users) < 2 {
+		t.Errorf("expected at least 2 users, got %d", len(users))
+	}
+}
+
+func TestUpdateUserRoles_ChangesRole(t *testing.T) {
+	d := newTestDB(t)
+	uid := seedUser(t, d, "roles@test.com")
+
+	if err := d.UpdateUserRoles(uid, "global,status_manager"); err != nil {
+		t.Fatalf("UpdateUserRoles: %v", err)
+	}
+	u, err := d.GetUserByID(uid)
+	if err != nil {
+		t.Fatalf("GetUserByID: %v", err)
+	}
+	if u.Roles != "global,status_manager" {
+		t.Errorf("expected updated roles, got %q", u.Roles)
+	}
+}
+
+func TestUpdateLocalUser_ChangesEmailAndName(t *testing.T) {
+	d := newTestDB(t)
+	d.SetBcryptCost(bcrypt.MinCost)
+
+	uid, _ := d.CreateLocalUser("before@test.com", "Before", "pass")
+	if err := d.UpdateLocalUser(uid, "after@test.com", "After"); err != nil {
+		t.Fatalf("UpdateLocalUser: %v", err)
+	}
+	u, err := d.GetUserByID(uid)
+	if err != nil {
+		t.Fatalf("GetUserByID: %v", err)
+	}
+	if u.Email != "after@test.com" || u.Name != "After" {
+		t.Errorf("expected email=after@test.com name=After, got %q / %q", u.Email, u.Name)
+	}
+}
+
+func TestDeleteLocalUser_RemovesUser(t *testing.T) {
+	d := newTestDB(t)
+	uid := seedUser(t, d, "del@test.com")
+
+	if err := d.DeleteLocalUser(uid); err != nil {
+		t.Fatalf("DeleteLocalUser: %v", err)
+	}
+	if _, err := d.GetUserByID(uid); err == nil {
+		t.Error("user should have been deleted")
+	}
+}
+
+// -----------------------------------------------------------------------
+// Session lifecycle: DeleteSession / DeleteUserSessions
+// -----------------------------------------------------------------------
+
+func TestDeleteSession_RemovesSession(t *testing.T) {
+	d := newTestDB(t)
+	uid := seedUser(t, d, "delsess@test.com")
+
+	tok, _ := d.CreateSession(uid)
+	if err := d.DeleteSession(tok); err != nil {
+		t.Fatalf("DeleteSession: %v", err)
+	}
+	if _, err := d.GetSessionUser(tok); err == nil {
+		t.Error("session should be gone after DeleteSession")
+	}
+}
+
+func TestDeleteSession_UnknownToken_IsNoOp(t *testing.T) {
+	d := newTestDB(t)
+	// Deleting a non-existent session should succeed silently (DELETE with 0 rows affected).
+	if err := d.DeleteSession("no-such-token"); err != nil {
+		t.Errorf("DeleteSession on unknown token should not error, got: %v", err)
+	}
+}
+
+func TestDeleteUserSessions_RemovesAllExceptOne(t *testing.T) {
+	d := newTestDB(t)
+	uid := seedUser(t, d, "multisess@test.com")
+
+	tok1, _ := d.CreateSession(uid)
+	tok2, _ := d.CreateSession(uid)
+
+	d.DeleteUserSessions(uid, tok1)
+
+	if _, err := d.GetSessionUser(tok1); err != nil {
+		t.Error("tok1 should still be valid (was the excepted token)")
+	}
+	if _, err := d.GetSessionUser(tok2); err == nil {
+		t.Error("tok2 should have been deleted")
+	}
+}
+
+// -----------------------------------------------------------------------
+// GetUserByPAT / RevokePAT
+// -----------------------------------------------------------------------
+
+func TestGetUserByPAT_ValidToken(t *testing.T) {
+	d := newTestDB(t)
+	uid := seedUser(t, d, "patauth@test.com")
+	d.core.Exec("UPDATE users SET role='global' WHERE id=?", uid) //nolint:errcheck
+
+	rawToken, _, err := d.CreatePAT(uid, "auth-test", nil)
+	if err != nil {
+		t.Fatalf("CreatePAT: %v", err)
+	}
+	u, err := d.GetUserByPAT(rawToken)
+	if err != nil {
+		t.Fatalf("GetUserByPAT: %v", err)
+	}
+	if u.ID != uid {
+		t.Errorf("expected userID %d, got %d", uid, u.ID)
+	}
+}
+
+func TestGetUserByPAT_InvalidToken_ReturnsError(t *testing.T) {
+	d := newTestDB(t)
+	if _, err := d.GetUserByPAT("invalid-token"); err == nil {
+		t.Error("expected error for invalid PAT")
+	}
+}
+
+func TestRevokePAT_OwnerCanRevoke(t *testing.T) {
+	d := newTestDB(t)
+	uid := seedUser(t, d, "patrevoke@test.com")
+	d.core.Exec("UPDATE users SET role='global' WHERE id=?", uid) //nolint:errcheck
+
+	_, pat, _ := d.CreatePAT(uid, "revoke-test", nil)
+	if err := d.RevokePAT(pat.ID, uid); err != nil {
+		t.Fatalf("RevokePAT: %v", err)
+	}
+	pats, _ := d.ListUserPATs(uid)
+	for _, p := range pats {
+		if p.ID == pat.ID {
+			t.Error("PAT should have been revoked by its owner")
+		}
+	}
+}
+
+func TestRevokePAT_OtherUserCannotRevoke(t *testing.T) {
+	d := newTestDB(t)
+	owner := seedUser(t, d, "patowner2@test.com")
+	other := seedUser(t, d, "patother@test.com")
+	d.core.Exec("UPDATE users SET role='global' WHERE id=?", owner) //nolint:errcheck
+
+	_, pat, _ := d.CreatePAT(owner, "cannot-revoke", nil)
+	if err := d.RevokePAT(pat.ID, other); err == nil {
+		t.Error("another user should not be able to revoke someone else's PAT")
+	}
+}
+
+// -----------------------------------------------------------------------
+// CreateStatus / UpdateStatus
+// -----------------------------------------------------------------------
+
+func TestCreateStatus_ReturnsPositiveID(t *testing.T) {
+	d := newTestDB(t)
+	id, err := d.CreateStatus(models.Status{Name: "Test Status", Color: "#ffffff", Billable: false, OnSite: false, SortOrder: 1})
+	if err != nil {
+		t.Fatalf("CreateStatus: %v", err)
+	}
+	if id <= 0 {
+		t.Errorf("expected positive ID, got %d", id)
+	}
+}
+
+func TestUpdateStatus_ChangesFields(t *testing.T) {
+	d := newTestDB(t)
+	sid := seedOnSiteStatus(t, d)
+
+	err := d.UpdateStatus(models.Status{ID: sid, Name: "Updated Name", Color: "#000000", Billable: true, OnSite: false, SortOrder: 99})
+	if err != nil {
+		t.Fatalf("UpdateStatus: %v", err)
+	}
+	statuses, err := d.ListStatuses()
+	if err != nil {
+		t.Fatalf("ListStatuses: %v", err)
+	}
+	var found bool
+	for _, s := range statuses {
+		if s.ID == sid {
+			found = true
+			if s.Name != "Updated Name" {
+				t.Errorf("expected Name=Updated Name, got %q", s.Name)
+			}
+			if s.SortOrder != 99 {
+				t.Errorf("expected SortOrder=99, got %d", s.SortOrder)
+			}
+			if !s.Billable {
+				t.Error("expected Billable=true after update")
+			}
+		}
+	}
+	if !found {
+		t.Error("updated status not found in ListStatuses")
+	}
+}
+
+// -----------------------------------------------------------------------
+// GetPresences / SetPresences / ClearPresences round-trip
+// -----------------------------------------------------------------------
+
+func TestSetPresences_GetPresences_FullDay(t *testing.T) {
+	d := newTestDB(t)
+	uid := seedUser(t, d, "pres@test.com")
+	sid := seedOnSiteStatus(t, d)
+
+	dates := []string{"2026-05-01", "2026-05-02"}
+	if err := d.SetPresences(uid, dates, sid, "full"); err != nil {
+		t.Fatalf("SetPresences: %v", err)
+	}
+	result, err := d.GetPresences([]int64{uid}, "2026-05-01", "2026-05-02")
+	if err != nil {
+		t.Fatalf("GetPresences: %v", err)
+	}
+	for _, date := range dates {
+		if result[uid][date]["full"] != sid {
+			t.Errorf("expected presence on %s with status %d, got %v", date, sid, result[uid][date])
+		}
+	}
+}
+
+func TestSetPresences_HalfDay_AM(t *testing.T) {
+	d := newTestDB(t)
+	uid := seedUser(t, d, "halfday@test.com")
+	sid := seedOnSiteStatus(t, d)
+
+	if err := d.SetPresences(uid, []string{"2026-05-03"}, sid, "AM"); err != nil {
+		t.Fatalf("SetPresences AM: %v", err)
+	}
+	result, _ := d.GetPresences([]int64{uid}, "2026-05-03", "2026-05-03")
+	if result[uid]["2026-05-03"]["AM"] != sid {
+		t.Errorf("expected AM presence, got %v", result[uid]["2026-05-03"])
+	}
+	if _, hasFullDay := result[uid]["2026-05-03"]["full"]; hasFullDay {
+		t.Error("should not have full-day presence when AM is set")
+	}
+}
+
+func TestSetPresences_FullReplacesPreviousHalves(t *testing.T) {
+	d := newTestDB(t)
+	uid := seedUser(t, d, "fullreplace@test.com")
+	sid := seedOnSiteStatus(t, d)
+
+	d.SetPresences(uid, []string{"2026-05-10"}, sid, "AM") //nolint:errcheck
+	d.SetPresences(uid, []string{"2026-05-10"}, sid, "PM") //nolint:errcheck
+
+	// Setting full-day should remove the AM/PM records
+	if err := d.SetPresences(uid, []string{"2026-05-10"}, sid, "full"); err != nil {
+		t.Fatalf("SetPresences full: %v", err)
+	}
+	result, _ := d.GetPresences([]int64{uid}, "2026-05-10", "2026-05-10")
+	day := result[uid]["2026-05-10"]
+	if _, hasAM := day["AM"]; hasAM {
+		t.Error("AM should have been removed when full-day is set")
+	}
+	if day["full"] != sid {
+		t.Errorf("expected full-day presence, got %v", day)
+	}
+}
+
+func TestClearPresences_RemovesAll(t *testing.T) {
+	d := newTestDB(t)
+	uid := seedUser(t, d, "clearall@test.com")
+	sid := seedOnSiteStatus(t, d)
+
+	d.SetPresences(uid, []string{"2026-05-04", "2026-05-05"}, sid, "full") //nolint:errcheck
+	if err := d.ClearPresences(uid, []string{"2026-05-04", "2026-05-05"}, ""); err != nil {
+		t.Fatalf("ClearPresences: %v", err)
+	}
+	result, _ := d.GetPresences([]int64{uid}, "2026-05-01", "2026-05-31")
+	if len(result[uid]) != 0 {
+		t.Errorf("expected no presences after clear, got %v", result[uid])
+	}
+}
+
+func TestClearPresences_SpecificHalf(t *testing.T) {
+	d := newTestDB(t)
+	uid := seedUser(t, d, "clearhalf@test.com")
+	sid := seedOnSiteStatus(t, d)
+
+	d.SetPresences(uid, []string{"2026-05-06"}, sid, "AM") //nolint:errcheck
+	d.SetPresences(uid, []string{"2026-05-06"}, sid, "PM") //nolint:errcheck
+
+	if err := d.ClearPresences(uid, []string{"2026-05-06"}, "AM"); err != nil {
+		t.Fatalf("ClearPresences AM: %v", err)
+	}
+	result, _ := d.GetPresences([]int64{uid}, "2026-05-06", "2026-05-06")
+	if _, hasAM := result[uid]["2026-05-06"]["AM"]; hasAM {
+		t.Error("AM presence should have been cleared")
+	}
+	if _, hasPM := result[uid]["2026-05-06"]["PM"]; !hasPM {
+		t.Error("PM presence should remain after clearing only AM")
+	}
+}
+
+func TestGetPresences_EmptyUserIDs_ReturnsEmpty(t *testing.T) {
+	d := newTestDB(t)
+	result, err := d.GetPresences([]int64{}, "2026-05-01", "2026-05-31")
+	if err != nil {
+		t.Fatalf("GetPresences empty: %v", err)
+	}
+	if len(result) != 0 {
+		t.Errorf("expected empty result for no user IDs, got %v", result)
+	}
+}
+
+// -----------------------------------------------------------------------
+// Team CRUD: ListTeams / CreateTeam / UpdateTeam / DeleteTeam
+// -----------------------------------------------------------------------
+
+func TestListTeams_Empty(t *testing.T) {
+	d := newTestDB(t)
+	teams, err := d.ListTeams()
+	if err != nil {
+		t.Fatalf("ListTeams: %v", err)
+	}
+	if len(teams) != 0 {
+		t.Errorf("expected 0 teams, got %d", len(teams))
+	}
+}
+
+func TestCreateTeam_And_UpdateTeam(t *testing.T) {
+	d := newTestDB(t)
+	id, err := d.CreateTeam("Alpha Team")
+	if err != nil || id <= 0 {
+		t.Fatalf("CreateTeam: id=%d err=%v", id, err)
+	}
+	if err := d.UpdateTeam(id, "Alpha Team Renamed"); err != nil {
+		t.Fatalf("UpdateTeam: %v", err)
+	}
+	teams, _ := d.ListTeams()
+	var found bool
+	for _, tm := range teams {
+		if tm.ID == id && tm.Name == "Alpha Team Renamed" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("renamed team not found in ListTeams")
+	}
+}
+
+func TestDeleteTeam_RemovesTeam(t *testing.T) {
+	d := newTestDB(t)
+	id, _ := d.CreateTeam("ToDelete")
+	if err := d.DeleteTeam(id); err != nil {
+		t.Fatalf("DeleteTeam: %v", err)
+	}
+	teams, _ := d.ListTeams()
+	for _, tm := range teams {
+		if tm.ID == id {
+			t.Error("team should have been deleted")
+		}
+	}
+}
+
+func TestGetTeamMembers_And_RemoveTeamMember(t *testing.T) {
+	d := newTestDB(t)
+	uid := seedUser(t, d, "member2@test.com")
+	id, _ := d.CreateTeam("MemberTeam")
+	d.AddTeamMember(id, uid) //nolint:errcheck
+
+	members, err := d.GetTeamMembers(id)
+	if err != nil {
+		t.Fatalf("GetTeamMembers: %v", err)
+	}
+	if len(members) != 1 || members[0].ID != uid {
+		t.Errorf("expected 1 member with ID %d, got %v", uid, members)
+	}
+
+	if err := d.RemoveTeamMember(id, uid); err != nil {
+		t.Fatalf("RemoveTeamMember: %v", err)
+	}
+	members, _ = d.GetTeamMembers(id)
+	if len(members) != 0 {
+		t.Errorf("expected 0 members after removal, got %d", len(members))
+	}
+}
+
+func TestGetUserTeams_ReturnsUserMemberships(t *testing.T) {
+	d := newTestDB(t)
+	uid := seedUser(t, d, "userteams@test.com")
+	id1, _ := d.CreateTeam("TeamA")
+	id2, _ := d.CreateTeam("TeamB")
+	d.AddTeamMember(id1, uid) //nolint:errcheck
+	d.AddTeamMember(id2, uid) //nolint:errcheck
+
+	teams, err := d.GetUserTeams(uid)
+	if err != nil {
+		t.Fatalf("GetUserTeams: %v", err)
+	}
+	if len(teams) != 2 {
+		t.Errorf("expected 2 teams for user, got %d", len(teams))
+	}
+}
+
+// -----------------------------------------------------------------------
+// Holiday CRUD: CreateHoliday / ListHolidays / GetHolidayMap / UpdateHoliday / DeleteHoliday
+// -----------------------------------------------------------------------
+
+func TestCreateHoliday_And_ListHolidays(t *testing.T) {
+	d := newTestDB(t)
+	id, err := d.CreateHoliday("2026-07-14", "Bastille Day", false)
+	if err != nil || id <= 0 {
+		t.Fatalf("CreateHoliday: id=%d err=%v", id, err)
+	}
+	holidays, err := d.ListHolidays()
+	if err != nil {
+		t.Fatalf("ListHolidays: %v", err)
+	}
+	var found bool
+	for _, h := range holidays {
+		if h.ID == id && h.Name == "Bastille Day" && h.Date == "2026-07-14" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("created holiday not found in ListHolidays")
+	}
+}
+
+func TestGetHolidayMap_WithinRange(t *testing.T) {
+	d := newTestDB(t)
+	d.CreateHoliday("2026-08-15", "Assumption", false) //nolint:errcheck
+	d.CreateHoliday("2026-11-11", "Armistice", true)   //nolint:errcheck
+
+	m, err := d.GetHolidayMap("2026-08-01", "2026-08-31")
+	if err != nil {
+		t.Fatalf("GetHolidayMap: %v", err)
+	}
+	if _, ok := m["2026-08-15"]; !ok {
+		t.Error("expected 2026-08-15 in holiday map")
+	}
+	if _, ok := m["2026-11-11"]; ok {
+		t.Error("2026-11-11 should be outside the query range")
+	}
+}
+
+func TestUpdateHoliday_ChangesFields(t *testing.T) {
+	d := newTestDB(t)
+	id, _ := d.CreateHoliday("2026-12-25", "Christmas", false)
+	if err := d.UpdateHoliday(id, "2026-12-25", "Christmas Day", true); err != nil {
+		t.Fatalf("UpdateHoliday: %v", err)
+	}
+	holidays, _ := d.ListHolidays()
+	for _, h := range holidays {
+		if h.ID == id {
+			if h.Name != "Christmas Day" {
+				t.Errorf("expected updated name, got %q", h.Name)
+			}
+			if !h.AllowImputed {
+				t.Error("expected allow_imputed=true after update")
+			}
+		}
+	}
+}
+
+func TestDeleteHoliday_RemovesHoliday(t *testing.T) {
+	d := newTestDB(t)
+	id, _ := d.CreateHoliday("2026-01-01", "New Year", false)
+	if err := d.DeleteHoliday(id); err != nil {
+		t.Fatalf("DeleteHoliday: %v", err)
+	}
+	holidays, _ := d.ListHolidays()
+	for _, h := range holidays {
+		if h.ID == id {
+			t.Error("holiday should have been deleted")
+		}
+	}
+}
+
+// Ensure the import of "time" is used (kept for existing TestListAllPATs_ReturnsAllUsers).
+var _ = time.Now

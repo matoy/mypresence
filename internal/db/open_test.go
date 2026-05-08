@@ -1,10 +1,15 @@
 package db
 
 import (
+	"database/sql"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"presence-app/internal/config"
+
+	_ "modernc.org/sqlite"
 )
 
 // -----------------------------------------------------------------------
@@ -439,3 +444,73 @@ func TestAddTeamMember_Idempotent(t *testing.T) {
 		t.Errorf("AddTeamMember should not duplicate rows, got %d", count)
 	}
 }
+
+// -----------------------------------------------------------------------
+// migrateLegacy — copies rows from a legacy app.db into domain DBs
+// -----------------------------------------------------------------------
+
+func TestMigrateLegacy_CopiesData(t *testing.T) {
+	dir := t.TempDir()
+	legacyPath := filepath.Join(dir, "app.db")
+
+	// Build a minimal legacy SQLite database that mirrors the old single-file schema.
+	legacy, err := sql.Open("sqlite", legacyPath)
+	if err != nil {
+		t.Fatalf("open legacy: %v", err)
+	}
+	for _, stmt := range []string{
+		`CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE NOT NULL, name TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'basic', password_hash TEXT, disabled BOOLEAN NOT NULL DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
+		`CREATE TABLE teams (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
+		`CREATE TABLE user_teams (user_id BIGINT NOT NULL, team_id BIGINT NOT NULL)`,
+		`CREATE TABLE sessions (id TEXT PRIMARY KEY, user_id BIGINT NOT NULL, expires_at DATETIME NOT NULL)`,
+		`CREATE TABLE personal_access_tokens (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id BIGINT NOT NULL, description TEXT NOT NULL DEFAULT '', token_hash TEXT NOT NULL UNIQUE, token_prefix TEXT NOT NULL, expires_at DATETIME, last_used_at DATETIME, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
+		`CREATE TABLE statuses (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, color TEXT NOT NULL DEFAULT '#3b82f6', billable BOOLEAN DEFAULT 0, on_site BOOLEAN DEFAULT 0, sort_order INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
+		`CREATE TABLE presences (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, date TEXT NOT NULL, half TEXT NOT NULL DEFAULT 'full', status_id INTEGER NOT NULL)`,
+		`CREATE TABLE holidays (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT UNIQUE NOT NULL, name TEXT NOT NULL, allow_imputed BOOLEAN DEFAULT 0)`,
+		`CREATE TABLE presence_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id BIGINT NOT NULL, actor_id BIGINT NOT NULL, action TEXT NOT NULL, date TEXT NOT NULL, half TEXT NOT NULL DEFAULT 'full', status_id BIGINT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
+		`CREATE TABLE admin_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, actor_id BIGINT NOT NULL, entity_type TEXT NOT NULL, entity_id BIGINT NOT NULL DEFAULT 0, action TEXT NOT NULL, details TEXT NOT NULL DEFAULT '', created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
+		`CREATE TABLE floorplans (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, image_path TEXT NOT NULL DEFAULT '', sort_order INTEGER NOT NULL DEFAULT 0)`,
+		`CREATE TABLE seats (id INTEGER PRIMARY KEY AUTOINCREMENT, floorplan_id BIGINT NOT NULL, label TEXT NOT NULL, x_pct REAL NOT NULL DEFAULT 0, y_pct REAL NOT NULL DEFAULT 0)`,
+		`CREATE TABLE seat_reservations (id INTEGER PRIMARY KEY AUTOINCREMENT, seat_id BIGINT NOT NULL, user_id BIGINT NOT NULL, date TEXT NOT NULL, half TEXT NOT NULL DEFAULT 'full', created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
+	} {
+		if _, err := legacy.Exec(stmt); err != nil {
+			legacy.Close()
+			t.Fatalf("create legacy table: %v", err)
+		}
+	}
+	legacy.Exec(`INSERT INTO users (email, name, role) VALUES ('migrated@test.com', 'Migrated User', 'basic')`) //nolint:errcheck
+	legacy.Exec(`INSERT INTO statuses (name, color) VALUES ('Legacy Status', '#ff0000')`)                       //nolint:errcheck
+	legacy.Close()
+
+	// Open opens the new multi-file layout; finding app.db triggers migrateLegacy.
+	d, err := Open(&config.Config{DBDriver: "sqlite", DataDir: dir})
+	if err != nil {
+		t.Fatalf("Open with legacy db: %v", err)
+	}
+	defer d.Close()
+
+	// Migrated user must appear in core.db.
+	var userCount int
+	d.core.QueryRow("SELECT COUNT(*) FROM users WHERE email='migrated@test.com'").Scan(&userCount) //nolint:errcheck
+	if userCount != 1 {
+		t.Errorf("expected migrated user in core.db, got count=%d", userCount)
+	}
+
+	// Migrated status must appear in presence.db.
+	var statusCount int
+	d.presence.QueryRow("SELECT COUNT(*) FROM statuses WHERE name='Legacy Status'").Scan(&statusCount) //nolint:errcheck
+	if statusCount != 1 {
+		t.Errorf("expected migrated status in presence.db, got count=%d", statusCount)
+	}
+
+	// app.db should be renamed to app.db.bak.
+	if _, err := os.Stat(legacyPath); !os.IsNotExist(err) {
+		t.Error("expected app.db to be renamed, but it still exists")
+	}
+	if _, err := os.Stat(legacyPath + ".bak"); os.IsNotExist(err) {
+		t.Error("expected app.db.bak to exist after migration")
+	}
+}
+
+// Silence unused-import warning for the sqlite driver blank import.
+var _ = strings.Contains

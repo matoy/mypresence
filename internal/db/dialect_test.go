@@ -370,3 +370,110 @@ func TestDialectHelpers(t *testing.T) {
 		t.Error("sqlite should not match other dialects")
 	}
 }
+
+// -----------------------------------------------------------------------
+// insertIgnoreVerb / onConflictDoNothing
+// -----------------------------------------------------------------------
+
+func TestInsertIgnoreVerb(t *testing.T) {
+	cases := map[string]string{
+		"mysql":     "INSERT IGNORE INTO",
+		"sqlite":    "INSERT INTO",
+		"postgres":  "INSERT INTO",
+		"sqlserver": "INSERT INTO",
+	}
+	for driver, want := range cases {
+		got := newDialect(driver).insertIgnoreVerb()
+		if got != want {
+			t.Errorf("[%s] insertIgnoreVerb = %q, want %q", driver, got, want)
+		}
+	}
+}
+
+func TestOnConflictDoNothing(t *testing.T) {
+	// Only PostgreSQL returns a non-empty suffix; all others handle it differently.
+	dl := newDialect("postgres")
+	if got := dl.onConflictDoNothing(); got != " ON CONFLICT DO NOTHING" {
+		t.Errorf("postgres onConflictDoNothing = %q, want \" ON CONFLICT DO NOTHING\"", got)
+	}
+	for _, driver := range []string{"mysql", "sqlite", "sqlserver"} {
+		if got := newDialect(driver).onConflictDoNothing(); got != "" {
+			t.Errorf("[%s] onConflictDoNothing = %q, want empty string", driver, got)
+		}
+	}
+}
+
+// -----------------------------------------------------------------------
+// createTableIfNotExists per driver
+// -----------------------------------------------------------------------
+
+func TestCreateTableIfNotExists_SQLServer_ConditionalForm(t *testing.T) {
+	dl := newDialect("sqlserver")
+	got := dl.createTableIfNotExists("mytable", "id BIGINT PRIMARY KEY")
+	if !strings.Contains(got, "IF NOT EXISTS") {
+		t.Errorf("sqlserver createTableIfNotExists should use IF NOT EXISTS form: %q", got)
+	}
+	if !strings.Contains(strings.ToUpper(got), "INFORMATION_SCHEMA") {
+		t.Errorf("sqlserver createTableIfNotExists should check INFORMATION_SCHEMA: %q", got)
+	}
+	if !strings.Contains(got, "mytable") {
+		t.Errorf("sqlserver createTableIfNotExists missing table name: %q", got)
+	}
+}
+
+func TestCreateTableIfNotExists_NonSQLServer_StandardForm(t *testing.T) {
+	for _, driver := range []string{"sqlite", "mysql", "postgres"} {
+		dl := newDialect(driver)
+		got := dl.createTableIfNotExists("mytable", "id BIGINT PRIMARY KEY")
+		if !strings.HasPrefix(got, "CREATE TABLE IF NOT EXISTS mytable") {
+			t.Errorf("[%s] createTableIfNotExists = %q, want CREATE TABLE IF NOT EXISTS mytable ...", driver, got)
+		}
+	}
+}
+
+// -----------------------------------------------------------------------
+// addColumnIfNotExists per driver
+// -----------------------------------------------------------------------
+
+func TestAddColumnIfNotExists_SQLServer_ConditionalForm(t *testing.T) {
+	dl := newDialect("sqlserver")
+	got := dl.addColumnIfNotExists("users", "disabled", "BIT NOT NULL DEFAULT 0")
+	if !strings.Contains(got, "IF NOT EXISTS") {
+		t.Errorf("sqlserver addColumnIfNotExists should use IF NOT EXISTS form: %q", got)
+	}
+	if !strings.Contains(strings.ToUpper(got), "INFORMATION_SCHEMA") {
+		t.Errorf("sqlserver addColumnIfNotExists should check INFORMATION_SCHEMA.COLUMNS: %q", got)
+	}
+	if !strings.Contains(got, "users") || !strings.Contains(got, "disabled") {
+		t.Errorf("sqlserver addColumnIfNotExists missing table/column names: %q", got)
+	}
+}
+
+func TestAddColumnIfNotExists_NonSQLServer_StandardForm(t *testing.T) {
+	for _, driver := range []string{"sqlite", "mysql", "postgres"} {
+		dl := newDialect(driver)
+		got := dl.addColumnIfNotExists("users", "disabled", "BOOLEAN DEFAULT 0")
+		if !strings.Contains(got, "ADD COLUMN IF NOT EXISTS") {
+			t.Errorf("[%s] addColumnIfNotExists = %q, want ADD COLUMN IF NOT EXISTS", driver, got)
+		}
+		if !strings.Contains(got, "users") || !strings.Contains(got, "disabled") {
+			t.Errorf("[%s] addColumnIfNotExists missing table/column names: %q", driver, got)
+		}
+	}
+}
+
+// -----------------------------------------------------------------------
+// varcharType per driver
+// -----------------------------------------------------------------------
+
+func TestVarcharType_AllDrivers(t *testing.T) {
+	for _, driver := range []string{"sqlite", "mysql", "postgres"} {
+		got := newDialect(driver).varcharType(128)
+		if got != "VARCHAR(128)" {
+			t.Errorf("[%s] varcharType(128) = %q, want VARCHAR(128)", driver, got)
+		}
+	}
+	if got := newDialect("sqlserver").varcharType(64); got != "NVARCHAR(64)" {
+		t.Errorf("sqlserver varcharType(64) = %q, want NVARCHAR(64)", got)
+	}
+}
