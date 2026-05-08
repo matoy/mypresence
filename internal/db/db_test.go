@@ -1267,5 +1267,139 @@ func TestDeleteHoliday_RemovesHoliday(t *testing.T) {
 	}
 }
 
+// ── SetFloorplanImage ─────────────────────────────────────────────────────────
+
+func TestSetFloorplanImage_UpdatesPath(t *testing.T) {
+	d := newTestDB(t)
+	fpID, _ := seedFloorplanAndSeat(t, d, "A1")
+
+	if err := d.SetFloorplanImage(fpID, "/images/map.png"); err != nil {
+		t.Fatalf("SetFloorplanImage: %v", err)
+	}
+
+	fp, err := d.GetFloorplan(fpID)
+	if err != nil {
+		t.Fatalf("GetFloorplan: %v", err)
+	}
+	if fp.ImagePath != "/images/map.png" {
+		t.Fatalf("expected image_path '/images/map.png', got %q", fp.ImagePath)
+	}
+}
+
+// ── GetSeatsWithStatus ────────────────────────────────────────────────────────
+
+func TestGetSeatsWithStatus_Free(t *testing.T) {
+	d := newTestDB(t)
+	fpID, _ := seedFloorplanAndSeat(t, d, "B1")
+	uid := seedUser(t, d, "free@test.com")
+
+	seats, err := d.GetSeatsWithStatus(fpID, uid, "2026-06-01", "full")
+	if err != nil {
+		t.Fatalf("GetSeatsWithStatus: %v", err)
+	}
+	if len(seats) != 1 {
+		t.Fatalf("expected 1 seat, got %d", len(seats))
+	}
+	if seats[0].Status != "free" {
+		t.Fatalf("expected status 'free', got %q", seats[0].Status)
+	}
+}
+
+func TestGetSeatsWithStatus_Mine(t *testing.T) {
+	d := newTestDB(t)
+	fpID, seatID := seedFloorplanAndSeat(t, d, "C1")
+	uid := seedUser(t, d, "mine@test.com")
+
+	// Reserve the seat for this user.
+	_, err := d.floorplan.Exec(
+		"INSERT INTO seat_reservations (seat_id, user_id, date, half) VALUES (?, ?, '2026-06-02', 'full')",
+		seatID, uid,
+	)
+	if err != nil {
+		t.Fatalf("insert reservation: %v", err)
+	}
+
+	seats, err := d.GetSeatsWithStatus(fpID, uid, "2026-06-02", "full")
+	if err != nil {
+		t.Fatalf("GetSeatsWithStatus: %v", err)
+	}
+	if len(seats) != 1 || seats[0].Status != "mine" {
+		t.Fatalf("expected status 'mine', got %q", seats[0].Status)
+	}
+	if seats[0].ReservationID == 0 {
+		t.Fatal("expected non-zero ReservationID for 'mine' seat")
+	}
+}
+
+func TestGetSeatsWithStatus_Taken(t *testing.T) {
+	d := newTestDB(t)
+	fpID, seatID := seedFloorplanAndSeat(t, d, "D1")
+	uid := seedUser(t, d, "owner@test.com")
+	otherUID := seedUser(t, d, "other@test.com")
+
+	// Reserve the seat for another user.
+	_, err := d.floorplan.Exec(
+		"INSERT INTO seat_reservations (seat_id, user_id, date, half) VALUES (?, ?, '2026-06-03', 'full')",
+		seatID, otherUID,
+	)
+	if err != nil {
+		t.Fatalf("insert reservation: %v", err)
+	}
+
+	seats, err := d.GetSeatsWithStatus(fpID, uid, "2026-06-03", "full")
+	if err != nil {
+		t.Fatalf("GetSeatsWithStatus: %v", err)
+	}
+	if len(seats) != 1 || seats[0].Status != "taken" {
+		t.Fatalf("expected status 'taken', got %q", seats[0].Status)
+	}
+}
+
+// ── GetAdminLogsByActor / fetchTeamNames / fetchStatusNames / fetchHolidayNames ──
+
+func TestGetAdminLogsByActor_AllEntityTypes(t *testing.T) {
+	d := newTestDB(t)
+
+	actorID := seedUser(t, d, "actor@audit.com")
+
+	// Create one entity of each type.
+	teamID, _ := d.CreateTeam("Audit Team")
+	statusID, _ := d.CreateStatus(models.Status{Name: "AuditStatus", Color: "#aabbcc", SortOrder: 1})
+	holidayID, _ := d.CreateHoliday("2026-07-14", "Bastille Day", false)
+	targetUID := seedUser(t, d, "target@audit.com")
+
+	// Log one action per entity type.
+	d.LogAdminAction(actorID, "team", teamID, "create", "Audit Team")
+	d.LogAdminAction(actorID, "status", statusID, "create", "AuditStatus")
+	d.LogAdminAction(actorID, "holiday", holidayID, "create", "Bastille Day")
+	d.LogAdminAction(actorID, "user", targetUID, "create", "target@audit.com")
+
+	logs, err := d.GetAdminLogsByActor(actorID, time.Time{})
+	if err != nil {
+		t.Fatalf("GetAdminLogsByActor: %v", err)
+	}
+	if len(logs) != 4 {
+		t.Fatalf("expected 4 log entries, got %d", len(logs))
+	}
+
+	entityNames := make(map[string]string)
+	for _, l := range logs {
+		entityNames[l.EntityType] = l.EntityName
+	}
+
+	if entityNames["team"] == "" {
+		t.Error("expected EntityName for team type, got empty")
+	}
+	if entityNames["status"] == "" {
+		t.Error("expected EntityName for status type, got empty")
+	}
+	if entityNames["holiday"] == "" {
+		t.Error("expected EntityName for holiday type, got empty")
+	}
+	if entityNames["user"] == "" {
+		t.Error("expected EntityName for user type, got empty")
+	}
+}
+
 // Ensure the import of "time" is used (kept for existing TestListAllPATs_ReturnsAllUsers).
 var _ = time.Now

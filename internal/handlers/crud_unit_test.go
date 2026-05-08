@@ -385,3 +385,273 @@ func TestToggleStatusDisabled_InvalidBodyReturns400(t *testing.T) {
 		t.Fatalf("expected 400 on malformed JSON, got %d", w.Code)
 	}
 }
+
+// ── StatusesPage ──────────────────────────────────────────────────────────────
+
+func TestStatusesPage_Renders(t *testing.T) {
+	d := newCRUDTestDB(t)
+	var page string
+	h := &AdminHandler{
+		DB: d,
+		Render: func(w http.ResponseWriter, r *http.Request, p string, data interface{}) {
+			page = p
+		},
+	}
+	req := createAuthedReq(t, d, http.MethodGet, "/admin/statuses",
+		"sm7@test.com", "SM7", "password1", models.RoleStatusManager, nil)
+	middleware.Auth(d, http.HandlerFunc(h.StatusesPage)).ServeHTTP(httptest.NewRecorder(), req)
+	if page != "admin_statuses" {
+		t.Fatalf("expected admin_statuses page, got %q", page)
+	}
+}
+
+// ── UsersAPI / UpdateUserRoles ────────────────────────────────────────────────
+
+func TestUsersAPI_ReturnsJSON(t *testing.T) {
+	d := newCRUDTestDB(t)
+	h := &AdminHandler{DB: d}
+
+	// Seed a user so the list is non-empty.
+	d.CreateLocalUser("list@test.com", "List", "password1") //nolint:errcheck
+
+	w := httptest.NewRecorder()
+	h.UsersAPI(w, httptest.NewRequest(http.MethodGet, "/api/admin/users", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var users []map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &users); err != nil {
+		t.Fatalf("UsersAPI: invalid JSON: %v", err)
+	}
+	if len(users) == 0 {
+		t.Fatal("expected at least one user in response")
+	}
+}
+
+func TestUpdateUserRoles_ValidAndInvalid(t *testing.T) {
+	d := newCRUDTestDB(t)
+	h := &AdminHandler{DB: d}
+
+	targetUID, err := d.CreateLocalUser("target@test.com", "Target", "password1")
+	if err != nil {
+		t.Fatalf("CreateLocalUser: %v", err)
+	}
+
+	// Valid role update.
+	reqOK := createAuthedReq(t, d, http.MethodPut, "/api/admin/users/"+strconvI64(targetUID)+"/roles",
+		"global@test.com", "Global", "password1", models.RoleGlobal,
+		[]byte(`{"roles":["team_manager"]}`))
+	reqOK.SetPathValue("id", strconvI64(targetUID))
+	wOK := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.UpdateUserRoles)).ServeHTTP(wOK, reqOK)
+	if wOK.Code != http.StatusOK {
+		t.Fatalf("expected 200 valid role update, got %d: %s", wOK.Code, wOK.Body.String())
+	}
+
+	// Invalid role name → 400.
+	reqBad := createAuthedReq(t, d, http.MethodPut, "/api/admin/users/"+strconvI64(targetUID)+"/roles",
+		"global2@test.com", "Global2", "password1", models.RoleGlobal,
+		[]byte(`{"roles":["not_a_role"]}`))
+	reqBad.SetPathValue("id", strconvI64(targetUID))
+	wBad := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.UpdateUserRoles)).ServeHTTP(wBad, reqBad)
+	if wBad.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 invalid role, got %d", wBad.Code)
+	}
+}
+
+// ── UserLogsPage ──────────────────────────────────────────────────────────────
+
+func TestUserLogsPage_NotFoundForUnknownID(t *testing.T) {
+	d := newCRUDTestDB(t)
+	h := &UsersAdminHandler{DB: d, Render: func(w http.ResponseWriter, r *http.Request, p string, data interface{}) {}}
+
+	req := createAuthedReq(t, d, http.MethodGet, "/admin/users/99999/logs",
+		"ga@logstest.com", "GA", "password1", models.RoleGlobal, nil)
+	req.SetPathValue("id", "99999")
+	w := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.UserLogsPage)).ServeHTTP(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for unknown user, got %d", w.Code)
+	}
+}
+
+func TestUserLogsPage_RendersForKnownUser(t *testing.T) {
+	d := newCRUDTestDB(t)
+	var page string
+	var pageData interface{}
+	h := &UsersAdminHandler{
+		DB: d,
+		Render: func(w http.ResponseWriter, r *http.Request, p string, data interface{}) {
+			page = p
+			pageData = data
+		},
+	}
+
+	uid, err := d.CreateLocalUser("loguser@test.com", "Log User", "password1")
+	if err != nil {
+		t.Fatalf("CreateLocalUser: %v", err)
+	}
+
+	req := createAuthedReq(t, d, http.MethodGet, "/admin/users/"+strconvI64(uid)+"/logs",
+		"ga@logstest.com", "GA", "password1", models.RoleGlobal, nil)
+	req.SetPathValue("id", strconvI64(uid))
+	middleware.Auth(d, http.HandlerFunc(h.UserLogsPage)).ServeHTTP(httptest.NewRecorder(), req)
+	if page != "admin_user_logs" {
+		t.Fatalf("expected admin_user_logs page, got %q", page)
+	}
+	if pageData == nil {
+		t.Fatal("expected non-nil page data")
+	}
+}
+
+// ── SeatsAPI (floorplan) ──────────────────────────────────────────────────────
+
+func TestSeatsAPI_MissingParamsReturns400(t *testing.T) {
+	d := newCRUDTestDB(t)
+	h := &FloorplanHandler{DB: d, DataDir: t.TempDir()}
+
+	// No floorplan_id → 400.
+	req := createAuthedReq(t, d, http.MethodGet, "/api/seats?date=2026-05-08",
+		"fp@test.com", "FP", "password1", models.RoleBasic, nil)
+	w := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.SeatsAPI)).ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 missing floorplan_id, got %d", w.Code)
+	}
+}
+
+func TestSeatsAPI_NotOnSiteReturnsEmptyList(t *testing.T) {
+	d := newCRUDTestDB(t)
+	h := &FloorplanHandler{DB: d, DataDir: t.TempDir()}
+
+	// User exists but has no on-site presence → on_site=false result.
+	req := createAuthedReq(t, d, http.MethodGet, "/api/seats?floorplan_id=1&date=2026-05-08",
+		"fp2@test.com", "FP2", "password1", models.RoleBasic, nil)
+	w := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.SeatsAPI)).ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if onSite, _ := resp["on_site"].(bool); onSite {
+		t.Fatal("expected on_site=false when user has no on-site presence")
+	}
+}
+
+// ── ClearPresences forbidden branch ──────────────────────────────────────────
+
+func TestClearPresences_ForbiddenForOtherUser(t *testing.T) {
+	d := newCRUDTestDB(t)
+	h := &CalendarHandler{DB: d}
+
+	// Create target user
+	targetUID, err := d.CreateLocalUser("target@cal.com", "Target", "password1")
+	if err != nil {
+		t.Fatalf("CreateLocalUser target: %v", err)
+	}
+
+	// Request as basic user trying to clear another user's presences.
+	body := []byte(`{"user_id":` + strconvI64(targetUID) + `,"dates":["2026-05-01"]}`)
+	req := createAuthedReq(t, d, http.MethodPost, "/api/presences/clear",
+		"basic@cal.com", "Basic", "password1", models.RoleBasic, body)
+	w := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.ClearPresences)).ServeHTTP(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for unauthorized clear, got %d", w.Code)
+	}
+}
+
+// ── SetPresences forbidden ────────────────────────────────────────────────────
+
+func TestSetPresences_ForbiddenForOtherUser(t *testing.T) {
+	d := newCRUDTestDB(t)
+	h := &CalendarHandler{DB: d}
+
+	targetUID, err := d.CreateLocalUser("sp_target@cal.com", "SPTarget", "password1")
+	if err != nil {
+		t.Fatalf("CreateLocalUser target: %v", err)
+	}
+
+	body := []byte(`{"user_id":` + strconvI64(targetUID) + `,"dates":["2026-05-02"],"status_id":1,"half":"full"}`)
+	req := createAuthedReq(t, d, http.MethodPost, "/api/presences",
+		"sp_basic@cal.com", "SPBasic", "password1", models.RoleBasic, body)
+	w := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.SetPresences)).ServeHTTP(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for unauthorized set, got %d", w.Code)
+	}
+}
+
+// ── UpdateProject ─────────────────────────────────────────────────────────────
+
+func TestUpdateProject_ValidationAndSuccess(t *testing.T) {
+	d := newCRUDTestDB(t)
+	h := &ProjectsHandler{DB: d}
+
+	// Create a project to update.
+	projID, err := d.CreateProject("Orig", "ORIG", 0, true, "2026-01-01", "2026-12-31")
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+
+	// Missing name → 400.
+	reqBad := createAuthedReq(t, d, http.MethodPut, "/api/admin/projects/"+strconvI64(projID),
+		"pa@proj.com", "PA", "password1", models.RoleProjectsAdmin,
+		[]byte(`{"name":"","code":"ORIG","start_date":"2026-01-01","end_date":"2026-12-31"}`))
+	reqBad.SetPathValue("id", strconvI64(projID))
+	wBad := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.UpdateProject)).ServeHTTP(wBad, reqBad)
+	if wBad.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 missing name, got %d", wBad.Code)
+	}
+
+	// Valid update → 200.
+	reqOK := createAuthedReq(t, d, http.MethodPut, "/api/admin/projects/"+strconvI64(projID),
+		"pa2@proj.com", "PA2", "password1", models.RoleProjectsAdmin,
+		[]byte(`{"name":"Updated","code":"UPD","active":true,"start_date":"2026-01-01","end_date":"2026-12-31"}`))
+	reqOK.SetPathValue("id", strconvI64(projID))
+	wOK := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.UpdateProject)).ServeHTTP(wOK, reqOK)
+	if wOK.Code != http.StatusOK {
+		t.Fatalf("expected 200 valid update, got %d: %s", wOK.Code, wOK.Body.String())
+	}
+}
+
+// ── SetProjectTime validation ─────────────────────────────────────────────────
+
+func TestSetProjectTime_InvalidMonth_Returns400(t *testing.T) {
+	d := newCRUDTestDB(t)
+	h := &ProjectsHandler{DB: d}
+
+	body := []byte(`{"project_id":1,"year":2026,"month":13,"days":1}`)
+	req := createAuthedReq(t, d, http.MethodPost, "/api/project-time",
+		"pt@proj.com", "PT", "password1", models.RoleBasic, body)
+	w := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.SetProjectTime)).ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 invalid month, got %d", w.Code)
+	}
+}
+
+func TestSetProjectTime_InactiveProject_Returns400(t *testing.T) {
+	d := newCRUDTestDB(t)
+	h := &ProjectsHandler{DB: d}
+
+	projID, err := d.CreateProject("Inactive", "INACT", 0, false, "2025-01-01", "2025-12-31")
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+
+	body := []byte(`{"project_id":` + strconvI64(projID) + `,"year":2026,"month":5,"days":1}`)
+	req := createAuthedReq(t, d, http.MethodPost, "/api/project-time",
+		"pt2@proj.com", "PT2", "password1", models.RoleBasic, body)
+	w := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.SetProjectTime)).ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 inactive project, got %d: %s", w.Code, w.Body.String())
+	}
+}

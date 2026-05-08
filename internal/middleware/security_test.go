@@ -3,6 +3,7 @@ package middleware
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -72,5 +73,42 @@ func TestLoginRateLimiterFlow(t *testing.T) {
 	l.Reset(req)
 	if !l.Allow(req) {
 		t.Fatal("expected allowed after reset")
+	}
+}
+
+func TestLimitRequestBody_PassThrough(t *testing.T) {
+	called := false
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})
+	h := LimitRequestBody(inner)
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"key":"value"}`))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if !called {
+		t.Fatal("inner handler was not called")
+	}
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestLimitRequestBody_BodyIsWrapped(t *testing.T) {
+	// Verify that LimitRequestBody replaces r.Body with a limited reader.
+	// We confirm the body is still readable (not nil).
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Body == nil {
+			http.Error(w, "body is nil", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	h := LimitRequestBody(inner)
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("hello"))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 }

@@ -9,6 +9,7 @@ import (
 
 	"presence-app/internal/config"
 	"presence-app/internal/db"
+	"presence-app/internal/middleware"
 )
 
 func newResetTestDB(t *testing.T) *db.DB {
@@ -132,5 +133,70 @@ func TestResetPasswordPostValidationAndSuccess(t *testing.T) {
 	}
 	if !database.CheckPassword(u.ID, u.PasswordHash, "newpassword") {
 		t.Fatal("expected password to be updated")
+	}
+}
+
+// TestForgotPasswordPost_ExistingLocalUser covers the branch where a local
+// account exists, a token is generated and the email goroutine is launched.
+func TestForgotPasswordPost_ExistingLocalUser(t *testing.T) {
+	database := newResetTestDB(t)
+	_, err := database.CreateLocalUser("known@example.com", "Known", "password1")
+	if err != nil {
+		t.Fatalf("CreateLocalUser: %v", err)
+	}
+	cfg := &config.Config{AppName: "myPresence", SMTPFrom: "noreply@example.com"}
+
+	var renderedSent bool
+	h := &ResetPasswordHandler{
+		DB:     database,
+		Config: cfg,
+		Render: func(w http.ResponseWriter, r *http.Request, page string, d interface{}) {
+			data, _ := d.(map[string]interface{})
+			renderedSent, _ = data["Sent"].(bool)
+		},
+	}
+
+	form := url.Values{}
+	form.Set("email", "known@example.com")
+	req := httptest.NewRequest(http.MethodPost, "/forgot-password", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	h.ForgotPasswordPost(httptest.NewRecorder(), req)
+
+	if !renderedSent {
+		t.Fatal("expected Sent=true even for known user (user-enumeration protection)")
+	}
+}
+
+// TestForgotPasswordPost_RateLimited covers the early-return 429 path.
+func TestForgotPasswordPost_RateLimited(t *testing.T) {
+	database := newResetTestDB(t)
+	cfg := &config.Config{}
+
+	rl := middleware.NewLoginRateLimiter()
+	// Record enough failures from this IP to trigger a block.
+	blockReq := httptest.NewRequest(http.MethodPost, "/forgot-password", nil)
+	blockReq.RemoteAddr = "1.2.3.4:9999"
+	for i := 0; i < 10; i++ {
+		rl.RecordFailure(blockReq)
+	}
+
+	h := &ResetPasswordHandler{
+		DB:          database,
+		Config:      cfg,
+		RateLimiter: rl,
+		Render: func(w http.ResponseWriter, r *http.Request, page string, d interface{}) {
+			t.Fatal("Render should not be called when rate-limited")
+		},
+	}
+
+	form := url.Values{}
+	form.Set("email", "someone@example.com")
+	req := httptest.NewRequest(http.MethodPost, "/forgot-password", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.RemoteAddr = "1.2.3.4:9999"
+	w := httptest.NewRecorder()
+	h.ForgotPasswordPost(w, req)
+	if w.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429, got %d", w.Code)
 	}
 }

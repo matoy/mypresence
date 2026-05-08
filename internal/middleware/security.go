@@ -7,6 +7,16 @@ import (
 	"time"
 )
 
+// LimitRequestBody caps request bodies at 10 MB to prevent resource exhaustion.
+// This matches the maximum file upload size already enforced by the floorplan handler.
+func LimitRequestBody(next http.Handler) http.Handler {
+	const maxBytes = 10 << 20 // 10 MB
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+		next.ServeHTTP(w, r)
+	})
+}
+
 // SecurityHeaders adds defensive HTTP response headers to every response.
 // CSP allows CDN scripts/styles used by the application (Tailwind, Alpine.js,
 // Google Fonts) while blocking everything else by default.
