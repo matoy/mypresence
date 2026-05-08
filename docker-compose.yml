@@ -122,6 +122,10 @@ services:
       # Useful if your organisation does not use project-based time tracking
       # - DISABLE_PROJECTS=true
 
+      # Minimum on-site presence percentage required to display the 🚀 rocket
+      # on the activity summary page. Default: 60 (%)
+      # - ONSITE_RATIO_THRESHOLD=60
+
       # Set to "true" to disable the REST API entirely:
       # PAT (Personal Access Token) management, Bearer token authentication,
       # all /api/* endpoints and the /api/docs documentation page
