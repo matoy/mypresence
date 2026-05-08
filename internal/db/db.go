@@ -360,7 +360,7 @@ role %s NOT NULL DEFAULT 'basic',
 password_hash %s,
 disabled %s NOT NULL DEFAULT %s,
 created_at %s DEFAULT CURRENT_TIMESTAMP
-`, ai, emailType, nameType, dl.varcharType(64), text, bool_, dl.boolDefault(false), dt)),
+`, ai, emailType, nameType, dl.varcharType(128), text, bool_, dl.boolDefault(false), dt)),
 
 		dl.createTableIfNotExists("teams", fmt.Sprintf(`
 id %s,
@@ -416,6 +416,7 @@ FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	d.core.Exec(dl.rebind(dl.addColumnIfNotExists("users", "disabled", fmt.Sprintf("%s NOT NULL DEFAULT %s", bool_, dl.boolDefault(false))))) //nolint:errcheck
 	d.core.Exec(`UPDATE users SET role = REPLACE(role, 'stats_viewer', 'activity_viewer') WHERE role LIKE '%stats_viewer%'`)                  //nolint:errcheck
 	d.core.Exec(`UPDATE users SET role = REPLACE(role, 'cra_viewer', 'activity_viewer') WHERE role LIKE '%cra_viewer%'`)                      //nolint:errcheck
+	d.core.Exec(dl.rebind(dl.modifyColumnType("users", "role", dl.varcharType(128), "VARCHAR(64)")))                                          //nolint:errcheck
 	return nil
 }
 

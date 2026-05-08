@@ -301,6 +301,23 @@ func (d dialect) addColumnIfNotExists(table, col, colDef string) string {
 	return fmt.Sprintf("ALTER TABLE %s ADD COLUMN IF NOT EXISTS %s %s", table, col, colDef)
 }
 
+// modifyColumnType returns an ALTER TABLE … statement that widens a column's
+// type. oldType is only used by SQL Server (where the column must be re-declared
+// with all its constraints). SQLite does not support ALTER COLUMN; we emit a
+// no-op SELECT so the caller can safely ignore the error.
+func (d dialect) modifyColumnType(table, col, newType, oldType string) string {
+	switch d.driver {
+	case "postgres":
+		return fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s TYPE %s", table, col, newType)
+	case "mysql":
+		return fmt.Sprintf("ALTER TABLE %s MODIFY COLUMN %s %s NOT NULL DEFAULT 'basic'", table, col, newType)
+	case "sqlserver":
+		return fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s %s NOT NULL", table, col, newType)
+	default: // sqlite — column widening not supported; silently skip
+		return "SELECT 1"
+	}
+}
+
 // rebind converts a query using ? placeholders to the correct placeholder style
 // for the target database driver.
 // SQLite and MySQL use ?, PostgreSQL uses $1/$2/…, SQL Server uses @p1/@p2/…
