@@ -58,7 +58,7 @@ type Config struct {
 	SAMLGroupStatusManager    string // group ID → status_manager role
 	SAMLGroupActivityViewer   string // group ID → activity_viewer role
 	SAMLGroupFloorplanManager string // group ID → floorplan_manager role
-	SAMLGroupProjectsAdmin    string // group ID → projects_admin role
+	SAMLGroupProjectsManager  string // group ID → projects_admin role
 	SAMLGroupProjectsViewer   string // group ID → projects_viewer role
 
 	// Internationalisation
@@ -122,7 +122,7 @@ func Load() *Config {
 		SAMLGroupStatusManager:    getEnv("SAML_GROUP_STATUS_MANAGER", ""),
 		SAMLGroupActivityViewer:   getEnv("SAML_GROUP_ACTIVITY_VIEWER", ""),
 		SAMLGroupFloorplanManager: getEnv("SAML_GROUP_FLOORPLAN_MANAGER", ""),
-		SAMLGroupProjectsAdmin:    getEnv("SAML_GROUP_PROJECTS_ADMIN", ""),
+		SAMLGroupProjectsManager:  getEnv("SAML_GROUP_PROJECTS_MANAGER", ""),
 		SAMLGroupProjectsViewer:   getEnv("SAML_GROUP_PROJECTS_VIEWER", ""),
 
 		DefaultLang: getEnv("DEFAULT_LANG", "en"),

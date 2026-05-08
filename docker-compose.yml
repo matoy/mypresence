@@ -322,7 +322,7 @@ services:
       # - SAML_GROUP_STATUS_MANAGER=<object-id>  # Manage presence statuses
       # - SAML_GROUP_ACTIVITY_VIEWER=<object-id> # View all users activity
       # - SAML_GROUP_FLOORPLAN_MANAGER=<object-id> # Manage floor plans and seats
-      # - SAML_GROUP_PROJECTS_ADMIN=<object-id> # Manage projects and declare time
+      # - SAML_GROUP_PROJECTS_MANAGER=<object-id> # Manage projects and declare time
       # - SAML_GROUP_PROJECTS_VIEWER=<object-id> # View project time entries and reports
       #
       # Notes:
