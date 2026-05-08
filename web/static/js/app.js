@@ -659,7 +659,13 @@ function statusAdmin(initialStatuses) {
         },
 
         async deleteStatus(id) {
-            await fetch(`/admin/statuses/${id}`, { method: 'DELETE' });
+            const resp = await fetch(`/admin/statuses/${id}`, { method: 'DELETE' });
+            if (!resp.ok) {
+                const d = await resp.json();
+                const msg = _t[d.error] || d.error || 'Error';
+                alert(msg);
+                return;
+            }
             window.location.reload();
         }
     };

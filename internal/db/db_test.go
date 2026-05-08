@@ -433,6 +433,34 @@ func TestAdminRevokePAT_NotFound_ReturnsError(t *testing.T) {
 	}
 }
 
+func TestDeleteStatus_FreeStatus_Succeeds(t *testing.T) {
+	d := newTestDB(t)
+	sid := seedOnSiteStatus(t, d)
+
+	if err := d.DeleteStatus(sid); err != nil {
+		t.Fatalf("expected no error deleting unused status, got: %v", err)
+	}
+}
+
+func TestDeleteStatus_InUseReturnsError(t *testing.T) {
+	d := newTestDB(t)
+	uid := seedUser(t, d, "u@test.com")
+	sid := seedOnSiteStatus(t, d)
+
+	// Attach a presence so the status is in use.
+	if err := d.SetPresences(uid, []string{"2026-05-05"}, sid, "full"); err != nil {
+		t.Fatalf("SetPresences: %v", err)
+	}
+
+	err := d.DeleteStatus(sid)
+	if err == nil {
+		t.Fatal("expected an error deleting a status with linked presences, got nil")
+	}
+	if err.Error() != "status_in_use" {
+		t.Errorf("expected sentinel error \"status_in_use\", got %q", err.Error())
+	}
+}
+
 func TestListAllPATs_ReturnsAllUsers(t *testing.T) {
 	d := newTestDB(t)
 	u1 := seedUser(t, d, "p1@test.com")
