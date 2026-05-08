@@ -134,6 +134,7 @@ type Status struct {
 	Billable  bool   `json:"billable"`
 	OnSite    bool   `json:"on_site"`
 	SortOrder int    `json:"sort_order"`
+	Disabled  bool   `json:"disabled"`
 }
 
 // Presence represents a user's status for a given date.

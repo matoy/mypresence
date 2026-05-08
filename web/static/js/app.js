@@ -602,19 +602,21 @@ function statusAdmin(initialStatuses) {
         filterText: '',
         filterBillable: 'all',
         filterOnSite: 'all',
+        filterDisabled: 'all',
 
         get totalCount() {
             return this.statuses.length;
         },
 
         get filteredCount() {
-            return this.statuses.filter(s => this.matchesStatus(s.name, s.billable, s.on_site)).length;
+            return this.statuses.filter(s => this.matchesStatus(s.name, s.billable, s.on_site, s.disabled)).length;
         },
 
         resetFilters() {
             this.filterText = '';
             this.filterBillable = 'all';
             this.filterOnSite = 'all';
+            this.filterDisabled = 'all';
         },
 
         openCreateModal() {
@@ -627,13 +629,15 @@ function statusAdmin(initialStatuses) {
             this.showCreateModal = true;
         },
 
-        matchesStatus(name, billable, onSite) {
+        matchesStatus(name, billable, onSite, disabled) {
             const q = this.filterText.trim().toLowerCase();
             if (q && !(name || '').toLowerCase().includes(q)) return false;
             if (this.filterBillable === '1' && !billable) return false;
             if (this.filterBillable === '0' && billable) return false;
             if (this.filterOnSite === '1' && !onSite) return false;
             if (this.filterOnSite === '0' && onSite) return false;
+            if (this.filterDisabled === '0' && disabled) return false;
+            if (this.filterDisabled === '1' && !disabled) return false;
             return true;
         },
 
@@ -666,6 +670,15 @@ function statusAdmin(initialStatuses) {
                 alert(msg);
                 return;
             }
+            window.location.reload();
+        },
+
+        async toggleDisabled(id, disabled) {
+            await fetch(`/admin/statuses/${id}/disabled`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ disabled })
+            });
             window.location.reload();
         }
     };

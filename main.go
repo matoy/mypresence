@@ -478,6 +478,7 @@ func main() {
 	statusMux.HandleFunc("GET /admin/statuses", adminHandler.StatusesPage)
 	statusMux.HandleFunc("POST /admin/statuses", adminHandler.CreateStatus)
 	statusMux.HandleFunc("PUT /admin/statuses/{id}", adminHandler.UpdateStatus)
+	statusMux.HandleFunc("PATCH /admin/statuses/{id}/disabled", adminHandler.ToggleStatusDisabled)
 	statusMux.HandleFunc("DELETE /admin/statuses/{id}", adminHandler.DeleteStatus)
 
 	activityMux := http.NewServeMux()

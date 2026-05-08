@@ -300,3 +300,88 @@ func TestDeleteStatus_InUseReturns409WithMessage(t *testing.T) {
 func strconvI64(v int64) string {
 	return strconv.FormatInt(v, 10)
 }
+
+func TestToggleStatusDisabled_DisableAndEnable(t *testing.T) {
+	d := newCRUDTestDB(t)
+	h := &AdminHandler{DB: d}
+
+	// Create a user and get a session token once.
+	uid, err := d.CreateLocalUser("sm5@test.com", "SM5", "password1")
+	if err != nil {
+		t.Fatalf("CreateLocalUser: %v", err)
+	}
+	if err := d.UpdateUserRoles(uid, models.RoleStatusManager); err != nil {
+		t.Fatalf("UpdateUserRoles: %v", err)
+	}
+	tok, err := d.CreateSession(uid)
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+
+	// Create a status via the handler.
+	body := []byte(`{"name":"Togglable","color":"#aabbcc","sort_order":2}`)
+	reqCreate := httptest.NewRequest(http.MethodPost, "/admin/statuses", bytes.NewReader(body))
+	reqCreate.Header.Set("Content-Type", "application/json")
+	reqCreate.AddCookie(&http.Cookie{Name: "session", Value: tok})
+	wCreate := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.CreateStatus)).ServeHTTP(wCreate, reqCreate)
+	if wCreate.Code != http.StatusOK {
+		t.Fatalf("create status: got %d", wCreate.Code)
+	}
+	var created map[string]interface{}
+	json.Unmarshal(wCreate.Body.Bytes(), &created) //nolint:errcheck
+	sid := int64(created["id"].(float64))
+
+	doToggle := func(disabled bool) int {
+		body := []byte(`{"disabled":` + func() string {
+			if disabled {
+				return "true"
+			}
+			return "false"
+		}() + `}`)
+		req := httptest.NewRequest(http.MethodPatch, "/admin/statuses/"+strconvI64(sid)+"/disabled", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "session", Value: tok})
+		req.SetPathValue("id", strconvI64(sid))
+		w := httptest.NewRecorder()
+		middleware.Auth(d, http.HandlerFunc(h.ToggleStatusDisabled)).ServeHTTP(w, req)
+		return w.Code
+	}
+
+	// Disable → 200.
+	if code := doToggle(true); code != http.StatusOK {
+		t.Fatalf("expected 200 disabling status, got %d", code)
+	}
+	// Verify DB state.
+	statuses, _ := d.ListStatuses()
+	for _, s := range statuses {
+		if s.ID == sid && !s.Disabled {
+			t.Fatalf("status should be disabled in DB after PATCH disabled=true")
+		}
+	}
+
+	// Re-enable → 200.
+	if code := doToggle(false); code != http.StatusOK {
+		t.Fatalf("expected 200 re-enabling status, got %d", code)
+	}
+	statuses, _ = d.ListStatuses()
+	for _, s := range statuses {
+		if s.ID == sid && s.Disabled {
+			t.Fatalf("status should be active in DB after PATCH disabled=false")
+		}
+	}
+}
+
+func TestToggleStatusDisabled_InvalidBodyReturns400(t *testing.T) {
+	d := newCRUDTestDB(t)
+	h := &AdminHandler{DB: d}
+
+	req := createAuthedReq(t, d, http.MethodPatch, "/admin/statuses/1/disabled",
+		"sm6@test.com", "SM6", "password1", models.RoleStatusManager, []byte("{bad json"))
+	req.SetPathValue("id", "1")
+	w := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.ToggleStatusDisabled)).ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on malformed JSON, got %d", w.Code)
+	}
+}

@@ -432,8 +432,9 @@ color %s NOT NULL DEFAULT '#3b82f6',
 billable %s NOT NULL DEFAULT %s,
 on_site %s NOT NULL DEFAULT %s,
 sort_order INTEGER NOT NULL DEFAULT 0,
+disabled %s NOT NULL DEFAULT %s,
 created_at %s DEFAULT CURRENT_TIMESTAMP
-`, ai, dl.varcharType(128), dl.varcharType(16), bool_, dl.boolDefault(false), bool_, dl.boolDefault(false), dt)),
+`, ai, dl.varcharType(128), dl.varcharType(16), bool_, dl.boolDefault(false), bool_, dl.boolDefault(false), bool_, dl.boolDefault(false), dt)),
 
 		dl.createTableIfNotExists("presences", fmt.Sprintf(`
 id %s,
@@ -472,6 +473,7 @@ created_at %s DEFAULT CURRENT_TIMESTAMP
 
 	// Additive migrations
 	d.presence.Exec(dl.rebind(dl.addColumnIfNotExists("statuses", "on_site", fmt.Sprintf("%s NOT NULL DEFAULT %s", bool_, dl.boolDefault(false))))) //nolint:errcheck
+	d.presence.Exec(dl.rebind(dl.addColumnIfNotExists("statuses", "disabled", fmt.Sprintf("%s DEFAULT %s", bool_, dl.boolDefault(false)))))         //nolint:errcheck
 	d.presence.Exec(dl.rebind(dl.addColumnIfNotExists("presence_logs", "half", fmt.Sprintf("%s NOT NULL DEFAULT 'full'", dl.varcharType(4)))))      //nolint:errcheck
 
 	// SQLite-only migration: recreate presences table if 'half' column is missing
@@ -1252,7 +1254,7 @@ ORDER BY t.name
 // --- Status management ---
 
 func (d *DB) ListStatuses() ([]models.Status, error) {
-	rows, err := d.presence.Query("SELECT id, name, color, billable, on_site, sort_order FROM statuses ORDER BY sort_order, id")
+	rows, err := d.presence.Query("SELECT id, name, color, billable, on_site, sort_order, COALESCE(disabled, 0) FROM statuses ORDER BY sort_order, id")
 	if err != nil {
 		return nil, err
 	}
@@ -1261,12 +1263,41 @@ func (d *DB) ListStatuses() ([]models.Status, error) {
 	var statuses []models.Status
 	for rows.Next() {
 		var s models.Status
-		if err := rows.Scan(&s.ID, &s.Name, &s.Color, &s.Billable, &s.OnSite, &s.SortOrder); err != nil {
+		var disabled sql.NullBool
+		if err := rows.Scan(&s.ID, &s.Name, &s.Color, &s.Billable, &s.OnSite, &s.SortOrder, &disabled); err != nil {
 			return nil, err
 		}
+		s.Disabled = disabled.Valid && disabled.Bool
 		statuses = append(statuses, s)
 	}
 	return statuses, rows.Err()
+}
+
+// ListActiveStatuses returns only statuses that are not disabled (used for the presence picker).
+func (d *DB) ListActiveStatuses() ([]models.Status, error) {
+	rows, err := d.presence.Query("SELECT id, name, color, billable, on_site, sort_order, COALESCE(disabled, 0) FROM statuses WHERE COALESCE(disabled, 0) = 0 ORDER BY sort_order, id")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() //nolint:errcheck
+
+	var statuses []models.Status
+	for rows.Next() {
+		var s models.Status
+		var disabled sql.NullBool
+		if err := rows.Scan(&s.ID, &s.Name, &s.Color, &s.Billable, &s.OnSite, &s.SortOrder, &disabled); err != nil {
+			return nil, err
+		}
+		s.Disabled = disabled.Valid && disabled.Bool
+		statuses = append(statuses, s)
+	}
+	return statuses, rows.Err()
+}
+
+// SetStatusDisabled enables or disables a status.
+func (d *DB) SetStatusDisabled(id int64, disabled bool) error {
+	_, err := d.presence.Exec("UPDATE statuses SET disabled = ? WHERE id = ?", disabled, id)
+	return err
 }
 
 func (d *DB) CreateStatus(s models.Status) (int64, error) {
