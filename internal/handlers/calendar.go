@@ -100,8 +100,8 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 		reservationDates = make(map[string]bool)
 	}
 
-	// Get statuses
-	statuses, _ := h.DB.ListStatuses()
+	// Get statuses (only active ones for the picker)
+	statuses, _ := h.DB.ListActiveStatuses()
 
 	h.Render(w, r, "calendar", map[string]interface{}{
 		"Year":             year,

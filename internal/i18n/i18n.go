@@ -247,6 +247,9 @@ var en = map[string]string{
 	"statuses.none":             "No statuses configured",
 	"statuses.delete_confirm":   "Delete this status?",
 	"statuses.delete_in_use":    "This status cannot be deleted because it is used in presence declarations.",
+	"statuses.disable":          "Disable",
+	"statuses.enable":           "Enable",
+	"statuses.disabled_badge":   "Disabled",
 
 	// Holidays
 	"holidays.title":              "🎌 Public Holidays",
@@ -613,6 +616,9 @@ var fr = map[string]string{
 	"statuses.none":             "Aucun statut configuré",
 	"statuses.delete_confirm":   "Supprimer ce statut ?",
 	"statuses.delete_in_use":    "Ce statut ne peut pas être supprimé car il est utilisé dans des déclarations de présence.",
+	"statuses.disable":          "Désactiver",
+	"statuses.enable":           "Activer",
+	"statuses.disabled_badge":   "Désactivé",
 
 	"holidays.title":              "🎌 Jours fériés",
 	"holidays.add":                "Ajouter un jour férié",
@@ -974,6 +980,9 @@ var de = map[string]string{
 	"statuses.none":             "Keine Status konfiguriert",
 	"statuses.delete_confirm":   "Diesen Status löschen?",
 	"statuses.delete_in_use":    "Dieser Status kann nicht gelöscht werden, da er in Anwesenheitsmeldungen verwendet wird.",
+	"statuses.disable":          "Deaktivieren",
+	"statuses.enable":           "Aktivieren",
+	"statuses.disabled_badge":   "Deaktiviert",
 
 	"holidays.title":              "🎌 Feiertage",
 	"holidays.add":                "Feiertag hinzufügen",
@@ -1329,6 +1338,9 @@ var es = map[string]string{
 	"statuses.none":             "Sin estados configurados",
 	"statuses.delete_confirm":   "¿Eliminar este estado?",
 	"statuses.delete_in_use":    "Este estado no se puede eliminar porque se usa en declaraciones de presencia.",
+	"statuses.disable":          "Desactivar",
+	"statuses.enable":           "Activar",
+	"statuses.disabled_badge":   "Desactivado",
 
 	"holidays.title":              "🎌 Festivos",
 	"holidays.add":                "Añadir un festivo",
@@ -1689,6 +1701,9 @@ var it = map[string]string{
 	"statuses.none":             "Nessuno stato configurato",
 	"statuses.delete_confirm":   "Eliminare questo stato?",
 	"statuses.delete_in_use":    "Questo stato non può essere eliminato perché è utilizzato in dichiarazioni di presenza.",
+	"statuses.disable":          "Disattiva",
+	"statuses.enable":           "Attiva",
+	"statuses.disabled_badge":   "Disattivato",
 
 	// Holidays
 	"holidays.title":              "🎌 Festività",

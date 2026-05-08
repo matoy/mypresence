@@ -461,6 +461,161 @@ func TestDeleteStatus_InUseReturnsError(t *testing.T) {
 	}
 }
 
+func TestSetStatusDisabled_TogglesCorrectly(t *testing.T) {
+	d := newTestDB(t)
+	sid := seedOnSiteStatus(t, d)
+
+	// Initially the status must be active.
+	statuses, err := d.ListStatuses()
+	if err != nil {
+		t.Fatalf("ListStatuses: %v", err)
+	}
+	var found bool
+	for _, s := range statuses {
+		if s.ID == sid {
+			found = true
+			if s.Disabled {
+				t.Fatalf("expected status to be enabled on creation, got disabled=true")
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("seeded status id=%d not found in ListStatuses", sid)
+	}
+
+	// Disable it.
+	if err := d.SetStatusDisabled(sid, true); err != nil {
+		t.Fatalf("SetStatusDisabled(true): %v", err)
+	}
+	statuses, _ = d.ListStatuses()
+	for _, s := range statuses {
+		if s.ID == sid && !s.Disabled {
+			t.Fatalf("expected status to be disabled after SetStatusDisabled(true)")
+		}
+	}
+
+	// Re-enable it.
+	if err := d.SetStatusDisabled(sid, false); err != nil {
+		t.Fatalf("SetStatusDisabled(false): %v", err)
+	}
+	statuses, _ = d.ListStatuses()
+	for _, s := range statuses {
+		if s.ID == sid && s.Disabled {
+			t.Fatalf("expected status to be active again after SetStatusDisabled(false)")
+		}
+	}
+}
+
+func TestListActiveStatuses_ExcludesDisabled(t *testing.T) {
+	d := newTestDB(t)
+	sid := seedOnSiteStatus(t, d)
+
+	// Before disabling: must appear in ListActiveStatuses.
+	active, err := d.ListActiveStatuses()
+	if err != nil {
+		t.Fatalf("ListActiveStatuses: %v", err)
+	}
+	var found bool
+	for _, s := range active {
+		if s.ID == sid {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("enabled status id=%d not found in ListActiveStatuses", sid)
+	}
+
+	// Disable the status.
+	if err := d.SetStatusDisabled(sid, true); err != nil {
+		t.Fatalf("SetStatusDisabled: %v", err)
+	}
+
+	// After disabling: must NOT appear in ListActiveStatuses.
+	active, _ = d.ListActiveStatuses()
+	for _, s := range active {
+		if s.ID == sid {
+			t.Fatalf("disabled status id=%d should not appear in ListActiveStatuses", sid)
+		}
+	}
+
+	// But must still appear in ListStatuses (full admin view).
+	all, _ := d.ListStatuses()
+	found = false
+	for _, s := range all {
+		if s.ID == sid {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("disabled status id=%d should still appear in ListStatuses", sid)
+	}
+}
+
+// TestListStatuses_NullDisabledColumn verifies that both ListStatuses and
+// ListActiveStatuses handle a NULL disabled value gracefully (via COALESCE).
+// This reproduces the production scenario where an existing database had rows
+// before the disabled column was added: the addColumnIfNotExists migration adds
+// the column as nullable so that ALTER TABLE never fails on older SQLite builds,
+// leaving pre-existing rows with disabled = NULL until the next UPDATE.
+func TestListStatuses_NullDisabledColumn(t *testing.T) {
+	d := newTestDB(t)
+
+	// Recreate the statuses table without NOT NULL on disabled so we can
+	// insert a row that simulates a pre-migration record (disabled = NULL).
+	d.presence.Exec("DROP TABLE IF EXISTS statuses") //nolint:errcheck
+	d.presence.Exec(`CREATE TABLE statuses (                                                   
+id   INTEGER PRIMARY KEY AUTOINCREMENT,
+name TEXT    NOT NULL,
+color TEXT   NOT NULL DEFAULT '#3b82f6',
+billable BOOLEAN NOT NULL DEFAULT 0,
+on_site  BOOLEAN NOT NULL DEFAULT 0,
+sort_order INTEGER NOT NULL DEFAULT 0,
+disabled BOOLEAN,
+created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`) //nolint:errcheck
+
+	res, err := d.presence.Exec(
+		"INSERT INTO statuses (name, color, billable, on_site, sort_order, disabled) VALUES ('Legacy', '#123456', 0, 0, 99, NULL)",
+	)
+	if err != nil {
+		t.Fatalf("insert legacy status: %v", err)
+	}
+	id, _ := res.LastInsertId()
+
+	// ListStatuses must succeed and return the row with Disabled=false.
+	all, err := d.ListStatuses()
+	if err != nil {
+		t.Fatalf("ListStatuses with NULL disabled: %v", err)
+	}
+	var found bool
+	for _, s := range all {
+		if s.ID == id {
+			found = true
+			if s.Disabled {
+				t.Errorf("NULL disabled should be treated as false via COALESCE, got Disabled=true")
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("legacy status id=%d not returned by ListStatuses", id)
+	}
+
+	// ListActiveStatuses must also include the row (NULL → treated as active).
+	active, err := d.ListActiveStatuses()
+	if err != nil {
+		t.Fatalf("ListActiveStatuses with NULL disabled: %v", err)
+	}
+	found = false
+	for _, s := range active {
+		if s.ID == id {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("legacy status id=%d (disabled=NULL) should appear in ListActiveStatuses", id)
+	}
+}
+
 func TestListAllPATs_ReturnsAllUsers(t *testing.T) {
 	d := newTestDB(t)
 	u1 := seedUser(t, d, "p1@test.com")

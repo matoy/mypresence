@@ -300,6 +300,36 @@ func (h *AdminHandler) DeleteStatus(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
+// ToggleStatusDisabled enables or disables a status.
+func (h *AdminHandler) ToggleStatusDisabled(w http.ResponseWriter, r *http.Request) {
+	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	var req struct {
+		Disabled bool `json:"disabled"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+	statusName := h.DB.GetStatusName(id)
+	if err := h.DB.SetStatusDisabled(id, req.Disabled); err != nil {
+		slog.Error("admin.status.toggle_disabled_error", "status_id", id, "error", err)
+		metrics.AdminOpsTotal.WithLabelValues("status", "toggle_disabled", "failure").Inc()
+		jsonError(w, "Error updating status", http.StatusInternalServerError)
+		return
+	}
+	currentUser := middleware.GetUser(r)
+	action := "enable"
+	if req.Disabled {
+		action = "disable"
+	}
+	if currentUser != nil {
+		h.DB.LogAdminAction(currentUser.ID, "status", id, action, statusName)
+		slog.Info("admin.status.toggle_disabled", "actor", currentUser.Email, "status", statusName, "status_id", id, "disabled", req.Disabled)
+	}
+	metrics.AdminOpsTotal.WithLabelValues("status", "toggle_disabled", "success").Inc()
+	jsonOK(w, map[string]string{"status": "ok"})
+}
+
 // --- Users / Roles management ---
 
 // UsersAPI returns the user list as JSON.
