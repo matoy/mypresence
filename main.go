@@ -127,14 +127,16 @@ func main() {
 			return total
 		},
 		// Float64 variants for half-day support
-		"getCountF":      tmplGetCountF,
-		"getStrCountF":   tmplGetStrCountF,
-		"sumMapF":        tmplSumMapF,
-		"fmtF":           tmplFmtF,
-		"percentF":       tmplPercentF,
-		"i2f":            tmplI2F,
-		"subF":           tmplSubF,
-		"activityRocket": tmplActivitySummaryRocket,
+		"getCountF":    tmplGetCountF,
+		"getStrCountF": tmplGetStrCountF,
+		"sumMapF":      tmplSumMapF,
+		"fmtF":         tmplFmtF,
+		"percentF":     tmplPercentF,
+		"i2f":          tmplI2F,
+		"subF":         tmplSubF,
+		"activityRocket": func(notSet, onSiteDays, billableDays, projectActivity float64) bool {
+			return tmplActivitySummaryRocket(notSet, onSiteDays, billableDays, projectActivity, cfg.OnsiteRatioThreshold)
+		},
 		// Presence half-day helpers for templates
 		"presenceHalf":    tmplPresenceHalf,
 		"hasDatePresence": tmplHasDatePresence,

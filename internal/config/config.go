@@ -1,6 +1,9 @@
 package config
 
-import "os"
+import (
+	"os"
+	"strconv"
+)
 
 // Version is the application version, updated manually for each release.
 const Version = "0.3.1"
@@ -65,9 +68,10 @@ type Config struct {
 	MetricsToken string
 
 	// Features
-	DisableFloorplans bool
-	DisableAPI        bool
-	DisableProjects   bool
+	DisableFloorplans    bool
+	DisableAPI           bool
+	DisableProjects      bool
+	OnsiteRatioThreshold float64 // minimum on-site % for the activity rocket (default 60)
 
 	// SMTP (password reset)
 	SMTPURL  string
@@ -125,9 +129,10 @@ func Load() *Config {
 
 		MetricsToken: getEnv("METRICS_TOKEN", ""),
 
-		DisableFloorplans: getEnvBool("DISABLE_FLOORPLANS", false),
-		DisableAPI:        getEnvBool("DISABLE_API", false),
-		DisableProjects:   getEnvBool("DISABLE_PROJECTS", false),
+		DisableFloorplans:    getEnvBool("DISABLE_FLOORPLANS", false),
+		DisableAPI:           getEnvBool("DISABLE_API", false),
+		DisableProjects:      getEnvBool("DISABLE_PROJECTS", false),
+		OnsiteRatioThreshold: getEnvFloat("ONSITE_RATIO_THRESHOLD", 60.0),
 
 		SMTPURL:  getEnv("SMTP_URL", ""),
 		SMTPFrom: getEnv("SMTP_FROM", "noreply@presence.local"),
@@ -140,6 +145,15 @@ func Load() *Config {
 func getEnv(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
+	}
+	return fallback
+}
+
+func getEnvFloat(key string, fallback float64) float64 {
+	if v := os.Getenv(key); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return f
+		}
 	}
 	return fallback
 }
