@@ -57,6 +57,8 @@ function calendarApp(statuses, currentUserId, isAdmin, presences) {
         showPicker: false,
         pickerX: 0,
         pickerY: 0,
+        _selectButton: 0,          // mouse button that started the current selection
+        _contextMenuViaMouseup: false, // flag to skip @contextmenu when mouseup already showed it
         // Half-day context menu state
         showContextMenu: false,
         contextMenuX: 0,
@@ -85,14 +87,19 @@ function calendarApp(statuses, currentUserId, isAdmin, presences) {
         },
 
         // Start selection on mousedown/touchstart
-        startSelect(userId, date) {
+        startSelect(userId, date, event) {
             // Only allow editing own presences (admin/manager can edit anyone)
             if (!this.isAdmin && userId !== this.currentUserId) return;
             if (this.isCellBlocked(userId, date)) return;
 
-            // Long-press (600ms) opens the context menu on mobile
+            // Remember which button initiated the drag
+            this._selectButton = event ? event.button : 0;
+            const isTouch = event && event.type === 'touchstart';
+
+            // Long-press (600ms) opens the context menu — touch only.
+            // Mouse interactions use mouseup instead, so the timer must not fire.
             if (this.longPressTimer) clearTimeout(this.longPressTimer);
-            this.longPressTimer = setTimeout(() => {
+            this.longPressTimer = isTouch ? setTimeout(() => {
                 this.longPressTimer = null;
                 this.selecting = false;
                 this.selectedDates = [];
@@ -103,7 +110,7 @@ function calendarApp(statuses, currentUserId, isAdmin, presences) {
                     clientX: Math.min(rect.left, window.innerWidth - 220),
                     clientY: Math.min(rect.bottom + 4, window.innerHeight - 230)
                 });
-            }, 600);
+            }, 600) : null;
 
             this.selecting = true;
             this.selectedUserId = userId;
@@ -116,6 +123,12 @@ function calendarApp(statuses, currentUserId, isAdmin, presences) {
         extendSelect(userId, date) {
             if (!this.selecting || userId !== this.selectedUserId) return;
             if (this.isCellBlocked(userId, date)) return;
+
+            // Cancel long-press as soon as the user drags to a new cell
+            if (date !== this.startDate && this.longPressTimer) {
+                clearTimeout(this.longPressTimer);
+                this.longPressTimer = null;
+            }
 
             // Build date range between startDate and current date
             const start = new Date(this.startDate);
@@ -227,6 +240,15 @@ function calendarApp(statuses, currentUserId, isAdmin, presences) {
         openContextMenu(userId, date, event) {
             if (!this.isAdmin && userId !== this.currentUserId) return;
             if (this.isCellBlocked(userId, date)) return;
+            // Ignore contextmenu events fired during an active selection (e.g. the
+            // browser fires contextmenu on right-mousedown, before the button is
+            // released). The mouseup handler will show the menu at the right time.
+            if (this.selecting) return;
+            // mouseup already set up the context menu for right-click release
+            if (this._contextMenuViaMouseup) {
+                this._contextMenuViaMouseup = false;
+                return;
+            }
             this.contextMenuForSelection = false;
             this.showContextMenu = true;
             this.showPicker = false;
@@ -444,15 +466,24 @@ function calendarApp(statuses, currentUserId, isAdmin, presences) {
                     this.longPressTimer = null;
                 }
                 if (this.selecting && this.selectedDates.length > 0) {
-                    // Show status picker
-                    this.showPicker = true;
-                    
-                    // Position picker near the mouse/touch
-                    const rect = document.body.getBoundingClientRect();
-                    this.pickerX = Math.min(e.clientX + 10, window.innerWidth - 280);
-                    this.pickerY = Math.min(e.clientY + 10, window.innerHeight - 400);
-                    
                     this.selecting = false;
+
+                    if (e.button === 2) {
+                        // Right-click release: show AM/PM context menu for the selection
+                        this._contextMenuViaMouseup = true;
+                        this.contextMenuForSelection = this.selectedDates.length > 1;
+                        this.contextMenuUserId = this.selectedUserId;
+                        this.contextMenuDate = this.selectedDates[this.selectedDates.length - 1];
+                        this.contextMenuX = Math.min(e.clientX + 5, window.innerWidth - 220);
+                        this.contextMenuY = Math.min(e.clientY + 5, window.innerHeight - 210);
+                        this.showContextMenu = true;
+                        this.showPicker = false;
+                    } else {
+                        // Left-click release: show status picker directly
+                        this.showPicker = true;
+                        this.pickerX = Math.min(e.clientX + 10, window.innerWidth - 280);
+                        this.pickerY = Math.min(e.clientY + 10, window.innerHeight - 400);
+                    }
                 }
             });
 

@@ -95,7 +95,7 @@
                         data-weekend="{{.IsWeekend}}"
                         data-holiday="{{.IsHoliday}}"
                         data-holiday-allow-imputed="{{.HolidayAllowImputed}}"
-                        @mousedown.prevent="startSelect({{$uid}}, '{{.Date}}')"
+                        @mousedown.prevent="startSelect({{$uid}}, '{{.Date}}', $event)"
                         @mouseenter="extendSelect({{$uid}}, '{{.Date}}')"
                         @touchstart.prevent="startSelect({{$uid}}, '{{.Date}}')"
                         @touchmove.prevent="handleTouchMove($event)"
