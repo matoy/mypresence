@@ -474,13 +474,13 @@ func TestMigrateLegacy_CopiesData(t *testing.T) {
 		`CREATE TABLE seat_reservations (id INTEGER PRIMARY KEY AUTOINCREMENT, seat_id BIGINT NOT NULL, user_id BIGINT NOT NULL, date TEXT NOT NULL, half TEXT NOT NULL DEFAULT 'full', created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
 	} {
 		if _, err := legacy.Exec(stmt); err != nil {
-			legacy.Close()
+			_ = legacy.Close()
 			t.Fatalf("create legacy table: %v", err)
 		}
 	}
 	legacy.Exec(`INSERT INTO users (email, name, role) VALUES ('migrated@test.com', 'Migrated User', 'basic')`) //nolint:errcheck
 	legacy.Exec(`INSERT INTO statuses (name, color) VALUES ('Legacy Status', '#ff0000')`)                       //nolint:errcheck
-	legacy.Close()
+	_ = legacy.Close()
 
 	// Open opens the new multi-file layout; finding app.db triggers migrateLegacy.
 	d, err := Open(&config.Config{DBDriver: "sqlite", DataDir: dir})

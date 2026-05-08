@@ -322,7 +322,7 @@ func rebindPositional(query, prefix string) string {
 	for _, ch := range query {
 		if ch == '?' {
 			n++
-			b.WriteString(fmt.Sprintf("%s%d", prefix, n))
+			fmt.Fprintf(&b, "%s%d", prefix, n)
 		} else {
 			b.WriteRune(ch)
 		}

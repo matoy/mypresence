@@ -566,8 +566,8 @@ func TestListStatuses_NullDisabledColumn(t *testing.T) {
 
 	// Recreate the statuses table without NOT NULL on disabled so we can
 	// insert a row that simulates a pre-migration record (disabled = NULL).
-	d.presence.Exec("DROP TABLE IF EXISTS statuses") //nolint:errcheck
-	d.presence.Exec(`CREATE TABLE statuses (                                                   
+	_, _ = d.presence.Exec("DROP TABLE IF EXISTS statuses")
+	_, _ = d.presence.Exec(`CREATE TABLE statuses (                                                   
 id   INTEGER PRIMARY KEY AUTOINCREMENT,
 name TEXT    NOT NULL,
 color TEXT   NOT NULL DEFAULT '#3b82f6',
@@ -576,7 +576,7 @@ on_site  BOOLEAN NOT NULL DEFAULT 0,
 sort_order INTEGER NOT NULL DEFAULT 0,
 disabled BOOLEAN,
 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-)`) //nolint:errcheck
+)`)
 
 	res, err := d.presence.Exec(
 		"INSERT INTO statuses (name, color, billable, on_site, sort_order, disabled) VALUES ('Legacy', '#123456', 0, 0, 99, NULL)",
