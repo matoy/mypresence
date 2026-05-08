@@ -53,6 +53,154 @@ Data is persisted in the `presence-data` Docker volume (SQLite database at `/dat
 
 ---
 
+## Docker CLI Examples
+
+These examples use `docker run` directly — no Compose file needed. Replace `matoy/mypresence:latest` with the image you built locally if needed.
+
+### Minimal (SQLite, default settings)
+
+```bash
+docker run -d \
+  --name mypresence \
+  -p 8080:8080 \
+  -v mypresence-data:/data \
+  matoy/mypresence:latest
+```
+
+Open **http://localhost:8080** — default credentials: `admin` / `admin`.
+
+### Custom port and admin credentials
+
+```bash
+docker run -d \
+  --name mypresence \
+  -p 9090:8080 \
+  -v mypresence-data:/data \
+  -e ADMIN_USER=myuser \
+  -e ADMIN_PASSWORD=s3cr3tP@ss \
+  -e SECRET_KEY=change-me-32-chars-minimum-here!! \
+  matoy/mypresence:latest
+```
+
+### Custom branding
+
+```bash
+docker run -d \
+  --name mypresence \
+  -p 8080:8080 \
+  -v mypresence-data:/data \
+  -e APP_NAME="My Company Presence" \
+  -e PRIMARY_COLOR="#6366f1" \
+  -e SECONDARY_COLOR="#4338ca" \
+  -e ACCENT_COLOR="#f59e0b" \
+  matoy/mypresence:latest
+```
+
+### With PostgreSQL backend
+
+Start a PostgreSQL container first, then run the app pointing to it:
+
+```bash
+# 1 — PostgreSQL
+docker run -d \
+  --name presence-postgres \
+  --network presence-net \
+  -e POSTGRES_DB=mypresence \
+  -e POSTGRES_USER=presence \
+  -e POSTGRES_PASSWORD=dbpassword \
+  -v presence-pg-data:/var/lib/postgresql/data \
+  postgres:17-alpine
+
+# 2 — App
+docker run -d \
+  --name mypresence \
+  --network presence-net \
+  -p 8080:8080 \
+  -v mypresence-data:/data \
+  -e DB_DRIVER=postgres \
+  -e DB_HOST=presence-postgres \
+  -e DB_NAME=mypresence \
+  -e DB_USER=presence \
+  -e DB_PASSWORD=dbpassword \
+  matoy/mypresence:latest
+```
+
+> Create the shared network first: `docker network create presence-net`
+
+### With Prometheus metrics enabled
+
+```bash
+docker run -d \
+  --name mypresence \
+  -p 8080:8080 \
+  -v mypresence-data:/data \
+  -e METRICS_TOKEN=my-strong-random-token \
+  matoy/mypresence:latest
+```
+
+Scrape metrics with: `curl -H "Authorization: Bearer my-strong-random-token" http://localhost:8080/metrics`
+
+### With SAML 2.0 SSO (e.g. Microsoft Entra ID)
+
+```bash
+docker run -d \
+  --name mypresence \
+  -p 8080:8080 \
+  -v mypresence-data:/data \
+  -e SAML_IDP_METADATA_URL=https://login.microsoftonline.com/<tenant-id>/federationmetadata/2007-06/federationmetadata.xml \
+  -e SAML_ENTITY_ID=https://presence.example.com/saml/metadata \
+  -e SAML_ROOT_URL=https://presence.example.com \
+  matoy/mypresence:latest
+```
+
+The SP certificate and key are auto-generated on first startup and stored in the data volume. To use your own:
+
+```bash
+docker run -d \
+  --name mypresence \
+  -p 8080:8080 \
+  -v mypresence-data:/data \
+  -e SAML_IDP_METADATA_URL=https://login.microsoftonline.com/<tenant-id>/federationmetadata/2007-06/federationmetadata.xml \
+  -e SAML_ENTITY_ID=https://presence.example.com/saml/metadata \
+  -e SAML_ROOT_URL=https://presence.example.com \
+  -e SAML_SP_CERT_FILE=/data/saml/sp-cert.pem \
+  -e SAML_SP_KEY_FILE=/data/saml/sp-key.pem \
+  matoy/mypresence:latest
+```
+
+**Automatic role assignment from Entra groups** — add one `-e` per group to map:
+
+```bash
+docker run -d \
+  --name mypresence \
+  -p 8080:8080 \
+  -v mypresence-data:/data \
+  -e SAML_IDP_METADATA_URL=https://login.microsoftonline.com/<tenant-id>/federationmetadata/2007-06/federationmetadata.xml \
+  -e SAML_ENTITY_ID=https://presence.example.com/saml/metadata \
+  -e SAML_ROOT_URL=https://presence.example.com \
+  -e SAML_GROUP_GLOBAL=<object-id-global-admins> \
+  -e SAML_GROUP_TEAM_MANAGER=<object-id-team-managers> \
+  -e SAML_GROUP_TEAM_LEADER=<object-id-team-leaders> \
+  -e SAML_GROUP_STATUS_MANAGER=<object-id-status-managers> \
+  -e SAML_GROUP_ACTIVITY_VIEWER=<object-id-activity-viewers> \
+  -e SAML_GROUP_FLOORPLAN_MANAGER=<object-id-floorplan-managers> \
+  -e SAML_GROUP_PROJECTS_MANAGER=<object-id-project-managers> \
+  -e SAML_GROUP_PROJECTS_VIEWER=<object-id-project-viewers> \
+  matoy/mypresence:latest
+```
+
+> In Entra ID, configure the app to include a **Group** claim with format **Object ID**. The default claim URI (`http://schemas.microsoft.com/ws/2008/06/identity/claims/groups`) is used automatically; override with `SAML_GROUPS_CLAIM` if your IdP uses a different URI.
+
+### Stop and remove
+
+```bash
+docker stop mypresence && docker rm mypresence
+```
+
+> The `mypresence-data` volume is kept — data survives container removal. To also delete data: `docker volume rm mypresence-data`
+
+---
+
 ## Configuration
 
 All options are set via environment variables in `docker-compose.yml`.
@@ -299,6 +447,103 @@ Automatically seeded on first startup:
 | Absent | ⚫ grey | No | No |
 
 All statuses are fully editable from `/admin/statuses`. The **On-site** flag determines whether a desk reservation is allowed for that day.
+
+---
+
+## Database Backends
+
+myPresence supports four SQL backends, selectable via the `DB_DRIVER` environment variable. All schema migrations run automatically on startup — no manual SQL required.
+
+| Driver value | Engine | Minimum version |
+|---|---|---|
+| `sqlite` *(default)* | SQLite (embedded, no server) | — |
+| `postgres` | PostgreSQL | 14+ |
+| `mysql` | MySQL or MariaDB | MySQL 8+ / MariaDB 10.6+ |
+| `sqlserver` | Microsoft SQL Server | 2019+ |
+
+### SQLite (default)
+
+No extra configuration needed. The database file is created automatically in `DATA_DIR` (`/data/app.db`).
+
+```bash
+-e DB_DRIVER=sqlite
+```
+
+### PostgreSQL
+
+Create the database and user first:
+
+```sql
+CREATE DATABASE mypresence;
+CREATE USER mypresence WITH PASSWORD 'strongpassword';
+GRANT ALL PRIVILEGES ON DATABASE mypresence TO mypresence;
+```
+
+Then set:
+
+```bash
+-e DB_DRIVER=postgres
+-e DB_HOST=postgres-host
+-e DB_PORT=5432
+-e DB_NAME=mypresence
+-e DB_USER=mypresence
+-e DB_PASSWORD=strongpassword
+-e DB_SSL_MODE=disable   # disable | require | verify-full
+```
+
+### MySQL / MariaDB
+
+Create the database and user first:
+
+```sql
+CREATE DATABASE mypresence CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'mypresence'@'%' IDENTIFIED BY 'strongpassword';
+GRANT ALL PRIVILEGES ON mypresence.* TO 'mypresence'@'%';
+FLUSH PRIVILEGES;
+```
+
+Then set:
+
+```bash
+-e DB_DRIVER=mysql
+-e DB_HOST=mysql-host
+-e DB_PORT=3306
+-e DB_NAME=mypresence
+-e DB_USER=mypresence
+-e DB_PASSWORD=strongpassword
+-e DB_SSL_MODE=disable   # disable | require | skip-verify | verify-full
+```
+
+### Microsoft SQL Server
+
+Create the database and login first:
+
+```sql
+CREATE DATABASE mypresence;
+CREATE LOGIN mypresence WITH PASSWORD = 'StrongP@ssword1';
+USE mypresence;
+CREATE USER mypresence FOR LOGIN mypresence;
+GRANT CONTROL ON DATABASE::mypresence TO mypresence;
+```
+
+Then set:
+
+```bash
+-e DB_DRIVER=sqlserver
+-e DB_HOST=sqlserver-host
+-e DB_PORT=1433
+-e DB_NAME=mypresence
+-e DB_USER=mypresence
+-e DB_PASSWORD=StrongP@ssword1
+```
+
+> `DB_SSL_MODE` is not used for SQL Server — TLS is negotiated automatically by the driver.
+
+### Notes
+
+- All four backends share the exact same schema and application behaviour.
+- Switching backends requires a fresh database — there is no built-in migration tool between drivers.
+- The `docker-compose.yml` includes commented-out service definitions for PostgreSQL, MariaDB, and SQL Server for local testing.
 
 ---
 
