@@ -213,9 +213,10 @@ func buildDSN(cfg *config.Config, driver string) (string, error) {
 			port = "3306"
 		}
 		tls := "false"
-		if sslMode == "require" || sslMode == "verify-full" {
+		switch sslMode {
+		case "require", "verify-full":
 			tls = "true"
-		} else if sslMode == "skip-verify" {
+		case "skip-verify":
 			tls = "skip-verify"
 		}
 		return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&tls=%s&charset=utf8mb4",
@@ -482,7 +483,7 @@ created_at %s DEFAULT CURRENT_TIMESTAMP
 		var halfColExists int
 		d.presence.QueryRow("SELECT COUNT(*) FROM pragma_table_info('presences') WHERE name='half'").Scan(&halfColExists) //nolint:errcheck
 		if halfColExists == 0 {
-			d.presence.Exec(`CREATE TABLE presences_new (
+			_, _ = d.presence.Exec(`CREATE TABLE presences_new (
 id INTEGER PRIMARY KEY AUTOINCREMENT,
 user_id INTEGER NOT NULL,
 date TEXT NOT NULL,
@@ -490,10 +491,10 @@ half TEXT NOT NULL DEFAULT 'full',
 status_id INTEGER NOT NULL,
 UNIQUE(user_id, date, half),
 FOREIGN KEY (status_id) REFERENCES statuses(id)
-)`) //nolint:errcheck
-			d.presence.Exec(`INSERT INTO presences_new (id, user_id, date, half, status_id) SELECT id, user_id, date, 'full', status_id FROM presences`) //nolint:errcheck
-			d.presence.Exec(`DROP TABLE presences`)                                                                                                      //nolint:errcheck
-			d.presence.Exec(`ALTER TABLE presences_new RENAME TO presences`)                                                                             //nolint:errcheck
+)`)
+			_, _ = d.presence.Exec(`INSERT INTO presences_new (id, user_id, date, half, status_id) SELECT id, user_id, date, 'full', status_id FROM presences`)
+			_, _ = d.presence.Exec(`DROP TABLE presences`)
+			_, _ = d.presence.Exec(`ALTER TABLE presences_new RENAME TO presences`)
 		}
 	}
 	return nil
