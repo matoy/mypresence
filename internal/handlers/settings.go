@@ -173,12 +173,14 @@ func (h *SettingsHandler) ImpersonatePost(w http.ResponseWriter, r *http.Request
 		http.Error(w, "Erreur session", http.StatusInternalServerError)
 		return
 	}
+	secure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
 	http.SetCookie(w, &http.Cookie{
 		Name:     "real_session",
 		Value:    adminCookie.Value,
 		Path:     "/",
 		MaxAge:   4 * 3600,
 		HttpOnly: true,
+		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,
 	})
 	http.SetCookie(w, &http.Cookie{
@@ -187,6 +189,7 @@ func (h *SettingsHandler) ImpersonatePost(w http.ResponseWriter, r *http.Request
 		Path:     "/",
 		MaxAge:   4 * 3600,
 		HttpOnly: true,
+		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,
 	})
 	slog.Info("impersonate.start", "admin", admin.Email, "target", target.Email)
@@ -210,12 +213,21 @@ func (h *SettingsHandler) ImpersonateExitPost(w http.ResponseWriter, r *http.Req
 	if impCookie, err := r.Cookie("session"); err == nil {
 		_ = h.DB.DeleteSession(impCookie.Value)
 	}
+	// Rotate the admin session token: invalidate the stored token and issue a fresh one.
+	newAdminToken, err := h.DB.CreateSession(adminUser.ID)
+	if err != nil {
+		http.Error(w, "Erreur session", http.StatusInternalServerError)
+		return
+	}
+	_ = h.DB.DeleteSession(realCookie.Value)
+	secure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session",
-		Value:    realCookie.Value,
+		Value:    newAdminToken,
 		Path:     "/",
 		MaxAge:   30 * 24 * 3600,
 		HttpOnly: true,
+		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,
 	})
 	http.SetCookie(w, &http.Cookie{Name: "real_session", MaxAge: -1, Path: "/"})

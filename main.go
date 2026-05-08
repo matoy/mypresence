@@ -42,7 +42,8 @@ func main() {
 	cfg := config.Load()
 
 	if cfg.SecretKey == "change-me-in-production-use-random-32-chars" {
-		slog.Warn("SECRET_KEY is set to its default value — set a strong random secret in production")
+		slog.Error("SECRET_KEY is set to its default value — set a strong random secret via the SECRET_KEY environment variable")
+		os.Exit(1)
 	}
 
 	// Ensure data directory exists
@@ -580,11 +581,12 @@ func main() {
 		slog.Info("Prometheus metrics enabled", "path", "http://localhost"+addr+"/metrics")
 	}
 	srv := &http.Server{
-		Addr:         addr,
-		Handler:      middleware.SecurityHeaders(metrics.Instrument(middleware.AccessLog(mux))),
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  120 * time.Second,
+		Addr:              addr,
+		Handler:           middleware.SecurityHeaders(middleware.LimitRequestBody(metrics.Instrument(middleware.AccessLog(mux)))),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 	if err := srv.ListenAndServe(); err != nil {
 		slog.Error("server stopped", "error", err)
