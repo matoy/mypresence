@@ -1256,7 +1256,11 @@ ORDER BY t.name
 // --- Status management ---
 
 func (d *DB) ListStatuses() ([]models.Status, error) {
-	rows, err := d.presence.Query("SELECT id, name, color, billable, on_site, sort_order, COALESCE(disabled, FALSE) FROM statuses ORDER BY sort_order, id")
+	falseVal := d.dialect.boolDefault(false)
+	rows, err := d.presence.Query(fmt.Sprintf(
+		"SELECT id, name, color, billable, on_site, sort_order, COALESCE(disabled, %s) FROM statuses ORDER BY sort_order, id",
+		falseVal,
+	))
 	if err != nil {
 		return nil, err
 	}
@@ -1277,7 +1281,11 @@ func (d *DB) ListStatuses() ([]models.Status, error) {
 
 // ListActiveStatuses returns only statuses that are not disabled (used for the presence picker).
 func (d *DB) ListActiveStatuses() ([]models.Status, error) {
-	rows, err := d.presence.Query("SELECT id, name, color, billable, on_site, sort_order, COALESCE(disabled, FALSE) FROM statuses WHERE COALESCE(disabled, FALSE) = FALSE ORDER BY sort_order, id")
+	falseVal := d.dialect.boolDefault(false)
+	rows, err := d.presence.Query(fmt.Sprintf(
+		"SELECT id, name, color, billable, on_site, sort_order, COALESCE(disabled, %s) FROM statuses WHERE COALESCE(disabled, %s) = %s ORDER BY sort_order, id",
+		falseVal, falseVal, falseVal,
+	))
 	if err != nil {
 		return nil, err
 	}
