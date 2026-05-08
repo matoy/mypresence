@@ -14,9 +14,6 @@
         </a>
         <h2 class="text-xl sm:text-2xl font-bold text-gray-800 px-2">
             {{index $.T (printf "cal.month.%d" .Month)}} {{.Year}}
-            {{if .CalendarComplete}}
-            <span class="ml-1" title="Month complete">🚀</span>
-            {{end}}
         </h2>
         <a href="/?year={{.NextYear}}&month={{.NextMonth}}"
            class="p-1.5 rounded-lg bg-white shadow hover:bg-gray-50 transition">
@@ -24,6 +21,38 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
             </svg>
         </a>
+    </div>
+
+    <!-- Completion indicator -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4"
+         x-data="{
+             declarable: {{.DeclarableDays}},
+             declared:   {{.DeclaredDays}}
+         }">
+        <div class="flex flex-wrap gap-6 items-center">
+            <div>
+                <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide">{{index $.T "cal.working_days"}}</p>
+                <p class="text-2xl font-bold text-gray-900" x-text="declarable"></p>
+            </div>
+            <div>
+                <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide">{{index $.T "cal.declared"}}</p>
+                <p class="text-2xl font-bold text-gray-900" x-text="declared"></p>
+            </div>
+            <div class="flex-1">
+                <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">{{index $.T "cal.progress"}}</p>
+                <div class="flex items-center gap-2">
+                    <div class="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden projects-progress-track border border-transparent">
+                        <div class="h-full rounded-full transition-all projects-progress-fill"
+                             :style="(() => { const pct = declarable > 0 ? Math.min(100, declared/declarable*100) : 0; const hue = Math.round(25 + Math.pow(pct/100, 2) * 95); return `width:${pct}%; background-color:hsl(${hue},80%,45%)`; })()">
+                        </div>
+                    </div>
+                    <span x-show="declarable > 0 && declared >= declarable" x-cloak>🚀</span>
+                </div>
+                <p class="text-sm text-gray-500 mt-1"
+                   x-text="declarable > 0 && declared >= declarable ? '✓ {{index $.T "cal.all_declared"}}' : (declarable - declared) + ' {{index $.T "cal.days_remaining"}}'">
+                </p>
+            </div>
+        </div>
     </div>
 
     <!-- Legend -->
