@@ -226,6 +226,77 @@ func TestUsersPageAndAdminProjectsAPI(t *testing.T) {
 	}
 }
 
+func TestDeleteStatus_FreeStatus_Returns200(t *testing.T) {
+	d := newCRUDTestDB(t)
+	h := &AdminHandler{DB: d}
+
+	// Create a status that has no linked presences.
+	body := []byte(`{"name":"Unused","color":"#ff0000","sort_order":1}`)
+	reqCreate := createAuthedReq(t, d, http.MethodPost, "/admin/statuses", "sm@test.com", "SM", "password1", models.RoleStatusManager, body)
+	wCreate := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.CreateStatus)).ServeHTTP(wCreate, reqCreate)
+	if wCreate.Code != http.StatusOK {
+		t.Fatalf("expected 200 create status, got %d", wCreate.Code)
+	}
+	var created map[string]interface{}
+	json.Unmarshal(wCreate.Body.Bytes(), &created) //nolint:errcheck
+	sid := int64(created["id"].(float64))
+
+	// Delete — should succeed.
+	reqDel := createAuthedReq(t, d, http.MethodDelete, "/admin/statuses/"+strconvI64(sid), "sm2@test.com", "SM2", "password1", models.RoleStatusManager, nil)
+	reqDel.SetPathValue("id", strconvI64(sid))
+	wDel := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.DeleteStatus)).ServeHTTP(wDel, reqDel)
+	if wDel.Code != http.StatusOK {
+		t.Fatalf("expected 200 delete free status, got %d: %s", wDel.Code, wDel.Body.String())
+	}
+}
+
+func TestDeleteStatus_InUseReturns409WithMessage(t *testing.T) {
+	d := newCRUDTestDB(t)
+	h := &AdminHandler{DB: d}
+
+	// Create a user and a status, then attach a presence so the status is in use.
+	uid, err := d.CreateLocalUser("del_user@test.com", "Del User", "password1")
+	if err != nil {
+		t.Fatalf("CreateLocalUser: %v", err)
+	}
+	body := []byte(`{"name":"InUse","color":"#00ff00","sort_order":1}`)
+	reqCreate := createAuthedReq(t, d, http.MethodPost, "/admin/statuses", "sm3@test.com", "SM3", "password1", models.RoleStatusManager, body)
+	wCreate := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.CreateStatus)).ServeHTTP(wCreate, reqCreate)
+	if wCreate.Code != http.StatusOK {
+		t.Fatalf("create status: got %d", wCreate.Code)
+	}
+	var created map[string]interface{}
+	json.Unmarshal(wCreate.Body.Bytes(), &created) //nolint:errcheck
+	sid := int64(created["id"].(float64))
+
+	if err := d.SetPresences(uid, []string{"2026-06-02"}, sid, "full"); err != nil {
+		t.Fatalf("SetPresences: %v", err)
+	}
+
+	// Delete — must return 409 with the sentinel error key.
+	reqDel := createAuthedReq(t, d, http.MethodDelete, "/admin/statuses/"+strconvI64(sid), "sm4@test.com", "SM4", "password1", models.RoleStatusManager, nil)
+	reqDel.SetPathValue("id", strconvI64(sid))
+	wDel := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.DeleteStatus)).ServeHTTP(wDel, reqDel)
+
+	// HTTP status must be 409 Conflict.
+	if wDel.Code != http.StatusConflict {
+		t.Fatalf("expected 409 Conflict, got %d: %s", wDel.Code, wDel.Body.String())
+	}
+
+	// Body must contain the i18n key so the front-end can resolve the message.
+	var resp map[string]string
+	if err := json.Unmarshal(wDel.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("response is not valid JSON: %v", err)
+	}
+	if resp["error"] != "statuses.delete_in_use" {
+		t.Errorf("expected error key \"statuses.delete_in_use\", got %q", resp["error"])
+	}
+}
+
 func strconvI64(v int64) string {
 	return strconv.FormatInt(v, 10)
 }

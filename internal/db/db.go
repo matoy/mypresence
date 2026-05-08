@@ -1285,6 +1285,13 @@ func (d *DB) UpdateStatus(s models.Status) error {
 }
 
 func (d *DB) DeleteStatus(id int64) error {
+	var count int
+	if err := d.presence.QueryRow("SELECT COUNT(*) FROM presences WHERE status_id = ?", id).Scan(&count); err != nil {
+		return err
+	}
+	if count > 0 {
+		return fmt.Errorf("status_in_use")
+	}
 	_, err := d.presence.Exec("DELETE FROM statuses WHERE id = ?", id)
 	return err
 }

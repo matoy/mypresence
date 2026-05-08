@@ -275,8 +275,23 @@ func (h *AdminHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) DeleteStatus(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	statusName := h.DB.GetStatusName(id)
-	h.DB.DeleteStatus(id) //nolint:errcheck
 	currentUser := middleware.GetUser(r)
+	if err := h.DB.DeleteStatus(id); err != nil {
+		if err.Error() == "status_in_use" {
+			if currentUser != nil {
+				slog.Warn("admin.status.delete_rejected", "actor", currentUser.Email, "status", statusName, "status_id", id, "reason", "in_use")
+			}
+			metrics.AdminOpsTotal.WithLabelValues("status", "delete", "failure").Inc()
+			jsonError(w, "statuses.delete_in_use", http.StatusConflict)
+		} else {
+			if currentUser != nil {
+				slog.Error("admin.status.delete_error", "actor", currentUser.Email, "status", statusName, "status_id", id, "error", err)
+			}
+			metrics.AdminOpsTotal.WithLabelValues("status", "delete", "failure").Inc()
+			jsonError(w, "Error deleting status", http.StatusInternalServerError)
+		}
+		return
+	}
 	if currentUser != nil {
 		h.DB.LogAdminAction(currentUser.ID, "status", id, "delete", statusName)
 		slog.Info("admin.status.delete", "actor", currentUser.Email, "status", statusName, "status_id", id)
