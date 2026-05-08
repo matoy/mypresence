@@ -60,7 +60,7 @@ services:
       # Secret key used to sign session cookies
       # ⚠️  IMPORTANT: Change this value in production!
       # Generate a random key with: openssl rand -hex 32
-      - SECRET_KEY=change-me-in-production-use-random-32-chars
+      - SECRET_KEY="dev-only-secret-32chars!!!!!!!!"
 
       # =====================================================================
       # BRANDING
@@ -360,7 +360,7 @@ services:
   #     POSTGRES_PASSWORD: strongpassword   # ⚠️  change in production
   #   volumes:
   #     - mypresence-postgres:/var/lib/postgresql/data
-  # 
+  #
   # ---------------------------------------------------------------------------
   # MariaDB 11 LTS  (compatible MySQL 8)
   # ---------------------------------------------------------------------------
