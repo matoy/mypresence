@@ -117,6 +117,8 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 		"ReservationDates": reservationDates,
 		"Floorplans":       floorplans,
 		"CalendarComplete": calendarComplete,
+		"DeclarableDays":   declarableDays,
+		"DeclaredDays":     declaredDays,
 	})
 }
 
