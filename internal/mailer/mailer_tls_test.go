@@ -61,10 +61,10 @@ func startFakeTLSSMTPServer(t *testing.T) (addr string, stop func()) {
 			}
 			// Write a fake SMTP greeting then close
 			conn.Write([]byte("220 fake.smtp.server ESMTP\r\n")) //nolint:errcheck
-			conn.Close()
+			conn.Close()                                         //nolint:errcheck
 		}
 	}()
-	return l.Addr().String(), func() { l.Close() }
+	return l.Addr().String(), func() { l.Close() } //nolint:errcheck
 }
 
 func TestSendTLS_NewClientFails(t *testing.T) {

@@ -38,7 +38,9 @@ func TestUploadFloorplanImage_ValidPNG(t *testing.T) {
 		t.Fatalf("create form file: %v", err)
 	}
 	fw.Write(minimalPNG) //nolint:errcheck
-	mw.Close()
+	if err := mw.Close(); err != nil {
+		t.Fatalf("close multipart writer: %v", err)
+	}
 
 	req := createAdminReq(t, d, http.MethodPost, "/admin/floorplans/"+strconvI64(fpID)+"/image", buf.Bytes())
 	req.SetPathValue("id", strconvI64(fpID))
@@ -64,7 +66,9 @@ func TestUploadFloorplanImage_FakeExtension(t *testing.T) {
 	// Use .png extension but provide text content (invalid type)
 	fw, _ := mw.CreateFormFile("image", "test.png")
 	fw.Write([]byte("this is not an image")) //nolint:errcheck
-	mw.Close()
+	if err := mw.Close(); err != nil {
+		t.Fatalf("close multipart writer: %v", err)
+	}
 
 	req := createAdminReq(t, d, http.MethodPost, "/admin/floorplans/"+strconvI64(fpID)+"/image", buf.Bytes())
 	req.SetPathValue("id", strconvI64(fpID))

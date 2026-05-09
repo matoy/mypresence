@@ -187,7 +187,9 @@ func TestHolidaysCreateUpdateDelete(t *testing.T) {
 		t.Fatalf("CreateHoliday expected 200, got %d: %s", wc.Code, wc.Body.String())
 	}
 	var resp map[string]interface{}
-	json.Unmarshal(wc.Body.Bytes(), &resp)
+	if err := json.Unmarshal(wc.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
 	hid := int64(resp["id"].(float64))
 
 	// Update
@@ -550,7 +552,9 @@ func TestUpdateProject_ExtraValidationAndSuccess(t *testing.T) {
 	wCreate.Body = new(bytes.Buffer)
 	middleware.Auth(d, http.HandlerFunc(h.CreateProject)).ServeHTTP(wCreate, reqCreate)
 	var cr map[string]interface{}
-	json.Unmarshal(wCreate.Body.Bytes(), &cr)
+	if err := json.Unmarshal(wCreate.Body.Bytes(), &cr); err != nil {
+		t.Fatalf("unmarshal create response: %v", err)
+	}
 	pid := int64(cr["id"].(float64))
 
 	// Update with missing name → 400

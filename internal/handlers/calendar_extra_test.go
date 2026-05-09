@@ -145,14 +145,12 @@ func TestClearPresences_Success(t *testing.T) {
 	d := newExtraTestDB(t)
 	d.SetBcryptCost(4)
 	h := &CalendarHandler{DB: d, Render: noRender}
-	body, _ := json.Marshal(map[string]interface{}{"user_id": 0, "dates": []string{"2026-07-05"}})
-	// Use createAdminReq to get the admin user's actual ID via the middleware
-	// but we need to use user_id=0 which won't match → need actual admin ID
-	// Simpler: use uid=0 (global admin can clear own). Use a different approach:
 	uid, _ := d.CreateLocalUser("clearok@test.com", "ClearOK", "password1")
 	d.UpdateUserRoles(uid, models.RoleGlobal) //nolint:errcheck
 	tok, _ := d.CreateSession(uid)
-	body, _ = json.Marshal(map[string]interface{}{"user_id": uid, "dates": []string{"2026-07-05"}})
+	body, _ := json.Marshal(map[string]interface{}{
+		"user_id": uid, "dates": []string{"2026-07-05"},
+	})
 	req := httptest.NewRequest(http.MethodDelete, "/api/presences", bytes.NewReader(body))
 	req.AddCookie(&http.Cookie{Name: "session", Value: tok})
 	w := httptest.NewRecorder()
@@ -339,7 +337,7 @@ func TestUploadFloorplanImage_InvalidExt(t *testing.T) {
 	mw := multipart.NewWriter(&buf)
 	fw, _ := mw.CreateFormFile("image", "test.bmp")
 	fw.Write([]byte("fake image data")) //nolint:errcheck
-	mw.Close()
+	mw.Close()                          //nolint:errcheck
 
 	req := createAdminReq(t, d, http.MethodPost, "/admin/floorplans/"+strconvI64(fpID)+"/image", buf.Bytes())
 	req.Header.Set("Content-Type", mw.FormDataContentType())
