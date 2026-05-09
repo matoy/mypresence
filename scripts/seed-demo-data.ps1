@@ -139,20 +139,104 @@ function Get-WorkingDays ($year, $month) {
 }
 
 # ── 3. Create floorplan + seats ───────────────────────────────────────────────
+
+# Helper: generate a simple office layout PNG using .NET System.Drawing
+function New-FloorplanPNG {
+    Add-Type -AssemblyName System.Drawing -ErrorAction Stop
+    $W = 900; $H = 600
+    $bmp = [System.Drawing.Bitmap]::new($W, $H)
+    $g   = [System.Drawing.Graphics]::FromImage($bmp)
+    $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+
+    # Background
+    $g.Clear([System.Drawing.Color]::FromArgb(248, 250, 252))
+
+    # Helpers
+    $wallPen  = [System.Drawing.Pen]::new([System.Drawing.Color]::FromArgb(71,  85, 105), 4)
+    $divPen   = [System.Drawing.Pen]::new([System.Drawing.Color]::FromArgb(148, 163, 184), 2)
+    $zoneFill = [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(226, 232, 240))
+    $meetFill = [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(219, 234, 254))
+    $corrFill = [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(241, 245, 249))
+    $txtBrush = [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(71,  85, 105))
+    $font     = [System.Drawing.Font]::new("Arial", 11, [System.Drawing.FontStyle]::Bold)
+    $fontSm   = [System.Drawing.Font]::new("Arial",  9, [System.Drawing.FontStyle]::Regular)
+
+    # Outer walls
+    $g.DrawRectangle($wallPen, 10, 10, $W-20, $H-20)
+
+    # Corridor (horizontal band in the middle)
+    $g.FillRectangle($corrFill, 11, 270, $W-22, 60)
+    $g.DrawLine($divPen,  11, 270, $W-11, 270)
+    $g.DrawLine($divPen,  11, 330, $W-11, 330)
+    $g.DrawString("Corridor", $fontSm, $txtBrush, 400, 285)
+
+    # Zone A  (top-left)
+    $g.FillRectangle($zoneFill, 11, 11, 430, 258)
+    $g.DrawRectangle($divPen,   11, 11, 430, 258)
+    $g.DrawString("Zone A — Open Space", $font, $txtBrush, 110, 120)
+
+    # Zone B  (top-right)
+    $g.FillRectangle($zoneFill, 442, 11, 230, 258)
+    $g.DrawRectangle($divPen,   442, 11, 230, 258)
+    $g.DrawString("Zone B", $font, $txtBrush, 510, 120)
+
+    # Meeting room (top-far-right)
+    $g.FillRectangle($meetFill, 673, 11, $W-683, 258)
+    $g.DrawRectangle($divPen,   673, 11, $W-683, 258)
+    $g.DrawString("Meeting", $fontSm, $txtBrush, 698, 120)
+
+    # Zone C  (bottom full-width)
+    $g.FillRectangle($zoneFill, 11, 331, $W-22, $H-341)
+    $g.DrawRectangle($divPen,   11, 331, $W-22, $H-341)
+    $g.DrawString("Zone C — Open Space", $font, $txtBrush, 300, 430)
+
+    # Cleanup
+    foreach ($obj in @($g,$wallPen,$divPen,$zoneFill,$meetFill,$corrFill,$txtBrush,$font,$fontSm)) { $obj.Dispose() }
+
+    $ms = [System.IO.MemoryStream]::new()
+    $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
+    $bmp.Dispose()
+    $bytes = $ms.ToArray(); $ms.Dispose()
+    return $bytes
+}
+
+# Helper: upload image bytes as multipart/form-data
+function Upload-FloorplanImage ($fpId, [byte[]]$imgBytes) {
+    $boundary = [System.Guid]::NewGuid().ToString("N")
+    $ms  = [System.IO.MemoryStream]::new()
+    $sw  = [System.IO.StreamWriter]::new($ms, [System.Text.Encoding]::ASCII)
+    $sw.Write("--$boundary`r`nContent-Disposition: form-data; name=`"image`"; filename=`"floorplan.png`"`r`nContent-Type: image/png`r`n`r`n")
+    $sw.Flush()
+    $ms.Write($imgBytes, 0, $imgBytes.Length)
+    $sw.Write("`r`n--$boundary--`r`n")
+    $sw.Flush()
+    $body = $ms.ToArray(); $ms.Dispose()
+    $hdrs = @{ Cookie = $sc; "Content-Type" = "multipart/form-data; boundary=$boundary" }
+    try   { Invoke-RestMethod "$Base/admin/floorplans/$fpId/image" -Method POST -Headers $hdrs -Body $body | Out-Null; Write-Host "  Floorplan image uploaded" }
+    catch { Write-Warning "  Image upload failed: $_" }
+}
+
 Write-Host "`nCreating floorplan..."
 $fp = PostJSON "$Base/admin/floorplans" @{ name="HQ Open Space" }
 if ($fp -and $fp.id) {
     $fpID = [int]$fp.id
     Write-Host "  Floorplan id=$fpID"
+
+    # Generate and upload a floor plan image
+    try { Upload-FloorplanImage $fpID (New-FloorplanPNG) } catch { Write-Warning "  Could not generate floor plan image: $_" }
+
     $seats = @(
-        @{ label="A1"; x_pct=20.0; y_pct=30.0 },
-        @{ label="A2"; x_pct=30.0; y_pct=30.0 },
-        @{ label="A3"; x_pct=40.0; y_pct=30.0 },
-        @{ label="B1"; x_pct=20.0; y_pct=50.0 },
-        @{ label="B2"; x_pct=30.0; y_pct=50.0 },
-        @{ label="B3"; x_pct=40.0; y_pct=50.0 },
+        @{ label="A1"; x_pct=13.0; y_pct=25.0 },
+        @{ label="A2"; x_pct=22.0; y_pct=25.0 },
+        @{ label="A3"; x_pct=31.0; y_pct=25.0 },
+        @{ label="A4"; x_pct=13.0; y_pct=38.0 },
+        @{ label="A5"; x_pct=22.0; y_pct=38.0 },
+        @{ label="B1"; x_pct=55.0; y_pct=25.0 },
+        @{ label="B2"; x_pct=64.0; y_pct=25.0 },
         @{ label="C1"; x_pct=20.0; y_pct=70.0 },
-        @{ label="C2"; x_pct=30.0; y_pct=70.0 }
+        @{ label="C2"; x_pct=35.0; y_pct=70.0 },
+        @{ label="C3"; x_pct=50.0; y_pct=70.0 },
+        @{ label="C4"; x_pct=65.0; y_pct=70.0 }
     )
     $seatIDs = @{}
     foreach ($s in $seats) {
