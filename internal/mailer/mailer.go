@@ -47,8 +47,17 @@ func Send(smtpURL, from, to, subject, body string) error {
 	return smtp.SendMail(addr, auth, from, []string{to}, msg)
 }
 
+// tlsConfigForAddr is a hook for tests: if non-nil it overrides the default
+// tls.Config built in sendTLS (allows InsecureSkipVerify for self-signed certs).
+var tlsConfigForAddr func(addr, host string) *tls.Config
+
 func sendTLS(addr, host string, auth smtp.Auth, from, to string, msg []byte) error {
-	tlsCfg := &tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}
+	var tlsCfg *tls.Config
+	if tlsConfigForAddr != nil {
+		tlsCfg = tlsConfigForAddr(addr, host)
+	} else {
+		tlsCfg = &tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}
+	}
 	conn, err := tls.Dial("tcp", addr, tlsCfg)
 	if err != nil {
 		return fmt.Errorf("TLS dial %s: %w", addr, err)
