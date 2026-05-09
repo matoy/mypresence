@@ -6,7 +6,7 @@ import (
 )
 
 // Version is the application version, updated manually for each release.
-const Version = "0.4.0"
+const Version = "0.4.1"
 
 // Config holds all application configuration loaded from environment variables.
 type Config struct {
