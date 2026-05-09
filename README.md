@@ -8,7 +8,7 @@
 [![Go Version](https://img.shields.io/badge/go-1.25-00ADD8?logo=go)](https://golang.org)
 [![SQLite](https://img.shields.io/badge/SQLite-embedded-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org)
 [![SAML 2.0](https://img.shields.io/badge/SSO-SAML%202.0-0052CC?logo=auth0&logoColor=white)](https://en.wikipedia.org/wiki/SAML_2.0)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Go Report Card](https://goreportcard.com/badge/github.com/matoy/myPresence)](https://goreportcard.com/report/github.com/matoy/myPresence)
 [![codecov](https://codecov.io/gh/matoy/myPresence/graph/badge.svg)](https://codecov.io/gh/matoy/myPresence)
 [![GitHub Stars](https://img.shields.io/github/stars/matoy/myPresence?style=social)](https://github.com/matoy/myPresence/stargazers)
