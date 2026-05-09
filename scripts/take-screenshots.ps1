@@ -94,16 +94,21 @@ function Take-Screenshot ($ws, [int]$cmdId, [string]$url, [string]$filename, [in
     $nav = Invoke-CDP $ws $cmdId "Page.navigate" @{ url = $url }
     $cmdId++
 
-    # Wait for load event
-    $loaded = Wait-CDPEvent $ws "Page.loadEventFired" 12000
-    Start-Sleep -Milliseconds $waitMs   # wait for Alpine + Tailwind CDN to render
+    # Wait for networkIdle lifecycle event (all CDN resources fetched)
+    $deadline = [DateTime]::Now.AddSeconds(20)
+    while ([DateTime]::Now -lt $deadline) {
+        $msg = Recv-WS $ws 4000
+        if ($msg -and $msg.method -eq "Page.lifecycleEvent" -and $msg.params.name -eq "networkIdle") { break }
+        if ($msg -and $msg.method -eq "Page.loadEventFired") { break }
+    }
+    Start-Sleep -Milliseconds $waitMs   # extra wait for Alpine to finish rendering
 
     # Capture full-page screenshot
     $scr = Invoke-CDP $ws $cmdId "Page.captureScreenshot" @{
         format  = "png"
         quality = 100
         captureBeyondViewport = $true
-        clip = @{ x=0; y=0; width=1440; height=900; scale=1 }
+        clip = @{ x=0; y=0; width=1440; height=900; scale=1.5 }
     }
     $cmdId++
 
@@ -132,8 +137,18 @@ try {
     $cmdId = 1
 
     # Enable domains
-    Invoke-CDP $ws $cmdId "Network.enable"  | Out-Null; $cmdId++
-    Invoke-CDP $ws $cmdId "Page.enable"     | Out-Null; $cmdId++
+    Invoke-CDP $ws $cmdId "Network.enable"      | Out-Null; $cmdId++
+    Invoke-CDP $ws $cmdId "Page.enable"         | Out-Null; $cmdId++
+    Invoke-CDP $ws $cmdId "Emulation.enable"   | Out-Null; $cmdId++
+    Invoke-CDP $ws $cmdId "Page.setLifecycleEventsEnabled" @{ enabled = $true } | Out-Null; $cmdId++
+
+    # Force desktop viewport (1440 × 900, deviceScaleFactor=1, no mobile emulation)
+    Invoke-CDP $ws $cmdId "Emulation.setDeviceMetricsOverride" @{
+        width             = 1440
+        height            = 900
+        deviceScaleFactor = 1
+        mobile            = $false
+    } | Out-Null; $cmdId++
 
     # Set session cookie
     Invoke-CDP $ws $cmdId "Network.setCookie" @{
@@ -165,9 +180,13 @@ try {
         } | Out-Null; $cmdId++
     }
 
-    # 1. Login page — temporarily clear cookies so user is not logged in
+    # 1. Login page — first navigate while logged in to warm up CDN cache (Tailwind + Alpine)
+    $cmdId = Take-Screenshot $ws $cmdId "$BaseUrl/login" "_warmup_login" 500
+    Remove-Item (Join-Path $OutDir "_warmup_login.png") -ErrorAction SilentlyContinue
+
+    # Now clear cookies so the real login screenshot shows the unauthenticated state
     Invoke-CDP $ws $cmdId "Network.clearBrowserCookies" | Out-Null; $cmdId++
-    $cmdId = Take-Screenshot $ws $cmdId "$BaseUrl/login" "01-login" 1500
+    $cmdId = Take-Screenshot $ws $cmdId "$BaseUrl/login" "01-login" 2500
 
     # Restore cookies for all further pages
     & $restoreCookies
@@ -191,7 +210,13 @@ try {
     $cmdId = Take-Screenshot $ws $cmdId "$BaseUrl/admin/activity"       "07-activity"  2500
 
     # 8. Floor plan
-    $cmdId = Take-Screenshot $ws $cmdId "$BaseUrl/floorplan"            "08-floorplan" 2500
+    $cmdId = Take-Screenshot $ws $cmdId "$BaseUrl/floorplan"            "08-floorplan" 4500
+
+    # 9. Project time imputation
+    $cmdId = Take-Screenshot $ws $cmdId "$BaseUrl/projects?year=2026&month=4" "09-projects-imputation" 2500
+
+    # 10. Projects report
+    $cmdId = Take-Screenshot $ws $cmdId "$BaseUrl/admin/projects-report"       "10-projects-report"      2500
 
     $ws.CloseAsync([System.Net.WebSockets.WebSocketCloseStatus]::NormalClosure, "", [Threading.CancellationToken]::None) | Out-Null
 

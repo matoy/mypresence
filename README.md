@@ -127,19 +127,6 @@ docker run -d \
 
 > Create the shared network first: `docker network create presence-net`
 
-### With Prometheus metrics enabled
-
-```bash
-docker run -d \
-  --name mypresence \
-  -p 8080:8080 \
-  -v mypresence-data:/data \
-  -e METRICS_TOKEN=my-strong-random-token \
-  matoy/mypresence:latest
-```
-
-Scrape metrics with: `curl -H "Authorization: Bearer my-strong-random-token" http://localhost:8080/metrics`
-
 ### With SAML 2.0 SSO (e.g. Microsoft Entra ID)
 
 ```bash
@@ -190,6 +177,19 @@ docker run -d \
 ```
 
 > In Entra ID, configure the app to include a **Group** claim with format **Object ID**. The default claim URI (`http://schemas.microsoft.com/ws/2008/06/identity/claims/groups`) is used automatically; override with `SAML_GROUPS_CLAIM` if your IdP uses a different URI.
+
+### With Prometheus metrics enabled
+
+```bash
+docker run -d \
+  --name mypresence \
+  -p 8080:8080 \
+  -v mypresence-data:/data \
+  -e METRICS_TOKEN=my-strong-random-token \
+  matoy/mypresence:latest
+```
+
+Scrape metrics with: `curl -H "Authorization: Bearer my-strong-random-token" http://localhost:8080/metrics`
 
 ### Stop and remove
 
@@ -251,48 +251,6 @@ SSO is enabled when both `SAML_IDP_METADATA_URL` and `SAML_ENTITY_ID` are set. N
 
 Roles can be automatically assigned at login based on IDP group membership (e.g. Microsoft Entra ID Security Groups). Configure Entra to include a group claim (`http://schemas.microsoft.com/ws/2008/06/identity/claims/groups`, format: Object ID) then map each group to an application role.
 
----
-
-## Roles & Permissions
-
-Roles are cumulative (stored as a comma-separated string per user). The `global` role grants all permissions.
-
-| Role | Access |
-|------|--------|
-| `basic` | Personal calendar (own presences only) |
-| `team_leader` | View calendar and activity report for own team; view project reports for own teams |
-| `team_manager` | Team management + edit any user's presences |
-| `status_manager` | Create / edit / delete presence statuses |
-| `activity_viewer` | View Activity Report (billable days) by team |
-| `floorplan_manager` | Create / edit floor plans and seats |
-| `projects_admin` | Create / edit / delete projects; view full project reports |
-| `projects_viewer` | View project time entries and reports |
-| `global` | Full access — includes user/role management, public holidays, and project administration |
-
-Roles are assigned from **👤 Users & Roles** (`/admin/users`), accessible to the `global` role only.
-
----
-
-## Pages
-
-| URL | Required role | Description |
-|-----|---------------|-------------|
-| `/` | Any logged-in user | Personal monthly calendar |
-| `/floorplan` | Any logged-in user | Floor plan viewer and desk reservation |
-| `/projects` | Any logged-in user | Declare and track time on projects |
-| `/settings/tokens` | Any logged-in user | Manage Personal Access Tokens (API keys) |
-| `/admin/teams` | `team_manager` or `team_leader` | Manage teams and members |
-| `/admin/statuses` | `status_manager` | Manage presence statuses |
-| `/admin/activity` | `activity_viewer` or `team_leader` | Activity report by team and period |
-| `/admin/floorplans` | `floorplan_manager` | Manage floor plans and seats |
-| `/admin/projects` | `projects_admin` | Create and manage projects |
-| `/admin/projects-report` | `projects_admin`, `projects_viewer`, or `team_leader` | Project time tracking and reporting |
-| `/admin/holidays` | `global` | Manage public holidays |
-| `/admin/users` | `global` | Manage users, roles and passwords |
-| `/admin/users/{id}/logs` | `global` | Presence audit log for a user |
-| `/health` | *(none)* | Health check — public, no authentication |
-| `/api/docs` | *(none)* | Full REST API documentation (plain text, public) |
-
 ### Features
 
 | Variable | Default | Description |
@@ -303,45 +261,40 @@ Roles are assigned from **👤 Users & Roles** (`/admin/users`), accessible to t
 
 ---
 
-## REST API
+## Calendar
 
-myPresence exposes a full REST API that mirrors every user action available in the browser interface. All endpoints require authentication using a **Personal Access Token (PAT)**.
+- Month navigation (← →) and direct year/month selection
+- Days selected by **click** or **drag** (range selection); blocked on weekends and non-imputable holidays
+- After selection, a colour-coded **status picker** appears to apply or clear a presence
+- **Right-click** on any day opens a context menu to:
+  - Declare a **half-day** (AM or PM) with an independent status per half
+  - Insert the day’s status into your **calendar client** as an `.ics` event (Outlook, Google Calendar, etc.)
+  - **Reserve a desk** on the selected period (see [Floor Plans](#floor-plans--desk-reservations))
+  - **Cancel desk reservation(s)** on the selected period
+  - Clear all presences for the day
+- Days with a desk reservation display a 🪑 icon
+- Hovering over a cell shows a tooltip with the status name or holiday name
+- **Weekends** are greyed out and cannot be selected
+- **Public holidays** are greyed out and non-selectable by default
+  - *Allow imputed* option: the holiday remains visually grey but can receive a status
 
-### Personal Access Tokens
+---
 
-Each user can generate tokens at **🔑 `/settings/tokens`** (accessible from the top-right menu).
+## Default Presence Statuses
 
-- Choose a **description** (e.g. *"Reporting script"*) and an **expiry** (7, 30, 90, 365 days, or no expiry)
-- The raw token (prefixed `mpa_`) is shown **once** — copy it before closing the dialog
-- Tokens inherit **exactly** the permissions of the issuing user — no elevation, no restriction
-- Revocation is immediate; all integrations using the token stop working instantly
+Automatically seeded on first startup:
 
-### Authentication header
+| Name | Color | Billable | On-site |
+|------|-------|----------|---------|
+| On site | 🟢 green | Yes | Yes |
+| Remote work | 🟣 purple | Yes | No |
+| Business trip | 🔵 blue | Yes | Yes |
+| Leave | 🟠 orange | No | No |
+| Sick leave | 🔴 red | No | No |
+| Training | 🟡 yellow | No | No |
+| Absent | ⚫ grey | No | No |
 
-```
-Authorization: Bearer mpa_<your-token>
-```
-
-### API documentation
-
-The full endpoint reference (request/response format for every route) is available at:
-
-- **In-app**: [`/api/docs`](http://localhost:8080/api/docs) — served as plain text, no authentication required
-- **In the repository**: [`API.md`](API.md)
-
-### Example
-
-```bash
-# Get your presences for April 2026
-curl -H "Authorization: Bearer mpa_yourtoken" \
-     "http://localhost:8080/api/presences?team_id=1&year=2026&month=4"
-
-# Set a presence
-curl -X POST -H "Authorization: Bearer mpa_yourtoken" \
-     -H "Content-Type: application/json" \
-     -d '{"user_id":5,"dates":["2026-04-14"],"status_id":3,"half":"full"}' \
-     http://localhost:8080/api/presences
-```
+All statuses are fully editable from `/admin/statuses`. The **On-site** flag determines whether a desk reservation is allowed for that day.
 
 ---
 
@@ -413,40 +366,45 @@ The project management feature allows organizations to track employee time alloc
 
 ---
 
-## Calendar
+## Roles & Permissions
 
-- Month navigation (← →) and direct year/month selection
-- Days selected by **click** or **drag** (range selection); blocked on weekends and non-imputable holidays
-- After selection, a colour-coded **status picker** appears to apply or clear a presence
-- **Right-click** on any day opens a context menu to:
-  - Declare a **half-day** (AM or PM) with an independent status per half
-  - Insert the day’s status into your **calendar client** as an `.ics` event (Outlook, Google Calendar, etc.)
-  - **Reserve a desk** on the selected period (see [Floor Plans](#floor-plans--desk-reservations))
-  - **Cancel desk reservation(s)** on the selected period
-  - Clear all presences for the day
-- Days with a desk reservation display a 🪑 icon
-- Hovering over a cell shows a tooltip with the status name or holiday name
-- **Weekends** are greyed out and cannot be selected
-- **Public holidays** are greyed out and non-selectable by default
-  - *Allow imputed* option: the holiday remains visually grey but can receive a status
+Roles are cumulative (stored as a comma-separated string per user). The `global` role grants all permissions.
+
+| Role | Access |
+|------|--------|
+| `basic` | Personal calendar (own presences only) |
+| `team_leader` | View calendar and activity report for own team; view project reports for own teams |
+| `team_manager` | Team management + edit any user's presences |
+| `status_manager` | Create / edit / delete presence statuses |
+| `activity_viewer` | View Activity Report (billable days) by team |
+| `floorplan_manager` | Create / edit floor plans and seats |
+| `projects_manager` | Create / edit / delete projects; view full project reports |
+| `projects_viewer` | View project time entries and reports |
+| `global` | Full access — includes user/role management, public holidays, and project administration |
+
+Roles are assigned from **👤 Users & Roles** (`/admin/users`), accessible to the `global` role only.
 
 ---
 
-## Default Presence Statuses
+## Pages
 
-Automatically seeded on first startup:
-
-| Name | Color | Billable | On-site |
-|------|-------|----------|---------|
-| On site | 🟢 green | Yes | Yes |
-| Remote work | 🟣 purple | Yes | No |
-| Business trip | 🔵 blue | Yes | Yes |
-| Leave | 🟠 orange | No | No |
-| Sick leave | 🔴 red | No | No |
-| Training | 🟡 yellow | No | No |
-| Absent | ⚫ grey | No | No |
-
-All statuses are fully editable from `/admin/statuses`. The **On-site** flag determines whether a desk reservation is allowed for that day.
+| URL | Required role | Description |
+|-----|---------------|-------------|
+| `/` | Any logged-in user | Personal monthly calendar |
+| `/floorplan` | Any logged-in user | Floor plan viewer and desk reservation |
+| `/projects` | Any logged-in user | Declare and track time on projects |
+| `/settings/tokens` | Any logged-in user | Manage Personal Access Tokens (API keys) |
+| `/admin/teams` | `team_manager` or `team_leader` | Manage teams and members |
+| `/admin/statuses` | `status_manager` | Manage presence statuses |
+| `/admin/activity` | `activity_viewer` or `team_leader` | Activity report by team and period |
+| `/admin/floorplans` | `floorplan_manager` | Manage floor plans and seats |
+| `/admin/projects` | `projects_manager` | Create and manage projects |
+| `/admin/projects-report` | `projects_manager`, `projects_viewer`, or `team_leader` | Project time tracking and reporting |
+| `/admin/holidays` | `global` | Manage public holidays |
+| `/admin/users` | `global` | Manage users, roles and passwords |
+| `/admin/users/{id}/logs` | `global` | Presence audit log for a user |
+| `/health` | *(none)* | Health check — public, no authentication |
+| `/api/docs` | *(none)* | Full REST API documentation (plain text, public) |
 
 ---
 
@@ -545,6 +503,24 @@ Then set:
 - Switching backends requires a fresh database — there is no built-in migration tool between drivers.
 - The `docker-compose.yml` includes commented-out service definitions for PostgreSQL, MariaDB, and SQL Server for local testing.
 
+### Database Schema
+
+| Table | Description |
+|-------|-------------|
+| `users` | Users (email, name, roles as comma-separated string, optional password hash) |
+| `teams` | Teams |
+| `user_teams` | User ↔ team many-to-many mapping |
+| `statuses` | Presence statuses (name, color, billable, on_site flag, sort order) |
+| `presences` | Recorded presences (user_id, date YYYY-MM-DD, half `full`/`AM`/`PM`, status_id) |
+| `presence_logs` | Audit log of all set/clear presence actions (actor, target user, date, half, status) |
+| `admin_logs` | Audit log of admin operations on entities (teams, statuses, holidays, users) |
+| `sessions` | Active sessions (token, user_id, 30-day expiry) |
+| `holidays` | Public holidays (date, name, allow_imputed) |
+| `floorplans` | Floor map definitions (name, image path, sort order) |
+| `seats` | Seats placed on a floorplan (label, x/y position as percentage of image) |
+| `seat_reservations` | Seat bookings (seat_id, user_id, date, half — unique per seat+date+half) |
+| `personal_access_tokens` | API tokens (description, SHA-256 hash, prefix, expiry, last-used timestamp, user_id) |
+
 ---
 
 ## Technical Architecture
@@ -574,23 +550,47 @@ myPresence/
 - **Database**: SQLite (single file at `/data/app.db`)
 - **Deployment**: Docker multi-stage build, static binary, Alpine 3.19 runtime
 
-### Database Schema
+---
 
-| Table | Description |
-|-------|-------------|
-| `users` | Users (email, name, roles as comma-separated string, optional password hash) |
-| `teams` | Teams |
-| `user_teams` | User ↔ team many-to-many mapping |
-| `statuses` | Presence statuses (name, color, billable, on_site flag, sort order) |
-| `presences` | Recorded presences (user_id, date YYYY-MM-DD, half `full`/`AM`/`PM`, status_id) |
-| `presence_logs` | Audit log of all set/clear presence actions (actor, target user, date, half, status) |
-| `admin_logs` | Audit log of admin operations on entities (teams, statuses, holidays, users) |
-| `sessions` | Active sessions (token, user_id, 30-day expiry) |
-| `holidays` | Public holidays (date, name, allow_imputed) |
-| `floorplans` | Floor map definitions (name, image path, sort order) |
-| `seats` | Seats placed on a floorplan (label, x/y position as percentage of image) |
-| `seat_reservations` | Seat bookings (seat_id, user_id, date, half — unique per seat+date+half) |
-| `personal_access_tokens` | API tokens (description, SHA-256 hash, prefix, expiry, last-used timestamp, user_id) |
+## REST API
+
+myPresence exposes a full REST API that mirrors every user action available in the browser interface. All endpoints require authentication using a **Personal Access Token (PAT)**.
+
+### Personal Access Tokens
+
+Each user can generate tokens at **🔑 `/settings/tokens`** (accessible from the top-right menu).
+
+- Choose a **description** (e.g. *"Reporting script"*) and an **expiry** (7, 30, 90, 365 days, or no expiry)
+- The raw token (prefixed `mpa_`) is shown **once** — copy it before closing the dialog
+- Tokens inherit **exactly** the permissions of the issuing user — no elevation, no restriction
+- Revocation is immediate; all integrations using the token stop working instantly
+
+### Authentication header
+
+```
+Authorization: Bearer mpa_<your-token>
+```
+
+### API documentation
+
+The full endpoint reference (request/response format for every route) is available at:
+
+- **In-app**: [`/api/docs`](http://localhost:8080/api/docs) — served as plain text, no authentication required
+- **In the repository**: [`API.md`](API.md)
+
+### Example
+
+```bash
+# Get your presences for April 2026
+curl -H "Authorization: Bearer mpa_yourtoken" \
+     "http://localhost:8080/api/presences?team_id=1&year=2026&month=4"
+
+# Set a presence
+curl -X POST -H "Authorization: Bearer mpa_yourtoken" \
+     -H "Content-Type: application/json" \
+     -d '{"user_id":5,"dates":["2026-04-14"],"status_id":3,"half":"full"}' \
+     http://localhost:8080/api/presences
+```
 
 ---
 
@@ -731,6 +731,12 @@ docker compose down && docker compose up -d --build
 
 ### Floor Plans
 ![Floor plan with seat reservations](docs/screenshots/08-floorplan.png)
+
+### Project Time Imputation
+![Project time imputation](docs/screenshots/09-projects-imputation.png)
+
+### Projects Report
+![Projects report](docs/screenshots/10-projects-report.png)
 
 ### Grafana Dashboard
 ![Grafana dashboard](docs/screenshots/09-grafana.png)
