@@ -170,7 +170,7 @@ func TestTmplPresenceHalf(t *testing.T) {
 	}{
 		{"2026-04-14", "full", 2},
 		{"2026-04-14", "AM", 3},
-		{"2026-04-14", "PM", 0},   // key missing in sub-map
+		{"2026-04-14", "PM", 0}, // key missing in sub-map
 		{"2026-04-15", "PM", 1},
 		{"2026-04-15", "full", 0}, // key missing in sub-map
 		{"2026-04-16", "full", 0}, // date missing entirely
@@ -205,5 +205,35 @@ func TestTmplHasDatePresence(t *testing.T) {
 	}
 	if tmplHasDatePresence(nil, "2026-04-14") {
 		t.Error("expected false for nil map")
+	}
+}
+
+// ---- tmplActivitySummaryRocket ----
+
+func TestTmplActivitySummaryRocket(t *testing.T) {
+	tests := []struct {
+		name            string
+		notSet          float64
+		onSiteDays      float64
+		billableDays    float64
+		projectActivity float64
+		onsiteThreshold float64
+		want            bool
+	}{
+		{"all criteria met", 0, 10, 15, 100, 60, true},
+		{"notSet > 0 → false", 0.5, 10, 15, 100, 60, false},
+		{"billableDays zero → false", 0, 0, 0, 100, 60, false},
+		{"onsite below threshold", 0, 5, 15, 100, 60, false}, // 33% < 60%
+		{"project != 100 → false", 0, 9, 15, 99, 60, false},
+		{"project 100.001 → false", 0, 9, 15, 100.002, 60, false},
+		{"exact threshold met", 0, 6, 10, 100, 60, true},     // exactly 60%
+		{"threshold not met by 1", 0, 5, 10, 100, 60, false}, // 50% < 60%
+	}
+	for _, tt := range tests {
+		got := tmplActivitySummaryRocket(tt.notSet, tt.onSiteDays, tt.billableDays, tt.projectActivity, tt.onsiteThreshold)
+		if got != tt.want {
+			t.Errorf("%s: tmplActivitySummaryRocket(%v,%v,%v,%v,%v) = %v, want %v",
+				tt.name, tt.notSet, tt.onSiteDays, tt.billableDays, tt.projectActivity, tt.onsiteThreshold, got, tt.want)
+		}
 	}
 }
