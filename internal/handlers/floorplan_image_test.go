@@ -22,14 +22,6 @@ func createPNGBytes() []byte {
 	return buf.Bytes()
 }
 
-// createFloorplanUploadRequest creates a multipart POST request for image upload.
-func createFloorplanUploadRequest(t *testing.T, d interface {
-	CreateSession(uid int64) (string, error)
-}, fpID int64, imgBytes []byte, dataDir string) (*http.Request, *httptest.ResponseRecorder) {
-	t.Helper()
-	return nil, nil // placeholder
-}
-
 // TestUploadFloorplanImage_DeleteOld covers floorplan.go L.353-355 (delete old image on re-upload)
 func TestUploadFloorplanImage_DeleteOld(t *testing.T) {
 	d := newExtraTestDB(t)
@@ -49,7 +41,9 @@ func TestUploadFloorplanImage_DeleteOld(t *testing.T) {
 		t.Fatal(err)
 	}
 	part.Write(pngBytes) //nolint:errcheck
-	mp.Close()
+	if err := mp.Close(); err != nil {
+		t.Fatal(err)
+	}
 
 	req := createAdminReq(t, d, http.MethodPost, "/admin/floorplans/"+strconvI64(fpID)+"/image", body.Bytes())
 	req.Header.Set("Content-Type", mp.FormDataContentType())
@@ -77,7 +71,9 @@ func TestUploadFloorplanImage_OsCreateError(t *testing.T) {
 		t.Fatal(err)
 	}
 	part.Write(pngBytes) //nolint:errcheck
-	mp.Close()
+	if err := mp.Close(); err != nil {
+		t.Fatal(err)
+	}
 
 	req := createAdminReq(t, d, http.MethodPost, "/admin/floorplans/"+strconvI64(fpID)+"/image", body.Bytes())
 	req.Header.Set("Content-Type", mp.FormDataContentType())

@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"bytes"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -119,12 +118,6 @@ func TestResetPasswordPost_SetPasswordDBError(t *testing.T) {
 // UserLogsPage with days query param (covers L.26-29)
 func TestUserLogsPage_DaysParam(t *testing.T) {
 	d := newExtraTestDB(t)
-	type settingsHandler struct {
-		DB interface {
-			GetUserLogs(int64, interface{}) (interface{}, error)
-		}
-		Render func(http.ResponseWriter, *http.Request, string, interface{})
-	}
 	h := &SettingsHandler{DB: d, Render: noRender}
 
 	uid, _ := d.CreateLocalUser("logsdays@test.com", "LogsDays", "password1")
@@ -194,13 +187,9 @@ func TestImpersonatePage_SelfOnly(t *testing.T) {
 // CreateStatus DB error (covers L.239-243)
 func TestCreateStatus_DBError(t *testing.T) {
 	d := newExtraTestDB(t)
-	type adminHandler struct {
-		DB     interface{}
-		Render func(http.ResponseWriter, *http.Request, string, interface{})
-	}
 	h := &AdminHandler{DB: d, Render: noRender}
 
-	body := fmt.Sprintf(`{"name":"TestStatus","color":"#ff0000","billable":false,"on_site":false,"sort_order":1}`)
+	body := `{"name":"TestStatus","color":"#ff0000","billable":false,"on_site":false,"sort_order":1}`
 	req := createAdminReq(t, d, http.MethodPost, "/admin/statuses", []byte(body))
 	req.Header.Set("Content-Type", "application/json")
 
