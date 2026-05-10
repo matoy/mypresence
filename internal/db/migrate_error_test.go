@@ -136,17 +136,17 @@ func TestMigratePresence_HalfColumnMigration(t *testing.T) {
 		disabled BOOLEAN NOT NULL DEFAULT FALSE,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	)`)
-	pdb.Exec(`CREATE TABLE presences (
+	_, _ = pdb.Exec(`CREATE TABLE presences (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		user_id BIGINT NOT NULL,
 		date TEXT NOT NULL,
 		status_id BIGINT NOT NULL,
 		UNIQUE(user_id, date)
-	)`) //nolint:errcheck
+	)`)
 	// Insert a row to verify it survives the migration.
-	pdb.Exec(`INSERT INTO statuses (name, color) VALUES ('Office', '#3b82f6')`)              //nolint:errcheck
-	pdb.Exec(`INSERT INTO presences (user_id, date, status_id) VALUES (1, '2024-01-15', 1)`) //nolint:errcheck
-	pdb.Close()                                                                              //nolint:errcheck
+	_, _ = pdb.Exec(`INSERT INTO statuses (name, color) VALUES ('Office', '#3b82f6')`)
+	_, _ = pdb.Exec(`INSERT INTO presences (user_id, date, status_id) VALUES (1, '2024-01-15', 1)`)
+	_ = pdb.Close()
 
 	// Open full multi-DB; migratePresence detects missing 'half' → runs migration.
 	d, err := openSQLiteMulti(dir, newDialect("sqlite"))
