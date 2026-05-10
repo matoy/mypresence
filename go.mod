@@ -1,4 +1,4 @@
-module presence-app
+module github.com/matoy/myPresence
 
 go 1.25.10
 
