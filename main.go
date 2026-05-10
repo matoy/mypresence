@@ -1,26 +1,16 @@
 package main
 
 import (
-	"crypto/subtle"
 	"embed"
-	"encoding/json"
-	"html/template"
 	"io/fs"
-	"log"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"os"
-	"path/filepath"
-	"strings"
 	"time"
-
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"presence-app/internal/config"
 	"presence-app/internal/db"
 	"presence-app/internal/handlers"
-	"presence-app/internal/i18n"
 	"presence-app/internal/metrics"
 	"presence-app/internal/middleware"
 	"presence-app/internal/models"
@@ -70,177 +60,10 @@ func main() {
 	database.CleanExpiredSessions()
 	database.CleanExpiredResetTokens()
 
-	// Parse templates
-	funcMap := template.FuncMap{
-		"add": func(a, b int) int { return a + b },
-		"sub": func(a, b int) int { return a - b },
-		// safehtml marks a string as safe HTML so html/template does not escape it.
-		// Only use with strings originating from our own controlled i18n data.
-		"safehtml": func(s string) template.HTML { return template.HTML(s) }, //nolint:gosec
-		"seq": func(n int) []int {
-			s := make([]int, n)
-			for i := range s {
-				s[i] = i
-			}
-			return s
-		},
-		"json": func(v interface{}) template.JS {
-			b, _ := json.Marshal(v)
-			return template.JS(b)
-		},
-		"statusColor": func(statuses []models.Status, id int64) string {
-			for _, s := range statuses {
-				if s.ID == id {
-					return s.Color
-				}
-			}
-			return "#e5e7eb"
-		},
-		"statusName": func(statuses []models.Status, id int64) string {
-			for _, s := range statuses {
-				if s.ID == id {
-					return s.Name
-				}
-			}
-			return ""
-		},
-		"hasKey": func(m map[string]int64, key string) bool {
-			_, ok := m[key]
-			return ok
-		},
-		"getKey": func(m map[string]int64, key string) int64 {
-			if m == nil {
-				return 0
-			}
-			return m[key]
-		},
-		"getCount": func(m map[int64]int, key int64) int {
-			return m[key]
-		},
-		"getStrCount": func(m map[string]int, key string) int {
-			return m[key]
-		},
-		"sumMap": func(m map[int64]int) int {
-			total := 0
-			for _, v := range m {
-				total += v
-			}
-			return total
-		},
-		// Float64 variants for half-day support
-		"getCountF":    tmplGetCountF,
-		"getStrCountF": tmplGetStrCountF,
-		"sumMapF":      tmplSumMapF,
-		"fmtF":         tmplFmtF,
-		"percentF":     tmplPercentF,
-		"i2f":          tmplI2F,
-		"subF":         tmplSubF,
-		"activityRocket": func(notSet, onSiteDays, billableDays, projectActivity float64) bool {
-			return tmplActivitySummaryRocket(notSet, onSiteDays, billableDays, projectActivity, cfg.OnsiteRatioThreshold)
-		},
-		// Presence half-day helpers for templates
-		"presenceHalf":    tmplPresenceHalf,
-		"hasDatePresence": tmplHasDatePresence,
-		"dict": func(pairs ...interface{}) map[string]interface{} {
-			d := make(map[string]interface{})
-			for i := 0; i < len(pairs)-1; i += 2 {
-				d[pairs[i].(string)] = pairs[i+1]
-			}
-			return d
-		},
-		"intToInt64": func(i int) int64 { return int64(i) },
-		"upper":      strings.ToUpper,
-		"percent":    tmplPercent,
-		"hasRole": func(user *models.User, role string) bool {
-			if user == nil {
-				return false
-			}
-			return user.HasRole(role)
-		},
-	}
-
-	templates := make(map[string]*template.Template)
-	pages := []string{"login", "calendar", "admin_teams", "admin_statuses", "admin_activity", "admin_holidays", "admin_users", "admin_user_logs", "floorplan", "admin_floorplans", "pat", "settings_change_password", "forgot_password", "reset_password", "impersonate", "projects", "admin_projects", "admin_projects_report"}
-	for _, page := range pages {
-		t, err := template.New("").Funcs(funcMap).ParseFS(
-			templateFS,
-			"web/templates/layout.html",
-			"web/templates/"+page+".html",
-		)
-		if err != nil {
-			log.Fatalf("Template parse error (%s): %v", page, err)
-		}
-		templates[page] = t
-	}
-
-	// Render helper
-	renderPage := func(w http.ResponseWriter, r *http.Request, page string, data interface{}) {
-		user := middleware.GetUser(r)
-		// Resolve active language
-		lang := i18n.LangFromRequest(r, cfg.DefaultLang)
-		// Check if logo exists
-		logoExists := false
-		if cfg.LogoPath != "" {
-			if _, err := os.Stat(filepath.Join(cfg.DataDir, cfg.LogoPath)); err == nil {
-				logoExists = true
-			}
-		} else {
-			if _, err := os.Stat(filepath.Join(cfg.DataDir, "logo.png")); err == nil {
-				logoExists = true
-			}
-		}
-
-		var csrfToken string
-		if cookie, err := r.Cookie("session"); err == nil {
-			csrfToken = middleware.GenerateCSRFToken(cfg.SecretKey, cookie.Value)
-		}
-		// Detect impersonation: check if a real_session cookie exists and is valid
-		var realAdmin *models.User
-		if realCookie, err := r.Cookie("real_session"); err == nil {
-			if adminUser, err := database.GetSessionUser(realCookie.Value); err == nil && adminUser.HasRole(models.RoleGlobal) {
-				realAdmin = adminUser
-			}
-		}
-		pd := models.PageData{
-			Config: map[string]string{
-				"AppName":        cfg.AppName,
-				"PrimaryColor":   cfg.PrimaryColor,
-				"SecondaryColor": cfg.SecondaryColor,
-				"AccentColor":    cfg.AccentColor,
-				"FontURL":        cfg.FontURL,
-				"FontFamily":     cfg.FontFamily,
-				"FontFamilyMono": cfg.FontFamilyMono,
-			},
-			User:              user,
-			Page:              page,
-			Data:              data,
-			SAMLEnabled:       cfg.SAMLEnabled,
-			SMTPEnabled:       cfg.SMTPURL != "",
-			HideFooter:        cfg.HideFooter,
-			AppVersion:        config.Version,
-			DisableFloorplans: cfg.DisableFloorplans,
-			DisableAPI:        cfg.DisableAPI, DisableProjects: cfg.DisableProjects, T: i18n.T(lang),
-			Lang:           lang,
-			SupportedLangs: i18n.Supported,
-			CSRFToken:      csrfToken,
-			RealAdmin:      realAdmin,
-		}
-		// Add logo flag to config map
-		configMap := pd.Config.(map[string]string)
-		if logoExists {
-			configMap["LogoURL"] = "/data/logo.png"
-		}
-
-		tmpl, ok := templates[page]
-		if !ok {
-			http.Error(w, "Template not found", http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if err := tmpl.ExecuteTemplate(w, "layout", pd); err != nil {
-			log.Printf("Template render error: %v", err)
-		}
-	}
+	// Parse templates and build the render helper.
+	funcMap := buildTemplateFuncMap(cfg)
+	templates := loadTemplates(funcMap)
+	renderPage := newRenderPage(cfg, database, templates)
 
 	// Initialize handlers
 	healthHandler := &handlers.HealthHandler{DB: database, StartedAt: time.Now()}
@@ -314,86 +137,20 @@ func main() {
 
 	// Serve floorplan images from data directory
 	if !cfg.DisableFloorplans {
-		mux.HandleFunc("GET /floorplan-img/", func(w http.ResponseWriter, r *http.Request) {
-			name := filepath.Base(r.URL.Path)
-			// Only serve files matching expected pattern: floorplan_<id>.<ext>
-			if !strings.HasPrefix(name, "floorplan_") {
-				http.NotFound(w, r)
-				return
-			}
-			ext := strings.ToLower(filepath.Ext(name))
-			allowed := map[string]bool{".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true}
-			if !allowed[ext] {
-				http.NotFound(w, r)
-				return
-			}
-			http.ServeFile(w, r, filepath.Join(cfg.DataDir, name))
-		})
+		mux.Handle("GET /floorplan-img/", floorplanImgHandler(cfg.DataDir))
 	}
 
 	// Serve logo and data files
-	mux.HandleFunc("GET /data/", func(w http.ResponseWriter, r *http.Request) {
-		// Only serve specific safe files from data dir
-		name := filepath.Base(r.URL.Path)
-		allowed := map[string]bool{"logo.png": true, "logo.svg": true, "logo.jpg": true}
-		if !allowed[name] {
-			http.NotFound(w, r)
-			return
-		}
-		http.ServeFile(w, r, filepath.Join(cfg.DataDir, name))
-	})
+	mux.Handle("GET /data/", dataFileHandler(cfg.DataDir))
 
 	// Health check (public, no auth)
 	mux.HandleFunc("GET /health", healthHandler.Health)
 
 	// Metrics endpoint (token-protected)
-	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, r *http.Request) {
-		if cfg.MetricsToken == "" {
-			http.Error(w, "Metrics not enabled", http.StatusNotFound)
-			return
-		}
-		token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-		if subtle.ConstantTimeCompare([]byte(token), []byte(cfg.MetricsToken)) != 1 {
-			w.Header().Set("WWW-Authenticate", `Bearer realm="mypresence-metrics"`)
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-		promhttp.Handler().ServeHTTP(w, r)
-	})
+	mux.Handle("GET /metrics", metricsHandler(cfg.MetricsToken))
 
 	// Language switcher (public, sets a cookie and redirects back)
-	mux.HandleFunc("POST /set-lang", func(w http.ResponseWriter, r *http.Request) {
-		lang := r.FormValue("lang")
-		valid := false
-		for _, s := range i18n.Supported {
-			if s.Code == lang {
-				valid = true
-				break
-			}
-		}
-		if !valid {
-			lang = cfg.DefaultLang
-		}
-		http.SetCookie(w, &http.Cookie{
-			Name:     "lang",
-			Value:    lang,
-			Path:     "/",
-			MaxAge:   365 * 24 * 3600,
-			SameSite: http.SameSiteLaxMode,
-			HttpOnly: true,
-		})
-		// Prevent open redirect: only allow same-origin redirects
-		target := "/"
-		if ref := r.Header.Get("Referer"); ref != "" {
-			if u, err := url.Parse(ref); err == nil {
-				// Discard scheme/host — use only path+query to stay on same origin
-				if p := u.RequestURI(); strings.HasPrefix(p, "/") {
-					target = p
-				}
-			}
-		}
-		http.Redirect(w, r, target, http.StatusSeeOther)
-	})
+	mux.Handle("POST /set-lang", langSwitcherHandler(cfg.DefaultLang))
 
 	// API documentation (public, disabled when DISABLE_API=true)
 	if !cfg.DisableAPI {

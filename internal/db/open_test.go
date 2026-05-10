@@ -84,55 +84,20 @@ func TestOpen_SQLite_MigratesSchema(t *testing.T) {
 	}
 	defer d.Close()
 
-	tables := []struct {
-		conn interface {
-			QueryRow(string, ...interface{}) interface{ Scan(...interface{}) error }
-		}
-		name string
-	}{}
-	_ = tables // avoid "declared and not used" — we use raw *sql.DB below
+	assertTablesExist(t, d.core, []string{"users", "teams", "user_teams", "sessions", "personal_access_tokens", "password_reset_tokens"}, "core")
+	assertTablesExist(t, d.presence, []string{"statuses", "presences", "holidays", "presence_logs"}, "presence")
+	assertTablesExist(t, d.floorplan, []string{"floorplans", "seats", "seat_reservations"}, "floorplan")
+	assertTablesExist(t, d.audit, []string{"admin_logs"}, "audit")
+	assertTablesExist(t, d.projects, []string{"projects", "project_time_entries"}, "projects")
+}
 
-	for _, tc := range []struct {
-		table string
-		db    interface {
-			QueryRow(string, ...interface{}) interface {
-				Scan(...interface{}) error
-			}
-		}
-	}{} {
-		_ = tc
-	}
-
-	// Use direct SQL checks instead
-	coreTables := []string{"users", "teams", "user_teams", "sessions", "personal_access_tokens", "password_reset_tokens"}
-	for _, tbl := range coreTables {
+// assertTablesExist checks that each named table is present in the given DB.
+func assertTablesExist(t *testing.T, db *rebindDB, tables []string, label string) {
+	t.Helper()
+	for _, tbl := range tables {
 		var n int
-		if err := d.core.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", tbl).Scan(&n); err != nil || n == 0 {
-			t.Errorf("core table %q not found after migration (count=%d, err=%v)", tbl, n, err)
-		}
-	}
-	presenceTables := []string{"statuses", "presences", "holidays", "presence_logs"}
-	for _, tbl := range presenceTables {
-		var n int
-		if err := d.presence.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", tbl).Scan(&n); err != nil || n == 0 {
-			t.Errorf("presence table %q not found after migration (count=%d, err=%v)", tbl, n, err)
-		}
-	}
-	floorplanTables := []string{"floorplans", "seats", "seat_reservations"}
-	for _, tbl := range floorplanTables {
-		var n int
-		if err := d.floorplan.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", tbl).Scan(&n); err != nil || n == 0 {
-			t.Errorf("floorplan table %q not found after migration (count=%d, err=%v)", tbl, n, err)
-		}
-	}
-	var n int
-	if err := d.audit.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='admin_logs'").Scan(&n); err != nil || n == 0 {
-		t.Errorf("audit table admin_logs not found after migration")
-	}
-	projectTables := []string{"projects", "project_time_entries"}
-	for _, tbl := range projectTables {
-		if err := d.projects.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", tbl).Scan(&n); err != nil || n == 0 {
-			t.Errorf("projects table %q not found after migration (count=%d, err=%v)", tbl, n, err)
+		if err := db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", tbl).Scan(&n); err != nil || n == 0 {
+			t.Errorf("%s table %q not found after migration (count=%d, err=%v)", label, tbl, n, err)
 		}
 	}
 }

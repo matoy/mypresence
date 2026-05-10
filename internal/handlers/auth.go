@@ -265,49 +265,20 @@ func (h *AuthHandler) SAMLACS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Collect all non-expired pending request IDs and clean up stale ones.
-	now := time.Now()
-	var pendingIDs []string
-	h.pendingSAMLRequests.Range(func(key, value interface{}) bool {
-		if now.Before(value.(time.Time)) {
-			pendingIDs = append(pendingIDs, key.(string))
-		} else {
-			h.pendingSAMLRequests.Delete(key)
-		}
-		return true
-	})
-	assertion, err := h.SP.ParseResponse(r, pendingIDs)
+	pendingIDs := collectPendingSAMLIDs(&h.pendingSAMLRequests)
+	assert, err := h.SP.ParseResponse(r, pendingIDs)
 	if err != nil {
 		slog.Warn("auth.saml.response", "error", err, "ip", clientIP(r))
 		http.Redirect(w, r, "/login?error=Authentification+SSO+échouée", http.StatusSeeOther)
 		return
 	}
 
-	// Extract user attributes from SAML assertion
-	email := getAttributeValue(assertion, "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress")
-	if email == "" {
-		email = getAttributeValue(assertion, "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name")
-	}
-	if email == "" && assertion.Subject != nil && assertion.Subject.NameID != nil {
-		email = assertion.Subject.NameID.Value
-	}
-
-	displayName := getAttributeValue(assertion, "http://schemas.microsoft.com/identity/claims/displayname")
-	if displayName == "" {
-		first := getAttributeValue(assertion, "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname")
-		last := getAttributeValue(assertion, "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname")
-		if first != "" || last != "" {
-			displayName = first + " " + last
-		}
-	}
-	if displayName == "" {
-		displayName = email
-	}
-
+	email := extractSAMLEmail(assert)
 	if email == "" {
 		http.Redirect(w, r, "/login?error=Aucun+email+dans+la+réponse+SAML", http.StatusSeeOther)
 		return
 	}
+	displayName := extractSAMLDisplayName(assert, email)
 
 	// Auto-provision or update user
 	user, err := h.DB.UpsertUser(email, displayName)
@@ -318,37 +289,7 @@ func (h *AuthHandler) SAMLACS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Apply RBAC: map IDP groups to application roles if group mapping is configured.
-	if h.Config.SAMLGroupGlobal != "" || h.Config.SAMLGroupTeamManager != "" ||
-		h.Config.SAMLGroupTeamLeader != "" || h.Config.SAMLGroupStatusManager != "" ||
-		h.Config.SAMLGroupActivityViewer != "" || h.Config.SAMLGroupFloorplanManager != "" ||
-		h.Config.SAMLGroupProjectsManager != "" || h.Config.SAMLGroupProjectsViewer != "" {
-		groups := getAttributeValues(assertion, h.Config.SAMLGroupsClaim)
-		groupSet := make(map[string]bool, len(groups))
-		for _, g := range groups {
-			groupSet[g] = true
-		}
-		var roles []string
-		for _, mapping := range []struct{ groupID, role string }{
-			{h.Config.SAMLGroupGlobal, models.RoleGlobal},
-			{h.Config.SAMLGroupTeamManager, models.RoleTeamManager},
-			{h.Config.SAMLGroupTeamLeader, models.RoleTeamLeader},
-			{h.Config.SAMLGroupStatusManager, models.RoleStatusManager},
-			{h.Config.SAMLGroupActivityViewer, models.RoleActivityViewer},
-			{h.Config.SAMLGroupFloorplanManager, models.RoleFloorplanManager},
-			{h.Config.SAMLGroupProjectsManager, models.RoleProjectsAdmin},
-			{h.Config.SAMLGroupProjectsViewer, models.RoleProjectsViewer},
-		} {
-			if mapping.groupID != "" && groupSet[mapping.groupID] {
-				roles = append(roles, mapping.role)
-			}
-		}
-		if len(roles) == 0 {
-			roles = []string{models.RoleBasic}
-		}
-		if err := h.DB.UpdateUserRoles(user.ID, strings.Join(roles, ",")); err != nil {
-			slog.Warn("auth.saml.role_sync", "error", err, "email", email)
-		}
-	}
+	h.syncSAMLGroupRoles(user, assert, email)
 
 	token, err := h.DB.CreateSession(user.ID)
 	if err != nil {
@@ -368,6 +309,92 @@ func (h *AuthHandler) SAMLACS(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   86400 * 30,
 	})
 	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+// collectPendingSAMLIDs returns all non-expired pending SAML request IDs and
+// removes stale entries from the map.
+func collectPendingSAMLIDs(m *sync.Map) []string {
+	now := time.Now()
+	var ids []string
+	m.Range(func(key, value interface{}) bool {
+		if now.Before(value.(time.Time)) {
+			ids = append(ids, key.(string))
+		} else {
+			m.Delete(key)
+		}
+		return true
+	})
+	return ids
+}
+
+// extractSAMLEmail resolves the user's email from a SAML assertion, trying
+// the email-address claim, then the name claim, then the NameID.
+func extractSAMLEmail(assertion *saml.Assertion) string {
+	if v := getAttributeValue(assertion, "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"); v != "" {
+		return v
+	}
+	if v := getAttributeValue(assertion, "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"); v != "" {
+		return v
+	}
+	if assertion.Subject != nil && assertion.Subject.NameID != nil {
+		return assertion.Subject.NameID.Value
+	}
+	return ""
+}
+
+// extractSAMLDisplayName resolves the display name from a SAML assertion.
+// Falls back to combining given/surname claims, then to email.
+func extractSAMLDisplayName(assertion *saml.Assertion, email string) string {
+	if v := getAttributeValue(assertion, "http://schemas.microsoft.com/identity/claims/displayname"); v != "" {
+		return v
+	}
+	first := getAttributeValue(assertion, "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname")
+	last := getAttributeValue(assertion, "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname")
+	if first != "" || last != "" {
+		return first + " " + last
+	}
+	if email != "" {
+		return email
+	}
+	return ""
+}
+
+// syncSAMLGroupRoles maps IDP group memberships from the assertion to
+// application roles and persists the result via UpdateUserRoles.
+func (h *AuthHandler) syncSAMLGroupRoles(user *models.User, assertion *saml.Assertion, email string) {
+	cfg := h.Config
+	if cfg.SAMLGroupGlobal == "" && cfg.SAMLGroupTeamManager == "" &&
+		cfg.SAMLGroupTeamLeader == "" && cfg.SAMLGroupStatusManager == "" &&
+		cfg.SAMLGroupActivityViewer == "" && cfg.SAMLGroupFloorplanManager == "" &&
+		cfg.SAMLGroupProjectsManager == "" && cfg.SAMLGroupProjectsViewer == "" {
+		return
+	}
+	groups := getAttributeValues(assertion, cfg.SAMLGroupsClaim)
+	groupSet := make(map[string]bool, len(groups))
+	for _, g := range groups {
+		groupSet[g] = true
+	}
+	var roles []string
+	for _, m := range []struct{ groupID, role string }{
+		{cfg.SAMLGroupGlobal, models.RoleGlobal},
+		{cfg.SAMLGroupTeamManager, models.RoleTeamManager},
+		{cfg.SAMLGroupTeamLeader, models.RoleTeamLeader},
+		{cfg.SAMLGroupStatusManager, models.RoleStatusManager},
+		{cfg.SAMLGroupActivityViewer, models.RoleActivityViewer},
+		{cfg.SAMLGroupFloorplanManager, models.RoleFloorplanManager},
+		{cfg.SAMLGroupProjectsManager, models.RoleProjectsAdmin},
+		{cfg.SAMLGroupProjectsViewer, models.RoleProjectsViewer},
+	} {
+		if m.groupID != "" && groupSet[m.groupID] {
+			roles = append(roles, m.role)
+		}
+	}
+	if len(roles) == 0 {
+		roles = []string{models.RoleBasic}
+	}
+	if err := h.DB.UpdateUserRoles(user.ID, strings.Join(roles, ",")); err != nil {
+		slog.Warn("auth.saml.role_sync", "error", err, "email", email)
+	}
 }
 
 // getAttributeValue extracts an attribute value from a SAML assertion.

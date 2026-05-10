@@ -30,18 +30,7 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 
 	// Parse year/month from query
 	now := time.Now()
-	yearStr := r.URL.Query().Get("year")
-	monthStr := r.URL.Query().Get("month")
-
-	year := now.Year()
-	month := int(now.Month())
-
-	if y, err := strconv.Atoi(yearStr); err == nil && y >= 2020 && y <= 2100 {
-		year = y
-	}
-	if m, err := strconv.Atoi(monthStr); err == nil && m >= 1 && m <= 12 {
-		month = m
-	}
+	year, month := parseYearMonth(r, now)
 
 	// Calculate prev/next month
 	prevTime := time.Date(year, time.Month(month)-1, 1, 0, 0, 0, 0, time.UTC)
@@ -75,19 +64,7 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// A month is complete when every declarable day has at least one status set.
-	declarableDays := 0
-	declaredDays := 0
-	for _, d := range days {
-		if d.IsWeekend || (d.IsHoliday && !d.HolidayAllowImputed) {
-			continue
-		}
-		declarableDays++
-		halves := userPresences[d.Date]
-		if halves != nil && (halves["full"] > 0 || halves["AM"] > 0 || halves["PM"] > 0) {
-			declaredDays++
-		}
-	}
-	calendarComplete := declarableDays > 0 && declaredDays == declarableDays
+	declarableDays, declaredDays, calendarComplete := computeMonthCompletion(days, userPresences)
 
 	// Get seat reservations and floorplans (skipped when floor plans are disabled)
 	var reservationDates map[string]bool
@@ -263,6 +240,37 @@ func (h *CalendarHandler) GetPresencesAPI(w http.ResponseWriter, r *http.Request
 	}
 
 	jsonOK(w, presences)
+}
+
+// parseYearMonth reads year and month from the request query string, falling
+// back to the current date for missing or out-of-range values.
+func parseYearMonth(r *http.Request, now time.Time) (year, month int) {
+	year, month = now.Year(), int(now.Month())
+	if y, err := strconv.Atoi(r.URL.Query().Get("year")); err == nil && y >= 2020 && y <= 2100 {
+		year = y
+	}
+	if m, err := strconv.Atoi(r.URL.Query().Get("month")); err == nil && m >= 1 && m <= 12 {
+		month = m
+	}
+	return
+}
+
+// computeMonthCompletion counts declarable days (working, non-holiday) and
+// declared days (at least one presence half), and reports whether the month
+// is fully declared.
+func computeMonthCompletion(days []models.DayInfo, presences map[string]map[string]int64) (declarable, declared int, complete bool) {
+	for _, d := range days {
+		if d.IsWeekend || (d.IsHoliday && !d.HolidayAllowImputed) {
+			continue
+		}
+		declarable++
+		halves := presences[d.Date]
+		if halves != nil && (halves["full"] > 0 || halves["AM"] > 0 || halves["PM"] > 0) {
+			declared++
+		}
+	}
+	complete = declarable > 0 && declared == declarable
+	return
 }
 
 func getDaysInMonth(year, month int) []models.DayInfo {
