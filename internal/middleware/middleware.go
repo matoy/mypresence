@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"presence-app/internal/db"
-	"presence-app/internal/models"
+	"github.com/matoy/myPresence/internal/db"
+	"github.com/matoy/myPresence/internal/models"
 )
 
 type contextKey string

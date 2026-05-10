@@ -5,8 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"presence-app/internal/config"
-	"presence-app/internal/db"
+	"github.com/matoy/myPresence/internal/config"
+	"github.com/matoy/myPresence/internal/db"
 )
 
 // newMiddlewareTestDB opens an isolated SQLite DB for middleware tests.

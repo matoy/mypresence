@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"presence-app/internal/middleware"
+	"github.com/matoy/myPresence/internal/middleware"
 )
 
 // CreateHoliday via Auth (covers L.54-57 currentUser != nil log)

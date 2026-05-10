@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"presence-app/internal/db"
-	"presence-app/internal/models"
+	"github.com/matoy/myPresence/internal/db"
+	"github.com/matoy/myPresence/internal/models"
 )
 
 type fakeFataler struct {

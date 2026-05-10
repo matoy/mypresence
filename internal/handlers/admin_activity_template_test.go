@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"presence-app/internal/models"
+	"github.com/matoy/myPresence/internal/models"
 )
 
 func renderAdminActivityContent(t *testing.T, pageData map[string]interface{}) string {

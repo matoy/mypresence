@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"presence-app/internal/middleware"
+	"github.com/matoy/myPresence/internal/middleware"
 )
 
 // TestDeleteUser_TargetNil covers admin_users.go L.187 (targetUser == nil in slog closure)

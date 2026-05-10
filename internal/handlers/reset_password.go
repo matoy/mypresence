@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"strings"
 
-	"presence-app/internal/config"
-	"presence-app/internal/db"
-	"presence-app/internal/mailer"
-	"presence-app/internal/middleware"
+	"github.com/matoy/myPresence/internal/config"
+	"github.com/matoy/myPresence/internal/db"
+	"github.com/matoy/myPresence/internal/mailer"
+	"github.com/matoy/myPresence/internal/middleware"
 )
 
 // ResetPasswordHandler handles the forgot-password / reset-password flow.

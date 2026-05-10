@@ -10,7 +10,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"presence-app/internal/middleware"
+	"github.com/matoy/myPresence/internal/middleware"
 )
 
 // createPNGBytes creates a minimal valid PNG image as bytes.

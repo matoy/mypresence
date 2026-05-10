@@ -7,8 +7,8 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"presence-app/internal/config"
-	"presence-app/internal/models"
+	"github.com/matoy/myPresence/internal/config"
+	"github.com/matoy/myPresence/internal/models"
 )
 
 // newTestDB opens an isolated in-memory-style SQLite DB in a temp directory.

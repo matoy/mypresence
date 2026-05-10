@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"presence-app/internal/db"
+	"github.com/matoy/myPresence/internal/db"
 )
 
 // HealthHandler handles the /healthz endpoint.

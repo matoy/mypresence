@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"time"
 
-	"presence-app/internal/db"
-	"presence-app/internal/middleware"
-	"presence-app/internal/models"
+	"github.com/matoy/myPresence/internal/db"
+	"github.com/matoy/myPresence/internal/middleware"
+	"github.com/matoy/myPresence/internal/models"
 )
 
 // SettingsHandler handles personal user settings pages.

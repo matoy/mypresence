@@ -8,12 +8,12 @@ import (
 	"os"
 	"time"
 
-	"presence-app/internal/config"
-	"presence-app/internal/db"
-	"presence-app/internal/handlers"
-	"presence-app/internal/metrics"
-	"presence-app/internal/middleware"
-	"presence-app/internal/models"
+	"github.com/matoy/myPresence/internal/config"
+	"github.com/matoy/myPresence/internal/db"
+	"github.com/matoy/myPresence/internal/handlers"
+	"github.com/matoy/myPresence/internal/metrics"
+	"github.com/matoy/myPresence/internal/middleware"
+	"github.com/matoy/myPresence/internal/models"
 )
 
 //go:embed web/templates/*.html

@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"presence-app/internal/middleware"
+	"github.com/matoy/myPresence/internal/middleware"
 )
 
 // -----------------------------------------------------------------------

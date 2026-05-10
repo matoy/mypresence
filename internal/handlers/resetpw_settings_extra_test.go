@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"presence-app/internal/middleware"
-	"presence-app/internal/models"
+	"github.com/matoy/myPresence/internal/middleware"
+	"github.com/matoy/myPresence/internal/models"
 )
 
 // ─── reset_password.go branches ───────────────────────────────────────────────
