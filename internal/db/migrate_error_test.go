@@ -126,7 +126,7 @@ func TestMigratePresence_HalfColumnMigration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sql.Open presence: %v", err)
 	}
-	pdb.Exec(`CREATE TABLE statuses (
+	_, _ = pdb.Exec(`CREATE TABLE statuses (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		name TEXT NOT NULL,
 		color TEXT NOT NULL DEFAULT '#3b82f6',
@@ -135,7 +135,7 @@ func TestMigratePresence_HalfColumnMigration(t *testing.T) {
 		sort_order INTEGER NOT NULL DEFAULT 0,
 		disabled BOOLEAN NOT NULL DEFAULT FALSE,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	)`) //nolint:errcheck
+	)`)
 	pdb.Exec(`CREATE TABLE presences (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		user_id BIGINT NOT NULL,
@@ -186,7 +186,7 @@ func TestCopyLegacyRows_DstBeginError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dstDB.Close() //nolint:errcheck — closed so Begin() fails
+	_ = dstDB.Close() // intentionally closed so Begin() fails
 
 	err = copyLegacyRows(srcDB, dstDB, "SELECT id FROM t1", "INSERT INTO t1 (id) VALUES (?)")
 	if err == nil {
