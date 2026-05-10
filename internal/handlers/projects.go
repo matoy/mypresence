@@ -180,24 +180,10 @@ func (h *ProjectsHandler) SetProjectTime(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if req.Days > 0 {
-		// Enforce cap: total declared <= billable days in that month
-		billable, _ := h.DB.GetUserBillableDaysForMonth(user.ID, req.Year, req.Month)
-		current, _ := h.DB.GetUserTotalDeclaredForMonth(user.ID, req.Year, req.Month)
-		// Subtract the current entry for this project from the current total
-		entries, _ := h.DB.GetUserProjectEntriesForMonth(user.ID, req.Year, req.Month)
-		var existing float64
-		for _, e := range entries {
-			if e.ProjectID == req.ProjectID {
-				existing = e.Days
-				break
-			}
-		}
-		if current-existing+req.Days > billable+0.001 { // small tolerance for float
-			metrics.ProjectOpsTotal.WithLabelValues("set_time", "failure").Inc()
-			jsonError(w, "Exceeds billable days cap", http.StatusUnprocessableEntity)
-			return
-		}
+	if req.Days > 0 && h.exceedsBillableCap(user.ID, req.ProjectID, req.Year, req.Month, req.Days) {
+		metrics.ProjectOpsTotal.WithLabelValues("set_time", "failure").Inc()
+		jsonError(w, "Exceeds billable days cap", http.StatusUnprocessableEntity)
+		return
 	}
 
 	if err := h.DB.SetProjectTimeEntry(user.ID, req.ProjectID, req.Year, req.Month, req.Days); err != nil {
@@ -410,35 +396,9 @@ func (h *ProjectsHandler) ProjectsReportPage(w http.ResponseWriter, r *http.Requ
 		monthKeys[2-i] = fmt.Sprintf("%04d-%02d", t.Year(), int(t.Month()))
 	}
 
-	// Determine project scope: team_leaders only see their teams' projects
-	var teamIDFilter []int64
-	if !currentUser.HasAnyRole(models.RoleProjectsAdmin, models.RoleProjectsViewer) {
-		// team_leader: restrict to teams they belong to
-		ids, _ := h.DB.GetTeamIDsForUser(currentUser.ID)
-		teamIDFilter = ids
-	}
+	allProjects, allTeams := h.buildProjectReportRows(currentUser, monthKeys)
 
-	allProjects, _ := h.DB.ListProjectsByTeams(teamIDFilter)
-	allTeams, _ := h.DB.ListTeams()
-	allUsers, _ := h.DB.ListUsers()
-
-	// Build user map
-	userMap := make(map[int64]models.User)
-	for _, u := range allUsers {
-		userMap[u.ID] = u
-	}
-
-	// Extract IDs for report query
-	projectIDs := make([]int64, 0, len(allProjects))
-	for _, p := range allProjects {
-		projectIDs = append(projectIDs, p.ID)
-	}
-
-	reportRows, _ := h.DB.GetProjectsReport(projectIDs, monthKeys, userMap)
-	enrichReportTotals(reportRows, monthKeys)
-
-	// Apply optional UI filters (text, active, team) — done in-process to avoid
-	// complex parameterized SQL; project counts are typically small.
+	// Apply optional UI filters
 	query := r.URL.Query()
 	filterText := query.Get("q")
 	filterActive := query.Get("active") // "1", "0", or ""
@@ -449,22 +409,7 @@ func (h *ProjectsHandler) ProjectsReportPage(w http.ResponseWriter, r *http.Requ
 	}
 	filterTeam, _ := strconv.ParseInt(query.Get("team"), 10, 64)
 
-	filtered := make([]models.ProjectReportRow, 0, len(reportRows))
-	for _, row := range reportRows {
-		if filterText != "" && !containsCI(row.Project.Name, filterText) && !containsCI(row.Project.Code, filterText) {
-			continue
-		}
-		if filterActive == "1" && !row.Project.Active {
-			continue
-		}
-		if filterActive == "0" && row.Project.Active {
-			continue
-		}
-		if filterTeam > 0 && row.Project.TeamID != filterTeam {
-			continue
-		}
-		filtered = append(filtered, row)
-	}
+	filtered := filterReportRows(allProjects, filterText, filterActive, filterTeam)
 
 	h.Render(w, r, "admin_projects_report", map[string]interface{}{
 		"Rows":         filtered,
@@ -491,28 +436,7 @@ func (h *ProjectsHandler) ProjectsReportAPI(w http.ResponseWriter, r *http.Reque
 		monthKeys[2-i] = fmt.Sprintf("%04d-%02d", t.Year(), int(t.Month()))
 	}
 
-	var teamIDFilter []int64
-	if !currentUser.HasAnyRole(models.RoleProjectsAdmin, models.RoleProjectsViewer) {
-		ids, _ := h.DB.GetTeamIDsForUser(currentUser.ID)
-		teamIDFilter = ids
-	}
-
-	allProjects, _ := h.DB.ListProjectsByTeams(teamIDFilter)
-	allTeams, _ := h.DB.ListTeams()
-	allUsers, _ := h.DB.ListUsers()
-
-	userMap := make(map[int64]models.User)
-	for _, u := range allUsers {
-		userMap[u.ID] = u
-	}
-
-	projectIDs := make([]int64, 0, len(allProjects))
-	for _, p := range allProjects {
-		projectIDs = append(projectIDs, p.ID)
-	}
-
-	reportRows, _ := h.DB.GetProjectsReport(projectIDs, monthKeys, userMap)
-	enrichReportTotals(reportRows, monthKeys)
+	reportRows, allTeams := h.buildProjectReportRows(currentUser, monthKeys)
 
 	query := r.URL.Query()
 	filterText := query.Get("q")
@@ -522,8 +446,67 @@ func (h *ProjectsHandler) ProjectsReportAPI(w http.ResponseWriter, r *http.Reque
 	}
 	filterTeam, _ := strconv.ParseInt(query.Get("team"), 10, 64)
 
-	filtered := make([]models.ProjectReportRow, 0, len(reportRows))
-	for _, row := range reportRows {
+	filtered := filterReportRows(reportRows, filterText, filterActive, filterTeam)
+
+	jsonOK(w, map[string]interface{}{
+		"rows":          filtered,
+		"month_keys":    monthKeys,
+		"teams":         allTeams,
+		"filter_text":   filterText,
+		"filter_active": filterActive,
+		"filter_team":   filterTeam,
+		"project_scope": len(reportRows),
+	})
+	metrics.ProjectOpsTotal.WithLabelValues("report", "success").Inc()
+	slog.Info("project.report.api", "user", currentUser.Email, "rows", len(filtered), "filter_active", filterActive, "filter_team", filterTeam)
+}
+
+// ─── helpers ──────────────────────────────────────────────────────────────────
+
+// exceedsBillableCap returns true when adding days for projectID would exceed the
+// user's billable-days cap for the given year/month.
+func (h *ProjectsHandler) exceedsBillableCap(userID, projectID int64, year, month int, days float64) bool {
+	billable, _ := h.DB.GetUserBillableDaysForMonth(userID, year, month)
+	current, _ := h.DB.GetUserTotalDeclaredForMonth(userID, year, month)
+	entries, _ := h.DB.GetUserProjectEntriesForMonth(userID, year, month)
+	var existing float64
+	for _, e := range entries {
+		if e.ProjectID == projectID {
+			existing = e.Days
+			break
+		}
+	}
+	return current-existing+days > billable+0.001 // small tolerance for float
+}
+
+// buildProjectReportRows loads and assembles the report rows for the given user
+// and set of month keys, restricting to the user's teams when they lack admin/viewer role.
+func (h *ProjectsHandler) buildProjectReportRows(currentUser *models.User, monthKeys []string) ([]models.ProjectReportRow, []models.Team) {
+	var teamIDFilter []int64
+	if !currentUser.HasAnyRole(models.RoleProjectsAdmin, models.RoleProjectsViewer) {
+		ids, _ := h.DB.GetTeamIDsForUser(currentUser.ID)
+		teamIDFilter = ids
+	}
+	allProjects, _ := h.DB.ListProjectsByTeams(teamIDFilter)
+	allTeams, _ := h.DB.ListTeams()
+	allUsers, _ := h.DB.ListUsers()
+	userMap := make(map[int64]models.User)
+	for _, u := range allUsers {
+		userMap[u.ID] = u
+	}
+	projectIDs := make([]int64, 0, len(allProjects))
+	for _, p := range allProjects {
+		projectIDs = append(projectIDs, p.ID)
+	}
+	reportRows, _ := h.DB.GetProjectsReport(projectIDs, monthKeys, userMap)
+	enrichReportTotals(reportRows, monthKeys)
+	return reportRows, allTeams
+}
+
+// filterReportRows applies text/active/team filters to a slice of report rows.
+func filterReportRows(rows []models.ProjectReportRow, filterText, filterActive string, filterTeam int64) []models.ProjectReportRow {
+	filtered := make([]models.ProjectReportRow, 0, len(rows))
+	for _, row := range rows {
 		if filterText != "" && !containsCI(row.Project.Name, filterText) && !containsCI(row.Project.Code, filterText) {
 			continue
 		}
@@ -538,22 +521,8 @@ func (h *ProjectsHandler) ProjectsReportAPI(w http.ResponseWriter, r *http.Reque
 		}
 		filtered = append(filtered, row)
 	}
-
-	jsonOK(w, map[string]interface{}{
-		"rows":           filtered,
-		"month_keys":     monthKeys,
-		"teams":          allTeams,
-		"filter_text":    filterText,
-		"filter_active":  filterActive,
-		"filter_team":    filterTeam,
-		"project_scope":  len(allProjects),
-		"team_id_scoped": teamIDFilter,
-	})
-	metrics.ProjectOpsTotal.WithLabelValues("report", "success").Inc()
-	slog.Info("project.report.api", "user", currentUser.Email, "rows", len(filtered), "filter_active", filterActive, "filter_team", filterTeam)
+	return filtered
 }
-
-// ─── helpers ──────────────────────────────────────────────────────────────────
 
 // enrichReportTotals computes TotalPastDays and TotalToDateDays on each row/userrow.
 // monthKeys is sorted ascending; currentMonthKey is monthKeys[len-1].

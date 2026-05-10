@@ -1839,18 +1839,7 @@ FROM admin_logs WHERE actor_id = ?`
 		}
 		logs = append(logs, l)
 		actorIDs[l.ActorID] = struct{}{}
-		switch l.EntityType {
-		case "team":
-			teamIDs[l.EntityID] = struct{}{}
-		case "status":
-			statusIDs[l.EntityID] = struct{}{}
-		case "holiday":
-			holidayIDs[l.EntityID] = struct{}{}
-		case "user":
-			if l.EntityID > 0 {
-				userEntityIDs[l.EntityID] = struct{}{}
-			}
-		}
+		collectAdminLogEntityID(l, teamIDs, statusIDs, holidayIDs, userEntityIDs)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1864,20 +1853,44 @@ FROM admin_logs WHERE actor_id = ?`
 
 	for i, l := range logs {
 		logs[i].ActorName = actorNames[l.ActorID]
-		switch l.EntityType {
-		case "team":
-			logs[i].EntityName = teamNames[l.EntityID]
-		case "status":
-			logs[i].EntityName = statusNames[l.EntityID]
-		case "holiday":
-			logs[i].EntityName = holidayNames[l.EntityID]
-		case "user":
-			if l.EntityID > 0 {
-				logs[i].EntityName = userNames[l.EntityID]
-			}
-		}
+		logs[i].EntityName = resolveAdminLogEntityName(l, teamNames, statusNames, holidayNames, userNames)
 	}
 	return logs, nil
+}
+
+// collectAdminLogEntityID routes the log entry's EntityID into the appropriate
+// ID-set based on EntityType, for later batch name resolution.
+func collectAdminLogEntityID(l models.AdminLog, teamIDs, statusIDs, holidayIDs, userEntityIDs map[int64]struct{}) {
+	switch l.EntityType {
+	case "team":
+		teamIDs[l.EntityID] = struct{}{}
+	case "status":
+		statusIDs[l.EntityID] = struct{}{}
+	case "holiday":
+		holidayIDs[l.EntityID] = struct{}{}
+	case "user":
+		if l.EntityID > 0 {
+			userEntityIDs[l.EntityID] = struct{}{}
+		}
+	}
+}
+
+// resolveAdminLogEntityName returns the human-readable name for the entity
+// referenced by the log entry.
+func resolveAdminLogEntityName(l models.AdminLog, teamNames, statusNames, holidayNames, userNames map[int64]string) string {
+	switch l.EntityType {
+	case "team":
+		return teamNames[l.EntityID]
+	case "status":
+		return statusNames[l.EntityID]
+	case "holiday":
+		return holidayNames[l.EntityID]
+	case "user":
+		if l.EntityID > 0 {
+			return userNames[l.EntityID]
+		}
+	}
+	return ""
 }
 
 // --- Floorplan management ---

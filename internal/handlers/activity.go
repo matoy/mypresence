@@ -99,32 +99,8 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 		presenceMap, _ = h.DB.GetPresences(userIDs, startDate, endDate)
 	}
 
-	// Count working days in the month (Mon–Fri)
-	workingDays := 0
-	for d := 1; d <= lastDay.Day(); d++ {
-		t := time.Date(year, time.Month(month), d, 0, 0, 0, 0, time.UTC)
-		if t.Weekday() != time.Saturday && t.Weekday() != time.Sunday {
-			workingDays++
-		}
-	}
-
-	// Count holidays falling on working days in the month.
-	// For the Not set column, all holidays are excluded from the expected input,
-	// even when presences are technically allowed on that day.
-	holidayCount := 0
-	for _, hol := range allHolidays {
-		t, err := time.Parse("2006-01-02", hol.Date)
-		if err != nil {
-			continue
-		}
-		if int(t.Month()) != month || t.Year() != year ||
-			t.Weekday() == time.Saturday || t.Weekday() == time.Sunday {
-			continue
-		}
-		if !hol.AllowImputed {
-			holidayCount++
-		}
-	}
+	// Count working days in the month (Mon–Fri) and holidays on those days.
+	workingDays, holidayCount := computeWorkingDays(year, month, allHolidays)
 	workingDaysExcluded := workingDays - holidayCount
 	totalOnSite := 0.0
 	for _, s := range stats {
@@ -134,16 +110,7 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 	projectActivityByUser := make(map[int64]float64)
 	totalProjectDeclared := 0.0
 	if !h.DisableProjects {
-		for _, s := range stats {
-			declared, err := h.DB.GetUserTotalDeclaredForMonth(s.User.ID, year, month)
-			if err != nil {
-				continue
-			}
-			totalProjectDeclared += declared
-			if s.BillableDays > 0 {
-				projectActivityByUser[s.User.ID] = (declared / s.BillableDays) * 100.0
-			}
-		}
+		projectActivityByUser, totalProjectDeclared = h.computeProjectActivity(stats, year, month)
 	}
 
 	totalWorkingDays := float64(workingDaysExcluded) * float64(len(stats))
@@ -153,34 +120,7 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Per-day billable / on-site counts for daily breakdown footer
-	billableIDs := make(map[int64]bool)
-	onSiteIDs := make(map[int64]bool)
-	for _, s := range statuses {
-		if s.Billable {
-			billableIDs[s.ID] = true
-		}
-		if s.OnSite {
-			onSiteIDs[s.ID] = true
-		}
-	}
-	dayBillable := make(map[string]float64)
-	dayOnSite := make(map[string]float64)
-	for _, userPresences := range presenceMap {
-		for date, halves := range userPresences {
-			for half, statusID := range halves {
-				weight := 1.0
-				if half == "AM" || half == "PM" {
-					weight = 0.5
-				}
-				if billableIDs[statusID] {
-					dayBillable[date] += weight
-				}
-				if onSiteIDs[statusID] {
-					dayOnSite[date] += weight
-				}
-			}
-		}
-	}
+	dayBillable, dayOnSite := computeDayBillableOnSite(presenceMap, statuses)
 
 	prevTime := time.Date(year, time.Month(month)-1, 1, 0, 0, 0, 0, time.UTC)
 	nextTime := time.Date(year, time.Month(month)+1, 1, 0, 0, 0, 0, time.UTC)
@@ -278,4 +218,81 @@ func filterTeamsForUser(database *db.DB, user *models.User, allTeams []models.Te
 		}
 	}
 	return filtered, myTeamIDs
+}
+
+// computeWorkingDays counts the working days (Mon–Fri) in the given month and
+// the number of those working days that are non-imputable public holidays.
+func computeWorkingDays(year, month int, holidays []models.Holiday) (workingDays, holidayCount int) {
+	lastDay := time.Date(year, time.Month(month)+1, 0, 0, 0, 0, 0, time.UTC)
+	for d := 1; d <= lastDay.Day(); d++ {
+		t := time.Date(year, time.Month(month), d, 0, 0, 0, 0, time.UTC)
+		if t.Weekday() != time.Saturday && t.Weekday() != time.Sunday {
+			workingDays++
+		}
+	}
+	for _, hol := range holidays {
+		t, err := time.Parse("2006-01-02", hol.Date)
+		if err != nil {
+			continue
+		}
+		if int(t.Month()) != month || t.Year() != year ||
+			t.Weekday() == time.Saturday || t.Weekday() == time.Sunday {
+			continue
+		}
+		if !hol.AllowImputed {
+			holidayCount++
+		}
+	}
+	return
+}
+
+// computeDayBillableOnSite aggregates per-date billable and on-site half-day
+// weights from the presence map for the activity daily breakdown footer.
+func computeDayBillableOnSite(presenceMap map[int64]map[string]map[string]int64, statuses []models.Status) (dayBillable, dayOnSite map[string]float64) {
+	billableIDs := make(map[int64]bool)
+	onSiteIDs := make(map[int64]bool)
+	for _, s := range statuses {
+		if s.Billable {
+			billableIDs[s.ID] = true
+		}
+		if s.OnSite {
+			onSiteIDs[s.ID] = true
+		}
+	}
+	dayBillable = make(map[string]float64)
+	dayOnSite = make(map[string]float64)
+	for _, userPresences := range presenceMap {
+		for date, halves := range userPresences {
+			for half, statusID := range halves {
+				weight := 1.0
+				if half == "AM" || half == "PM" {
+					weight = 0.5
+				}
+				if billableIDs[statusID] {
+					dayBillable[date] += weight
+				}
+				if onSiteIDs[statusID] {
+					dayOnSite[date] += weight
+				}
+			}
+		}
+	}
+	return
+}
+
+// computeProjectActivity returns the per-user project activity percentage and
+// total declared days for the given month across all projects.
+func (h *ActivityHandler) computeProjectActivity(stats []models.UserStats, year, month int) (projectActivityByUser map[int64]float64, totalProjectDeclared float64) {
+	projectActivityByUser = make(map[int64]float64)
+	for _, s := range stats {
+		declared, err := h.DB.GetUserTotalDeclaredForMonth(s.User.ID, year, month)
+		if err != nil {
+			continue
+		}
+		totalProjectDeclared += declared
+		if s.BillableDays > 0 {
+			projectActivityByUser[s.User.ID] = (declared / s.BillableDays) * 100.0
+		}
+	}
+	return
 }

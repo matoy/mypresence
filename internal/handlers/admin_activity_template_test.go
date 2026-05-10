@@ -26,68 +26,7 @@ func renderAdminActivityContent(t *testing.T, pageData map[string]interface{}) s
 		t.Fatalf("read admin_activity template: %v", err)
 	}
 
-	funcMap := template.FuncMap{
-		"fmtF": func(f float64) string {
-			if f == float64(int64(f)) {
-				return strconv.FormatInt(int64(f), 10)
-			}
-			return strconv.FormatFloat(f, 'f', 1, 64)
-		},
-		"percentF": func(a, b float64) int {
-			if b == 0 {
-				return 0
-			}
-			return int(a * 100 / b)
-		},
-		"i2f":  func(i int) float64 { return float64(i) },
-		"subF": func(a, b float64) float64 { return a - b },
-		"sumMapF": func(m map[int64]float64) float64 {
-			total := 0.0
-			for _, v := range m {
-				total += v
-			}
-			return total
-		},
-		"getCountF": func(m map[int64]float64, key int64) float64 { return m[key] },
-		"getStrCountF": func(m map[string]float64, key string) float64 {
-			return m[key]
-		},
-		"presenceHalf": func(m map[string]map[string]int64, date, half string) int64 {
-			if halves, ok := m[date]; ok {
-				return halves[half]
-			}
-			return 0
-		},
-		"statusColor": func(statuses []models.Status, id int64) string {
-			for _, s := range statuses {
-				if s.ID == id {
-					return s.Color
-				}
-			}
-			return "#e5e7eb"
-		},
-		"statusName": func(statuses []models.Status, id int64) string {
-			for _, s := range statuses {
-				if s.ID == id {
-					return s.Name
-				}
-			}
-			return ""
-		},
-		"activityRocket": func(notSet, onSiteDays, billableDays, projectActivity float64) bool {
-			if notSet > 0.001 {
-				return false
-			}
-			if billableDays <= 0 {
-				return false
-			}
-			onSiteRatio := (onSiteDays / billableDays) * 100.0
-			if onSiteRatio <= 60.0 {
-				return false
-			}
-			return projectActivity >= 99.999 && projectActivity <= 100.001
-		},
-	}
+	funcMap := buildActivityTemplateFuncMap()
 
 	tmpl, err := template.New("admin_activity.html").Funcs(funcMap).Parse(string(tplBytes))
 	if err != nil {
@@ -179,4 +118,69 @@ func TestAdminActivityTemplate_RocketRule(t *testing.T) {
 	if c := strings.Count(html, `title="Goal achieved"`); c != 0 {
 		t.Fatalf("expected no row rocket marker when rule is not met, got %d", c)
 	}
+}
+
+// buildActivityTemplateFuncMap constructs the template.FuncMap used by the
+// admin_activity.html template tests.
+func buildActivityTemplateFuncMap() template.FuncMap {
+	return template.FuncMap{
+		"fmtF": func(f float64) string {
+			if f == float64(int64(f)) {
+				return strconv.FormatInt(int64(f), 10)
+			}
+			return strconv.FormatFloat(f, 'f', 1, 64)
+		},
+		"percentF": func(a, b float64) int {
+			if b == 0 {
+				return 0
+			}
+			return int(a * 100 / b)
+		},
+		"i2f":          func(i int) float64 { return float64(i) },
+		"subF":         func(a, b float64) float64 { return a - b },
+		"getCountF":    func(m map[int64]float64, key int64) float64 { return m[key] },
+		"getStrCountF": func(m map[string]float64, key string) float64 { return m[key] },
+		"sumMapF": func(m map[int64]float64) float64 {
+			total := 0.0
+			for _, v := range m {
+				total += v
+			}
+			return total
+		},
+		"presenceHalf": func(m map[string]map[string]int64, date, half string) int64 {
+			if halves, ok := m[date]; ok {
+				return halves[half]
+			}
+			return 0
+		},
+		"statusColor": func(statuses []models.Status, id int64) string {
+			for _, s := range statuses {
+				if s.ID == id {
+					return s.Color
+				}
+			}
+			return "#e5e7eb"
+		},
+		"statusName": func(statuses []models.Status, id int64) string {
+			for _, s := range statuses {
+				if s.ID == id {
+					return s.Name
+				}
+			}
+			return ""
+		},
+		"activityRocket": testActivityRocket,
+	}
+}
+
+// testActivityRocket mirrors the production activityRocket template function
+// with a fixed 60% on-site threshold (used in template tests).
+func testActivityRocket(notSet, onSiteDays, billableDays, projectActivity float64) bool {
+	if notSet > 0.001 || billableDays <= 0 {
+		return false
+	}
+	if (onSiteDays/billableDays)*100.0 <= 60.0 {
+		return false
+	}
+	return projectActivity >= 99.999 && projectActivity <= 100.001
 }

@@ -274,37 +274,48 @@ func (d *DB) GetProjectsReport(projectIDs []int64, monthKeys []string, userMap m
 		if n, ok := teamMap[proj.TeamID]; ok {
 			proj.TeamName = n
 		}
-
-		userEntries := entryMap[pid]
-		var userRows []models.ProjectUserMonth
-		monthTotals := make(map[string]float64)
-		projectTotal := 0.0
-
-		for uid, monthMap := range userEntries {
-			u, ok := userMap[uid]
-			if !ok {
-				continue
-			}
-			row := models.ProjectUserMonth{
-				User:        u,
-				MonthlyDays: make(map[string]float64),
-			}
-			for _, mk := range monthKeys {
-				row.MonthlyDays[mk] = monthMap[mk]
-				monthTotals[mk] += monthMap[mk]
-			}
-			row.TotalDays = allTime[pid][uid]
-			projectTotal += row.TotalDays
-			userRows = append(userRows, row)
-		}
-		result = append(result, models.ProjectReportRow{
-			Project:     proj,
-			UserRows:    userRows,
-			MonthTotals: monthTotals,
-			TotalDays:   projectTotal,
-		})
+		row := buildProjectReportRow(proj, entryMap[pid], allTime[pid], monthKeys, userMap)
+		result = append(result, row)
 	}
 	return result, nil
+}
+
+// buildProjectReportRow constructs a ProjectReportRow for one project from the
+// pre-accumulated entry and time maps.
+func buildProjectReportRow(
+	proj models.Project,
+	userEntries map[int64]map[string]float64,
+	userTotals map[int64]float64,
+	monthKeys []string,
+	userMap map[int64]models.User,
+) models.ProjectReportRow {
+	var userRows []models.ProjectUserMonth
+	monthTotals := make(map[string]float64)
+	projectTotal := 0.0
+
+	for uid, monthMap := range userEntries {
+		u, ok := userMap[uid]
+		if !ok {
+			continue
+		}
+		row := models.ProjectUserMonth{
+			User:        u,
+			MonthlyDays: make(map[string]float64),
+		}
+		for _, mk := range monthKeys {
+			row.MonthlyDays[mk] = monthMap[mk]
+			monthTotals[mk] += monthMap[mk]
+		}
+		row.TotalDays = userTotals[uid]
+		projectTotal += row.TotalDays
+		userRows = append(userRows, row)
+	}
+	return models.ProjectReportRow{
+		Project:     proj,
+		UserRows:    userRows,
+		MonthTotals: monthTotals,
+		TotalDays:   projectTotal,
+	}
 }
 
 // ListProjectsByTeams returns all projects whose team_id is in the given set.
