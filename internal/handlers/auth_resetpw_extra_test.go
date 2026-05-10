@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"presence-app/internal/config"
+	"github.com/matoy/myPresence/internal/config"
 )
 
 // -----------------------------------------------------------------------

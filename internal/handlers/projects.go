@@ -8,10 +8,10 @@ import (
 	"strconv"
 	"time"
 
-	"presence-app/internal/db"
-	"presence-app/internal/metrics"
-	"presence-app/internal/middleware"
-	"presence-app/internal/models"
+	"github.com/matoy/myPresence/internal/db"
+	"github.com/matoy/myPresence/internal/metrics"
+	"github.com/matoy/myPresence/internal/middleware"
+	"github.com/matoy/myPresence/internal/models"
 )
 
 // ProjectsHandler handles all project-management pages.

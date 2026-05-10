@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"presence-app/internal/models"
+	"github.com/matoy/myPresence/internal/models"
 )
 
 // migrateProjects creates the projects schema if it doesn't exist.

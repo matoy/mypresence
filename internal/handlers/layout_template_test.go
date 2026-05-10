@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"presence-app/internal/models"
+	"github.com/matoy/myPresence/internal/models"
 )
 
 func renderLayoutForUser(t *testing.T, user *models.User, disableProjects bool) string {

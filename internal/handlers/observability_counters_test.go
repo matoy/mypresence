@@ -5,9 +5,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"presence-app/internal/metrics"
-	"presence-app/internal/middleware"
-	"presence-app/internal/models"
+	"github.com/matoy/myPresence/internal/metrics"
+	"github.com/matoy/myPresence/internal/middleware"
+	"github.com/matoy/myPresence/internal/models"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"

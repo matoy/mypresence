@@ -16,12 +16,12 @@ import (
 	"testing"
 	"time"
 
-	"presence-app/internal/config"
-	"presence-app/internal/db"
-	"presence-app/internal/handlers"
-	"presence-app/internal/i18n"
-	"presence-app/internal/middleware"
-	"presence-app/internal/models"
+	"github.com/matoy/myPresence/internal/config"
+	"github.com/matoy/myPresence/internal/db"
+	"github.com/matoy/myPresence/internal/handlers"
+	"github.com/matoy/myPresence/internal/i18n"
+	"github.com/matoy/myPresence/internal/middleware"
+	"github.com/matoy/myPresence/internal/models"
 
 	"golang.org/x/crypto/bcrypt"
 )

@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"presence-app/internal/middleware"
+	"github.com/matoy/myPresence/internal/middleware"
 )
 
 // TestGetPresencesAPI_WithMembers covers calendar.go L.255-257 (loop body when members non-empty)

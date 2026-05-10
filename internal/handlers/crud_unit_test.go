@@ -9,10 +9,10 @@ import (
 	"strings"
 	"testing"
 
-	"presence-app/internal/config"
-	"presence-app/internal/db"
-	"presence-app/internal/middleware"
-	"presence-app/internal/models"
+	"github.com/matoy/myPresence/internal/config"
+	"github.com/matoy/myPresence/internal/db"
+	"github.com/matoy/myPresence/internal/middleware"
+	"github.com/matoy/myPresence/internal/models"
 )
 
 func newCRUDTestDB(t *testing.T) *db.DB {

@@ -7,8 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"presence-app/internal/middleware"
-	"presence-app/internal/models"
+	"github.com/matoy/myPresence/internal/middleware"
+	"github.com/matoy/myPresence/internal/models"
 )
 
 // ─── floorplan.go DB error branches ──────────────────────────────────────────

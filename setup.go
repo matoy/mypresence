@@ -13,11 +13,11 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"presence-app/internal/config"
-	"presence-app/internal/db"
-	"presence-app/internal/i18n"
-	"presence-app/internal/middleware"
-	"presence-app/internal/models"
+	"github.com/matoy/myPresence/internal/config"
+	"github.com/matoy/myPresence/internal/db"
+	"github.com/matoy/myPresence/internal/i18n"
+	"github.com/matoy/myPresence/internal/middleware"
+	"github.com/matoy/myPresence/internal/models"
 )
 
 // buildTemplateFuncMap constructs the FuncMap used by all HTML templates.

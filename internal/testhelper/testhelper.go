@@ -13,9 +13,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"presence-app/internal/config"
-	"presence-app/internal/db"
-	"presence-app/internal/models"
+	"github.com/matoy/myPresence/internal/config"
+	"github.com/matoy/myPresence/internal/db"
+	"github.com/matoy/myPresence/internal/models"
 
 	"golang.org/x/crypto/bcrypt"
 )

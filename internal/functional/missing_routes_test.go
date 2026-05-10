@@ -20,7 +20,7 @@ import (
 	"strings"
 	"testing"
 
-	"presence-app/internal/models"
+	"github.com/matoy/myPresence/internal/models"
 )
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
