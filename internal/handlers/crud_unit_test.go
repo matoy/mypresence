@@ -9,10 +9,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/matoy/myPresence/internal/config"
-	"github.com/matoy/myPresence/internal/db"
-	"github.com/matoy/myPresence/internal/middleware"
-	"github.com/matoy/myPresence/internal/models"
+	"github.com/matoy/mypresence/internal/config"
+	"github.com/matoy/mypresence/internal/db"
+	"github.com/matoy/mypresence/internal/middleware"
+	"github.com/matoy/mypresence/internal/models"
 )
 
 func newCRUDTestDB(t *testing.T) *db.DB {

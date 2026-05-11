@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/matoy/myPresence/internal/config"
+	"github.com/matoy/mypresence/internal/config"
 )
 
 // -----------------------------------------------------------------------

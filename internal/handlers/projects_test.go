@@ -3,7 +3,7 @@ package handlers
 import (
 	"testing"
 
-	"github.com/matoy/myPresence/internal/models"
+	"github.com/matoy/mypresence/internal/models"
 )
 
 func TestPrevNextMonthAndYearHelpers(t *testing.T) {

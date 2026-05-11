@@ -3,7 +3,7 @@ package db
 import (
 	"testing"
 
-	"github.com/matoy/myPresence/internal/models"
+	"github.com/matoy/mypresence/internal/models"
 )
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
