@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/matoy/myPresence/internal/config"
-	"github.com/matoy/myPresence/internal/db"
-	"github.com/matoy/myPresence/internal/middleware"
+	"github.com/matoy/mypresence/internal/config"
+	"github.com/matoy/mypresence/internal/db"
+	"github.com/matoy/mypresence/internal/middleware"
 )
 
 func newResetTestDB(t *testing.T) *db.DB {

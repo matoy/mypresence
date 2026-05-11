@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/matoy/myPresence/internal/middleware"
+	"github.com/matoy/mypresence/internal/middleware"
 )
 
 // -----------------------------------------------------------------------

@@ -13,8 +13,8 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/matoy/myPresence/internal/config"
-	"github.com/matoy/myPresence/internal/models"
+	"github.com/matoy/mypresence/internal/config"
+	"github.com/matoy/mypresence/internal/models"
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"

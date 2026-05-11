@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/matoy/myPresence/internal/db"
-	"github.com/matoy/myPresence/internal/middleware"
+	"github.com/matoy/mypresence/internal/db"
+	"github.com/matoy/mypresence/internal/middleware"
 )
 
 // HolidaysHandler manages the public holidays admin page.

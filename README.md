@@ -1,17 +1,17 @@
 # Presence App
 
 <!-- Replace matoy/myPresence and matoy with actual values -->
-[![CI](https://github.com/matoy/myPresence/actions/workflows/ci.yml/badge.svg)](https://github.com/matoy/myPresence/actions/workflows/ci.yml)
-[![Release](https://github.com/matoy/myPresence/actions/workflows/release.yml/badge.svg)](https://github.com/matoy/myPresence/actions/workflows/release.yml)
+[![CI](https://github.com/matoy/mypresence/actions/workflows/ci.yml/badge.svg)](https://github.com/matoy/mypresence/actions/workflows/ci.yml)
+[![Release](https://github.com/matoy/mypresence/actions/workflows/release.yml/badge.svg)](https://github.com/matoy/mypresence/actions/workflows/release.yml)
 [![Docker Pulls](https://img.shields.io/docker/pulls/matoy/mypresence)](https://hub.docker.com/r/matoy/mypresence)
 [![Docker Image Size](https://img.shields.io/docker/image-size/matoy/mypresence/latest)](https://hub.docker.com/r/matoy/mypresence)
 [![Go Version](https://img.shields.io/badge/go-1.25-00ADD8?logo=go)](https://golang.org)
 [![SQLite](https://img.shields.io/badge/SQLite-embedded-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org)
 [![SAML 2.0](https://img.shields.io/badge/SSO-SAML%202.0-0052CC?logo=auth0&logoColor=white)](https://en.wikipedia.org/wiki/SAML_2.0)
 [![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
-[![Go Report Card](https://goreportcard.com/badge/github.com/matoy/myPresence)](https://goreportcard.com/report/github.com/matoy/myPresence)
+[![Go Report Card](https://goreportcard.com/badge/github.com/matoy/mypresence)](https://goreportcard.com/report/github.com/matoy/mypresence)
 [![codecov](https://codecov.io/gh/matoy/myPresence/graph/badge.svg)](https://codecov.io/gh/matoy/myPresence)
-[![GitHub Stars](https://img.shields.io/github/stars/matoy/myPresence?style=social)](https://github.com/matoy/myPresence/stargazers)
+[![GitHub Stars](https://img.shields.io/github/stars/matoy/myPresence?style=social)](https://github.com/matoy/mypresence/stargazers)
 
 A web application for managing employee presence and absences, built with Go and SQLite. Reactive UI using Alpine.js + Tailwind CSS, deployed via Docker.
 

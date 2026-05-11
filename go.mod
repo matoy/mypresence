@@ -1,4 +1,4 @@
-module github.com/matoy/myPresence
+module github.com/matoy/mypresence
 
 go 1.25.10
 

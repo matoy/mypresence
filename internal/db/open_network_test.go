@@ -3,7 +3,7 @@ package db
 import (
 	"testing"
 
-	"github.com/matoy/myPresence/internal/config"
+	"github.com/matoy/mypresence/internal/config"
 )
 
 // TestOpen_NetworkDriver covers db.go L.75 (openNetwork call for postgres/mysql/sqlserver drivers)

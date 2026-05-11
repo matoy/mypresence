@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/matoy/myPresence/internal/config"
-	"github.com/matoy/myPresence/internal/middleware"
-	"github.com/matoy/myPresence/internal/models"
+	"github.com/matoy/mypresence/internal/config"
+	"github.com/matoy/mypresence/internal/middleware"
+	"github.com/matoy/mypresence/internal/models"
 )
 
 // ---- AuthHandler SAML nil-SP branches ----

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/matoy/myPresence/internal/models"
+	"github.com/matoy/mypresence/internal/models"
 )
 
 // -----------------------------------------------------------------------

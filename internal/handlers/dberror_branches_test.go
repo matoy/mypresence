@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/matoy/myPresence/internal/middleware"
+	"github.com/matoy/mypresence/internal/middleware"
 )
 
 // Tests that trigger DB errors by closing the database before the handler call.
