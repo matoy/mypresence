@@ -119,6 +119,13 @@ func FilterUsersByText(users []User, q string) []User {
 	return result
 }
 
+// TeamMember is a User enriched with their departure date from a team.
+// LeftAt is nil when the member is currently active.
+type TeamMember struct {
+	User
+	LeftAt *string `json:"left_at"` // YYYY-MM-DD or nil
+}
+
 // Team represents a team of users.
 type Team struct {
 	ID        int64     `json:"id"`

@@ -879,7 +879,10 @@ function teamsAdmin(initialTeams) {
         },
 
         get filteredCount() {
-            return this.teams.filter(t => this.matchesTeam((t.Team && t.Team.name) || '', (t.Members || []).length)).length;
+            return this.teams.filter(t => {
+                const activeMemberCount = (t.Members || []).filter(m => !m.left_at).length;
+                return this.matchesTeam((t.Team && t.Team.name) || '', activeMemberCount);
+            }).length;
         },
 
         resetFilters() {
@@ -945,6 +948,24 @@ function teamsAdmin(initialTeams) {
         async removeMember(teamId, userId) {
             if (!confirm('Remove this member from the team?')) return;
             await fetch(`/admin/teams/${teamId}/members/${userId}`, { method: 'DELETE' });
+            window.location.reload();
+        },
+
+        async setLeftAt(teamId, userId, leftAt) {
+            await fetch(`/admin/teams/${teamId}/members/${userId}/left-at`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ left_at: leftAt })
+            });
+            window.location.reload();
+        },
+
+        async clearLeftAt(teamId, userId) {
+            await fetch(`/admin/teams/${teamId}/members/${userId}/left-at`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ left_at: null })
+            });
             window.location.reload();
         }
     };

@@ -94,7 +94,7 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 	myTeams, _ := h.DB.GetUserTeams(user.ID)
 	var teamViews []teamCalendarView
 	for _, team := range myTeams {
-		members, _ := h.DB.GetTeamMembers(team.ID)
+		members, _ := h.DB.GetTeamMembersAt(team.ID, startDate)
 		if len(members) == 0 {
 			continue
 		}
@@ -268,15 +268,15 @@ func (h *CalendarHandler) GetPresencesAPI(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	members, err := h.DB.GetTeamMembers(teamID)
+	startDate := fmt.Sprintf("%04d-%02d-01", year, month)
+	lastDay := time.Date(year, time.Month(month)+1, 0, 0, 0, 0, 0, time.UTC)
+	endDate := lastDay.Format("2006-01-02")
+
+	members, err := h.DB.GetTeamMembersAt(teamID, startDate)
 	if err != nil {
 		jsonError(w, "Erreur", http.StatusInternalServerError)
 		return
 	}
-
-	startDate := fmt.Sprintf("%04d-%02d-01", year, month)
-	lastDay := time.Date(year, time.Month(month)+1, 0, 0, 0, 0, 0, time.UTC)
-	endDate := lastDay.Format("2006-01-02")
 
 	userIDs := make([]int64, len(members))
 	for i, m := range members {

@@ -450,7 +450,7 @@ func TestAddColumnIfNotExists_SQLServer_ConditionalForm(t *testing.T) {
 }
 
 func TestAddColumnIfNotExists_NonSQLServer_StandardForm(t *testing.T) {
-	for _, driver := range []string{"sqlite", "mysql", "postgres"} {
+	for _, driver := range []string{"mysql", "postgres"} {
 		dl := newDialect(driver)
 		got := dl.addColumnIfNotExists("users", "disabled", "BOOLEAN DEFAULT 0")
 		if !strings.Contains(got, "ADD COLUMN IF NOT EXISTS") {
@@ -459,6 +459,20 @@ func TestAddColumnIfNotExists_NonSQLServer_StandardForm(t *testing.T) {
 		if !strings.Contains(got, "users") || !strings.Contains(got, "disabled") {
 			t.Errorf("[%s] addColumnIfNotExists missing table/column names: %q", driver, got)
 		}
+	}
+}
+
+func TestAddColumnIfNotExists_SQLite_PlainForm(t *testing.T) {
+	dl := newDialect("sqlite")
+	got := dl.addColumnIfNotExists("users", "disabled", "BOOLEAN DEFAULT 0")
+	if !strings.Contains(got, "ADD COLUMN") {
+		t.Errorf("sqlite addColumnIfNotExists = %q, want ADD COLUMN", got)
+	}
+	if strings.Contains(got, "IF NOT EXISTS") {
+		t.Errorf("sqlite addColumnIfNotExists should not use IF NOT EXISTS: %q", got)
+	}
+	if !strings.Contains(got, "users") || !strings.Contains(got, "disabled") {
+		t.Errorf("sqlite addColumnIfNotExists missing table/column names: %q", got)
 	}
 }
 

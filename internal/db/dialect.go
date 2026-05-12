@@ -289,7 +289,9 @@ func (d dialect) createTableIfNotExists(name, body string) string {
 
 // addColumnIfNotExists returns an ALTER TABLE … ADD COLUMN … statement that
 // is safe to run even when the column already exists.
-// PostgreSQL 9.6+, MariaDB 10.3+ and SQLite 3.37+ all support ADD COLUMN IF NOT EXISTS.
+// PostgreSQL 9.6+, MariaDB 10.3+ support ADD COLUMN IF NOT EXISTS.
+// SQLite supports it only in 3.37+; for portability we omit IF NOT EXISTS and
+// rely on the caller ignoring "duplicate column name" errors.
 // SQL Server has no such syntax; the statement is wrapped in a conditional.
 func (d dialect) addColumnIfNotExists(table, col, colDef string) string {
 	if d.driver == "sqlserver" {
@@ -297,6 +299,11 @@ func (d dialect) addColumnIfNotExists(table, col, colDef string) string {
 			"IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='%s' AND COLUMN_NAME='%s') ALTER TABLE %s ADD %s %s",
 			table, col, table, col, colDef,
 		)
+	}
+	if d.driver == "sqlite" {
+		// Omit IF NOT EXISTS — SQLite < 3.37 does not support it.
+		// Callers must ignore duplicate-column errors (//nolint:errcheck).
+		return fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, col, colDef)
 	}
 	return fmt.Sprintf("ALTER TABLE %s ADD COLUMN IF NOT EXISTS %s %s", table, col, colDef)
 }
