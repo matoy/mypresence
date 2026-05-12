@@ -313,6 +313,7 @@ func registerOptionalAuthRoutes(authMux *http.ServeMux, cfg *config.Config, patH
 		authMux.HandleFunc("GET /floorplan", floorplanHandler.FloorplanPage)
 		authMux.HandleFunc("GET /api/seats", floorplanHandler.SeatsAPI)
 		authMux.HandleFunc("GET /api/floorplans", floorplanHandler.ListFloorplansAPI)
+		authMux.HandleFunc("GET /api/floorplans/{id}/seats/status", floorplanHandler.ListSeatsWithStatusForDatesAPI)
 		authMux.HandleFunc("GET /api/floorplans/{id}/seats", floorplanHandler.ListSeatsForFloorplanAPI)
 		authMux.HandleFunc("POST /api/reservations", floorplanHandler.ReserveSeat)
 		authMux.HandleFunc("POST /api/reservations/bulk", floorplanHandler.BulkReserveSeats)
