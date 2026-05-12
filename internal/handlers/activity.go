@@ -26,32 +26,7 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 
 	teams, myTeamIDs := filterTeamsForUser(h.DB, currentUser, allTeams)
 
-	now := time.Now()
-	year, _ := strconv.Atoi(r.URL.Query().Get("year"))
-	month, _ := strconv.Atoi(r.URL.Query().Get("month"))
-	teamID, _ := strconv.ParseInt(r.URL.Query().Get("team"), 10, 64)
-	viewMode := r.URL.Query().Get("view") // "month" or "week"
-
-	if year == 0 {
-		year = now.Year()
-	}
-	if month == 0 {
-		month = int(now.Month())
-	}
-	if viewMode == "" {
-		viewMode = "month"
-	}
-	if teamID == 0 && len(teams) > 0 {
-		teamID = teams[0].ID
-	}
-	// Team leaders cannot request stats for teams they don't belong to
-	if myTeamIDs != nil && teamID > 0 && !myTeamIDs[teamID] {
-		if len(teams) > 0 {
-			teamID = teams[0].ID
-		} else {
-			teamID = 0
-		}
-	}
+	year, month, viewMode, teamID := normalizeActivityParams(r, time.Now(), teams, myTeamIDs)
 
 	startDate := fmt.Sprintf("%04d-%02d-01", year, month)
 	lastDay := time.Date(year, time.Month(month)+1, 0, 0, 0, 0, 0, time.UTC)
@@ -62,42 +37,13 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 		stats, _ = h.DB.GetTeamStats(teamID, startDate, endDate)
 	}
 
-	// Calculate totals (per-status and billable)
-	totalBillable := 0.0
-	totalSetDays := 0.0
-	statusTotals := make(map[int64]float64)
-	for _, s := range stats {
-		totalBillable += s.BillableDays
-		for sid, count := range s.StatusCounts {
-			statusTotals[sid] += count
-			totalSetDays += count
-		}
-	}
+	totalBillable, totalSetDays, statusTotals := computeStatusTotals(stats)
 
 	// Build daily breakdown data
 	allHolidays, _ := h.DB.ListHolidays()
 	days := getDaysInMonth(year, month)
-	// Mark holidays on days
-	for i, d := range days {
-		for _, hol := range allHolidays {
-			if hol.Date == d.Date {
-				days[i].IsHoliday = true
-				days[i].HolidayName = hol.Name
-				break
-			}
-		}
-	}
-	var members []models.User
-	presenceMap := make(map[int64]map[string]map[string]int64)
-	if teamID > 0 {
-		members = make([]models.User, len(stats))
-		userIDs := make([]int64, len(stats))
-		for i, s := range stats {
-			members[i] = s.User
-			userIDs[i] = s.User.ID
-		}
-		presenceMap, _ = h.DB.GetPresences(userIDs, startDate, endDate)
-	}
+	markHolidaysOnDays(days, allHolidays)
+	members, presenceMap := h.buildActivityMemberData(stats, teamID, startDate, endDate)
 
 	// Count working days in the month (Mon–Fri) and holidays on those days.
 	workingDays, holidayCount := computeWorkingDays(year, month, allHolidays)
@@ -294,5 +240,80 @@ func (h *ActivityHandler) computeProjectActivity(stats []models.UserStats, year,
 			projectActivityByUser[s.User.ID] = (declared / s.BillableDays) * 100.0
 		}
 	}
+	return
+}
+
+// normalizeActivityParams parses and normalizes the year, month, viewMode and teamID
+// query parameters, applying defaults and enforcing team-leader access restrictions.
+func normalizeActivityParams(r *http.Request, now time.Time, teams []models.Team, myTeamIDs map[int64]bool) (year, month int, viewMode string, teamID int64) {
+	year, _ = strconv.Atoi(r.URL.Query().Get("year"))
+	month, _ = strconv.Atoi(r.URL.Query().Get("month"))
+	teamID, _ = strconv.ParseInt(r.URL.Query().Get("team"), 10, 64)
+	viewMode = r.URL.Query().Get("view")
+	if year == 0 {
+		year = now.Year()
+	}
+	if month == 0 {
+		month = int(now.Month())
+	}
+	if viewMode == "" {
+		viewMode = "month"
+	}
+	if teamID == 0 && len(teams) > 0 {
+		teamID = teams[0].ID
+	}
+	// Team leaders cannot request stats for teams they don't belong to.
+	if myTeamIDs != nil && teamID > 0 && !myTeamIDs[teamID] {
+		if len(teams) > 0 {
+			teamID = teams[0].ID
+		} else {
+			teamID = 0
+		}
+	}
+	return
+}
+
+// computeStatusTotals aggregates billable days, total set days and per-status
+// counts from a slice of UserStats.
+func computeStatusTotals(stats []models.UserStats) (totalBillable, totalSetDays float64, statusTotals map[int64]float64) {
+	statusTotals = make(map[int64]float64)
+	for _, s := range stats {
+		totalBillable += s.BillableDays
+		for sid, count := range s.StatusCounts {
+			statusTotals[sid] += count
+			totalSetDays += count
+		}
+	}
+	return
+}
+
+// markHolidaysOnDays sets the IsHoliday and HolidayName fields on days that
+// match a holiday in the provided list.
+func markHolidaysOnDays(days []models.DayInfo, holidays []models.Holiday) {
+	for i, d := range days {
+		for _, hol := range holidays {
+			if hol.Date == d.Date {
+				days[i].IsHoliday = true
+				days[i].HolidayName = hol.Name
+				break
+			}
+		}
+	}
+}
+
+// buildActivityMemberData returns the ordered member list and presence map for
+// the given team stats. Returns nil members and an empty map when teamID is 0.
+func (h *ActivityHandler) buildActivityMemberData(stats []models.UserStats, teamID int64, startDate, endDate string) (members []models.User, presenceMap map[int64]map[string]map[string]int64) {
+	presenceMap = make(map[int64]map[string]map[string]int64)
+	if teamID == 0 {
+		return
+	}
+	members = make([]models.User, len(stats))
+	userIDs := make([]int64, len(stats))
+	for i, s := range stats {
+		members[i] = s.User
+		userIDs[i] = s.User.ID
+	}
+	presenceMap, _ = h.DB.GetPresences(userIDs, startDate, endDate)
 	return
 }
