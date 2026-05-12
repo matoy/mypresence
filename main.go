@@ -81,14 +81,7 @@ func main() {
 	floorplanHandler := &handlers.FloorplanHandler{DB: database, DataDir: cfg.DataDir, Render: renderPage}
 	settingsHandler := &handlers.SettingsHandler{DB: database, Render: renderPage}
 	resetPasswordHandler := &handlers.ResetPasswordHandler{DB: database, Config: cfg, Render: renderPage, RateLimiter: middleware.NewLoginRateLimiter()}
-	var patHandler *handlers.PATHandler
-	if !cfg.DisableAPI {
-		patHandler = &handlers.PATHandler{DB: database, Render: renderPage}
-	}
-	var projectsHandler *handlers.ProjectsHandler
-	if !cfg.DisableProjects {
-		projectsHandler = &handlers.ProjectsHandler{DB: database, Render: renderPage}
-	}
+	patHandler, projectsHandler := initOptionalHandlers(cfg, database, renderPage)
 
 	// Initialize SAML if configured
 	if cfg.SAMLEnabled {
@@ -98,35 +91,7 @@ func main() {
 		}
 	}
 
-	// Register DB gauge collector for Prometheus
-	metrics.RegisterDBCollector(func() metrics.DBStats {
-		c := database.Counts()
-		return metrics.DBStats{
-			Users:          float64(c.Users),
-			ActiveSessions: float64(c.ActiveSessions),
-			Teams:          float64(c.Teams),
-			Statuses:       float64(c.Statuses),
-			Presences:      float64(c.Presences),
-			Floorplans:     float64(c.Floorplans),
-			Seats:          float64(c.Seats),
-			Projects:       float64(c.Projects),
-			ProjectEntries: float64(c.ProjectEntries),
-		}
-	})
-
-	// Register health gauge collector for Prometheus
-	metrics.RegisterHealthCollector(func() metrics.HealthStats {
-		dbUp := 1.0
-		if err := database.Ping(); err != nil {
-			dbUp = 0
-		}
-		up := dbUp // currently the only check is DB
-		return metrics.HealthStats{
-			Up:            up,
-			UptimeSeconds: time.Since(healthHandler.StartedAt).Seconds(),
-			DBUp:          dbUp,
-		}
-	})
+	registerMetricsCollectors(database, healthHandler)
 
 	// Router
 	mux := http.NewServeMux()
@@ -135,10 +100,7 @@ func main() {
 	staticSub, _ := fs.Sub(staticFS, "web/static")
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServerFS(staticSub)))
 
-	// Serve floorplan images from data directory
-	if !cfg.DisableFloorplans {
-		mux.Handle("GET /floorplan-img/", floorplanImgHandler(cfg.DataDir))
-	}
+	registerOptionalPublicRoutes(mux, cfg, resetPasswordHandler, floorplanHandler)
 
 	// Serve logo and data files
 	mux.Handle("GET /data/", dataFileHandler(cfg.DataDir))
@@ -152,27 +114,10 @@ func main() {
 	// Language switcher (public, sets a cookie and redirects back)
 	mux.Handle("POST /set-lang", langSwitcherHandler(cfg.DefaultLang))
 
-	// API documentation (public, disabled when DISABLE_API=true)
-	if !cfg.DisableAPI {
-		mux.HandleFunc("GET /api/docs", func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-			w.Header().Set("Cache-Control", "public, max-age=3600")
-			w.Write(apiDocContent) //nolint:errcheck
-		})
-	}
-
 	// Auth routes (public)
 	mux.Handle("GET /login", middleware.OptionalAuth(database, http.HandlerFunc(authHandler.LoginPage)))
 	mux.HandleFunc("POST /login", authHandler.LocalLogin)
 	mux.Handle("POST /logout", middleware.ValidateCSRF(cfg.SecretKey)(http.HandlerFunc(authHandler.Logout)))
-
-	// Password reset routes (public, only active when SMTP is configured)
-	if cfg.SMTPURL != "" {
-		mux.HandleFunc("GET /forgot-password", resetPasswordHandler.ForgotPasswordPage)
-		mux.HandleFunc("POST /forgot-password", resetPasswordHandler.ForgotPasswordPost)
-		mux.HandleFunc("GET /reset-password", resetPasswordHandler.ResetPasswordPage)
-		mux.HandleFunc("POST /reset-password", resetPasswordHandler.ResetPasswordPost)
-	}
 
 	// SAML routes
 	mux.HandleFunc("GET /saml/metadata", authHandler.SAMLMetadata)
@@ -191,15 +136,6 @@ func main() {
 	authMux.HandleFunc("POST /api/presences/clear", calHandler.ClearPresences)
 	authMux.HandleFunc("GET /api/presences", calHandler.GetPresencesAPI)
 
-	// Personal Access Token management
-	if !cfg.DisableAPI {
-		authMux.HandleFunc("GET /settings/tokens", patHandler.PATPage)
-		authMux.HandleFunc("GET /api/tokens", patHandler.ListPATs)
-		authMux.HandleFunc("POST /api/tokens", patHandler.CreatePAT)
-		authMux.HandleFunc("DELETE /api/tokens/{id}", patHandler.RevokePAT)
-		authMux.HandleFunc("DELETE /api/admin/tokens/{id}", patHandler.AdminRevokePAT)
-	}
-
 	// Personal settings
 	authMux.HandleFunc("GET /settings/my-logs", settingsHandler.MyLogsPage)
 	authMux.HandleFunc("GET /settings/change-password", settingsHandler.ChangePasswordPage)
@@ -210,17 +146,7 @@ func main() {
 	authMux.Handle("POST /impersonate", middleware.ValidateCSRF(cfg.SecretKey)(http.HandlerFunc(settingsHandler.ImpersonatePost)))
 	authMux.Handle("POST /impersonate-exit", middleware.ValidateCSRF(cfg.SecretKey)(http.HandlerFunc(settingsHandler.ImpersonateExitPost)))
 
-	// Floorplan user routes
-	if !cfg.DisableFloorplans {
-		authMux.HandleFunc("GET /floorplan", floorplanHandler.FloorplanPage)
-		authMux.HandleFunc("GET /api/seats", floorplanHandler.SeatsAPI)
-		authMux.HandleFunc("GET /api/floorplans", floorplanHandler.ListFloorplansAPI)
-		authMux.HandleFunc("GET /api/floorplans/{id}/seats", floorplanHandler.ListSeatsForFloorplanAPI)
-		authMux.HandleFunc("POST /api/reservations", floorplanHandler.ReserveSeat)
-		authMux.HandleFunc("POST /api/reservations/bulk", floorplanHandler.BulkReserveSeats)
-		authMux.HandleFunc("DELETE /api/reservations/bulk", floorplanHandler.CancelReservationsByDates)
-		authMux.HandleFunc("DELETE /api/reservations/{id}", floorplanHandler.CancelReservation)
-	}
+	registerOptionalAuthRoutes(authMux, cfg, patHandler, floorplanHandler)
 
 	// Admin routes - each section guarded by its own role
 	teamMux := http.NewServeMux()
@@ -279,8 +205,118 @@ func main() {
 	mux.Handle("/api/users/", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(usersMux)))
 	mux.Handle("/admin/users", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(usersMux)))
 	mux.Handle("/admin/users/", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(usersMux)))
+	registerOptionalAdminRoutes(mux, authMux, cfg, database, floorplanHandler, projectsHandler)
+
+	mux.Handle("/", middleware.AuthWithOptions(database, !cfg.DisableAPI, authMux))
+
+	// Start server
+	addr := ":" + cfg.Port
+	slog.Info("server started", "app", cfg.AppName, "addr", "http://localhost"+addr, "admin", cfg.AdminUser)
+	logStartupInfo(cfg, addr)
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           middleware.SecurityHeaders(middleware.LimitRequestBody(metrics.Instrument(middleware.AccessLog(mux)))),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+	if err := srv.ListenAndServe(); err != nil {
+		slog.Error("server stopped", "error", err)
+		os.Exit(1)
+	}
+}
+
+// initOptionalHandlers creates handlers for API tokens and Projects if those features are enabled.
+func initOptionalHandlers(cfg *config.Config, database *db.DB, renderPage func(http.ResponseWriter, *http.Request, string, interface{})) (*handlers.PATHandler, *handlers.ProjectsHandler) {
+	var patHandler *handlers.PATHandler
+	if !cfg.DisableAPI {
+		patHandler = &handlers.PATHandler{DB: database, Render: renderPage}
+	}
+	var projectsHandler *handlers.ProjectsHandler
+	if !cfg.DisableProjects {
+		projectsHandler = &handlers.ProjectsHandler{DB: database, Render: renderPage}
+	}
+	return patHandler, projectsHandler
+}
+
+// registerMetricsCollectors registers the Prometheus DB and health gauge collectors.
+func registerMetricsCollectors(database *db.DB, healthHandler *handlers.HealthHandler) {
+	metrics.RegisterDBCollector(func() metrics.DBStats {
+		c := database.Counts()
+		return metrics.DBStats{
+			Users:          float64(c.Users),
+			ActiveSessions: float64(c.ActiveSessions),
+			Teams:          float64(c.Teams),
+			Statuses:       float64(c.Statuses),
+			Presences:      float64(c.Presences),
+			Floorplans:     float64(c.Floorplans),
+			Seats:          float64(c.Seats),
+			Projects:       float64(c.Projects),
+			ProjectEntries: float64(c.ProjectEntries),
+		}
+	})
+	metrics.RegisterHealthCollector(func() metrics.HealthStats {
+		dbUp := 1.0
+		if err := database.Ping(); err != nil {
+			dbUp = 0
+		}
+		up := dbUp // currently the only check is DB
+		return metrics.HealthStats{
+			Up:            up,
+			UptimeSeconds: time.Since(healthHandler.StartedAt).Seconds(),
+			DBUp:          dbUp,
+		}
+	})
+}
+
+// registerOptionalPublicRoutes registers public HTTP routes for optional features:
+// floorplan images, API documentation, and password reset.
+func registerOptionalPublicRoutes(mux *http.ServeMux, cfg *config.Config, resetPasswordHandler *handlers.ResetPasswordHandler, floorplanHandler *handlers.FloorplanHandler) {
 	if !cfg.DisableFloorplans {
-		// Floorplan admin routes
+		mux.Handle("GET /floorplan-img/", floorplanImgHandler(cfg.DataDir))
+	}
+	if !cfg.DisableAPI {
+		mux.HandleFunc("GET /api/docs", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.Header().Set("Cache-Control", "public, max-age=3600")
+			w.Write(apiDocContent) //nolint:errcheck
+		})
+	}
+	if cfg.SMTPURL != "" {
+		mux.HandleFunc("GET /forgot-password", resetPasswordHandler.ForgotPasswordPage)
+		mux.HandleFunc("POST /forgot-password", resetPasswordHandler.ForgotPasswordPost)
+		mux.HandleFunc("GET /reset-password", resetPasswordHandler.ResetPasswordPage)
+		mux.HandleFunc("POST /reset-password", resetPasswordHandler.ResetPasswordPost)
+	}
+}
+
+// registerOptionalAuthRoutes adds authenticated routes for optional features:
+// API token management and floorplan user pages.
+func registerOptionalAuthRoutes(authMux *http.ServeMux, cfg *config.Config, patHandler *handlers.PATHandler, floorplanHandler *handlers.FloorplanHandler) {
+	if !cfg.DisableAPI {
+		authMux.HandleFunc("GET /settings/tokens", patHandler.PATPage)
+		authMux.HandleFunc("GET /api/tokens", patHandler.ListPATs)
+		authMux.HandleFunc("POST /api/tokens", patHandler.CreatePAT)
+		authMux.HandleFunc("DELETE /api/tokens/{id}", patHandler.RevokePAT)
+		authMux.HandleFunc("DELETE /api/admin/tokens/{id}", patHandler.AdminRevokePAT)
+	}
+	if !cfg.DisableFloorplans {
+		authMux.HandleFunc("GET /floorplan", floorplanHandler.FloorplanPage)
+		authMux.HandleFunc("GET /api/seats", floorplanHandler.SeatsAPI)
+		authMux.HandleFunc("GET /api/floorplans", floorplanHandler.ListFloorplansAPI)
+		authMux.HandleFunc("GET /api/floorplans/{id}/seats", floorplanHandler.ListSeatsForFloorplanAPI)
+		authMux.HandleFunc("POST /api/reservations", floorplanHandler.ReserveSeat)
+		authMux.HandleFunc("POST /api/reservations/bulk", floorplanHandler.BulkReserveSeats)
+		authMux.HandleFunc("DELETE /api/reservations/bulk", floorplanHandler.CancelReservationsByDates)
+		authMux.HandleFunc("DELETE /api/reservations/{id}", floorplanHandler.CancelReservation)
+	}
+}
+
+// registerOptionalAdminRoutes adds role-gated admin routes for optional features:
+// floorplan administration and the projects feature.
+func registerOptionalAdminRoutes(mux, authMux *http.ServeMux, cfg *config.Config, database *db.DB, floorplanHandler *handlers.FloorplanHandler, projectsHandler *handlers.ProjectsHandler) {
+	if !cfg.DisableFloorplans {
 		fpAdminMux := http.NewServeMux()
 		fpAdminMux.HandleFunc("GET /admin/floorplans", floorplanHandler.AdminFloorplansPage)
 		fpAdminMux.HandleFunc("POST /admin/floorplans", floorplanHandler.CreateFloorplan)
@@ -296,16 +332,11 @@ func main() {
 		mux.Handle("/admin/seats/", middleware.Auth(database, middleware.RequireRole(models.RoleFloorplanManager)(fpAdminMux)))
 		mux.Handle("/api/admin/", middleware.Auth(database, middleware.RequireRole(models.RoleFloorplanManager)(fpAdminMux)))
 	}
-
-	// Projects feature
 	if !cfg.DisableProjects {
-		// User time-declaration page (all authenticated users)
 		authMux.HandleFunc("GET /projects", projectsHandler.ProjectsPage)
 		authMux.HandleFunc("GET /api/projects", projectsHandler.ProjectsAPI)
 		authMux.HandleFunc("GET /api/project-time", projectsHandler.ProjectTimeAPI)
 		authMux.HandleFunc("POST /api/project-time", projectsHandler.SetProjectTime)
-
-		// Projects admin (create / edit projects)
 		projAdminMux := http.NewServeMux()
 		projAdminMux.HandleFunc("GET /admin/projects", projectsHandler.AdminProjectsPage)
 		projAdminMux.HandleFunc("POST /admin/projects", projectsHandler.CreateProject)
@@ -317,36 +348,20 @@ func main() {
 		mux.Handle("/admin/projects/", middleware.Auth(database, middleware.RequireRole(models.RoleProjectsAdmin)(projAdminMux)))
 		mux.Handle("/api/admin/projects", middleware.Auth(database, middleware.RequireRole(models.RoleProjectsAdmin)(projAdminMux)))
 		mux.Handle("/api/admin/projects/", middleware.Auth(database, middleware.RequireRole(models.RoleProjectsAdmin)(projAdminMux)))
-
-		// Projects report (projects_admin, projects_viewer, team_leader)
 		projReportMux := http.NewServeMux()
 		projReportMux.HandleFunc("GET /admin/projects-report", projectsHandler.ProjectsReportPage)
 		projReportMux.HandleFunc("GET /api/projects-report", projectsHandler.ProjectsReportAPI)
 		mux.Handle("/admin/projects-report", middleware.Auth(database, middleware.RequireRole(models.RoleProjectsAdmin, models.RoleProjectsViewer, models.RoleTeamLeader)(projReportMux)))
 		mux.Handle("/api/projects-report", middleware.Auth(database, middleware.RequireRole(models.RoleProjectsAdmin, models.RoleProjectsViewer, models.RoleTeamLeader)(projReportMux)))
 	}
+}
 
-	mux.Handle("/", middleware.AuthWithOptions(database, !cfg.DisableAPI, authMux))
-
-	// Start server
-	addr := ":" + cfg.Port
-	slog.Info("server started", "app", cfg.AppName, "addr", "http://localhost"+addr, "admin", cfg.AdminUser)
+// logStartupInfo logs informational messages about enabled optional features.
+func logStartupInfo(cfg *config.Config, addr string) {
 	if cfg.SAMLEnabled {
 		slog.Info("SAML SSO enabled", "entity_id", cfg.SAMLEntityID)
 	}
 	if cfg.MetricsToken != "" {
 		slog.Info("Prometheus metrics enabled", "path", "http://localhost"+addr+"/metrics")
-	}
-	srv := &http.Server{
-		Addr:              addr,
-		Handler:           middleware.SecurityHeaders(middleware.LimitRequestBody(metrics.Instrument(middleware.AccessLog(mux)))),
-		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       120 * time.Second,
-	}
-	if err := srv.ListenAndServe(); err != nil {
-		slog.Error("server stopped", "error", err)
-		os.Exit(1)
 	}
 }
