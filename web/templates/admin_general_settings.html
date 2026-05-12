@@ -1,0 +1,80 @@
+{{define "content"}}
+{{with .Data}}
+<div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
+
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-bold text-gray-900">{{index $.T "settings.general.title"}}</h1>
+    </div>
+
+    {{if .Error}}
+    <div class="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-4 text-red-700 text-sm">
+        {{index $.T (printf "settings.general.error.%s" .Error)}}
+    </div>
+    {{end}}
+    {{if .Success}}
+    <div class="bg-green-50 border border-green-200 rounded-xl px-4 py-3 mb-4 text-green-700 text-sm">
+        {{index $.T (printf "settings.general.success.%s" .Success)}}
+    </div>
+    {{end}}
+
+    <!-- Logo card -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6"
+         x-data="{ confirmDelete: false }">
+        <h2 class="text-base font-semibold text-gray-800 mb-1">{{index $.T "settings.general.logo"}}</h2>
+        <p class="text-sm text-gray-500 mb-5">{{index $.T "settings.general.logo_hint"}}</p>
+
+        {{if .LogoExists}}
+        <!-- Current logo preview -->
+        <div class="mb-5">
+            <p class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">{{index $.T "settings.general.current_logo"}}</p>
+            <div class="inline-flex items-center justify-center bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <img src="/data/logo.png" alt="Logo" class="h-16 w-auto object-contain">
+            </div>
+        </div>
+        {{end}}
+
+        <!-- Upload form -->
+        <form method="POST" action="/admin/settings/logo" enctype="multipart/form-data" class="mb-4">
+            <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+            <div class="flex items-center gap-3">
+                <label class="flex items-center gap-2 px-4 py-2 bg-primary text-white text-sm font-medium rounded-lg cursor-pointer hover:opacity-90 transition">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                    </svg>
+                    <span>{{index $.T "settings.general.upload_logo"}}</span>
+                    <input type="file" name="logo" accept=".png,image/png" required class="sr-only"
+                           onchange="this.closest('form').submit()">
+                </label>
+                <span class="text-xs text-gray-400">PNG {{index $.T "settings.general.only"}}</span>
+            </div>
+        </form>
+
+        {{if .LogoExists}}
+        <!-- Delete logo -->
+        <div x-show="!confirmDelete">
+            <button @click="confirmDelete = true"
+                    class="text-sm text-red-500 hover:text-red-700 transition font-medium">
+                {{index $.T "settings.general.delete_logo"}}
+            </button>
+        </div>
+        <div x-show="confirmDelete" x-cloak class="flex items-center gap-3">
+            <span class="text-sm text-gray-600">{{index $.T "settings.general.delete_confirm"}}</span>
+            <button @click="
+                fetch('/admin/settings/logo', {method: 'DELETE'})
+                    .then(r => r.ok ? location.reload() : r.json().then(d => alert(d.error || 'Erreur')));
+                confirmDelete = false"
+                    class="text-xs px-3 py-1.5 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg font-medium transition">
+                {{index $.T "fp.confirm"}}
+            </button>
+            <button @click="confirmDelete = false"
+                    class="text-xs px-3 py-1.5 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-lg font-medium transition">
+                {{index $.T "admin.cancel"}}
+            </button>
+        </div>
+        {{end}}
+    </div>
+
+</div>
+{{end}}
+{{end}}

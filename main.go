@@ -80,6 +80,7 @@ func main() {
 	usersAdminHandler := &handlers.UsersAdminHandler{DB: database, Render: renderPage}
 	floorplanHandler := &handlers.FloorplanHandler{DB: database, DataDir: cfg.DataDir, Render: renderPage}
 	settingsHandler := &handlers.SettingsHandler{DB: database, Render: renderPage}
+	generalSettingsHandler := &handlers.GeneralSettingsHandler{DataDir: cfg.DataDir, Render: renderPage}
 	resetPasswordHandler := &handlers.ResetPasswordHandler{DB: database, Config: cfg, Render: renderPage, RateLimiter: middleware.NewLoginRateLimiter()}
 	patHandler, projectsHandler := initOptionalHandlers(cfg, database, renderPage)
 
@@ -205,6 +206,13 @@ func main() {
 	mux.Handle("/api/users/", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(usersMux)))
 	mux.Handle("/admin/users", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(usersMux)))
 	mux.Handle("/admin/users/", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(usersMux)))
+
+	generalSettingsMux := http.NewServeMux()
+	generalSettingsMux.HandleFunc("GET /admin/settings", generalSettingsHandler.GeneralSettingsPage)
+	generalSettingsMux.Handle("POST /admin/settings/logo", middleware.ValidateCSRF(cfg.SecretKey)(http.HandlerFunc(generalSettingsHandler.UploadLogo)))
+	generalSettingsMux.HandleFunc("DELETE /admin/settings/logo", generalSettingsHandler.DeleteLogo)
+	mux.Handle("/admin/settings", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(generalSettingsMux)))
+	mux.Handle("/admin/settings/", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(generalSettingsMux)))
 	registerOptionalAdminRoutes(mux, authMux, cfg, database, floorplanHandler, projectsHandler)
 
 	mux.Handle("/", middleware.AuthWithOptions(database, !cfg.DisableAPI, authMux))

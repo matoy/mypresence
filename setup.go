@@ -115,6 +115,7 @@ func loadTemplates(funcMap template.FuncMap) map[string]*template.Template {
 		"admin_holidays", "admin_users", "admin_user_logs", "floorplan", "admin_floorplans",
 		"pat", "settings_change_password", "forgot_password", "reset_password",
 		"impersonate", "projects", "admin_projects", "admin_projects_report",
+		"admin_general_settings",
 	}
 	templates := make(map[string]*template.Template)
 	for _, page := range pages {
