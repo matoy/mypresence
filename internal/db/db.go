@@ -2131,7 +2131,7 @@ WHERE s.floorplan_id = ? AND sr.date IN (`+strings.Join(placeholders, ",")+`)
 		if err := rows.Scan(&seatID, &uid, &h); err != nil {
 			return nil, err
 		}
-		if !(h == "full" || half == "full" || h == half) {
+		if h != "full" && half != "full" && h != half {
 			continue
 		}
 		if statusMap[seatID] == nil {
