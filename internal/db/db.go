@@ -371,6 +371,7 @@ created_at %s DEFAULT CURRENT_TIMESTAMP
 		dl.createTableIfNotExists("user_teams", `
 user_id BIGINT NOT NULL,
 team_id BIGINT NOT NULL,
+left_at VARCHAR(10) DEFAULT NULL,
 PRIMARY KEY (user_id, team_id),
 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
 FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
@@ -417,6 +418,7 @@ FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	d.core.Exec(`UPDATE users SET role = REPLACE(role, 'stats_viewer', 'activity_viewer') WHERE role LIKE '%stats_viewer%'`)                  //nolint:errcheck
 	d.core.Exec(`UPDATE users SET role = REPLACE(role, 'cra_viewer', 'activity_viewer') WHERE role LIKE '%cra_viewer%'`)                      //nolint:errcheck
 	d.core.Exec(dl.rebind(dl.modifyColumnType("users", "role", dl.varcharType(128), "VARCHAR(64)")))                                          //nolint:errcheck
+	d.core.Exec(dl.rebind(dl.addColumnIfNotExists("user_teams", "left_at", dl.varcharType(10)+" DEFAULT NULL")))                              //nolint:errcheck
 	return nil
 }
 
@@ -1190,12 +1192,13 @@ func (d *DB) DeleteTeam(id int64) error {
 	return err
 }
 
+// GetTeamMembers returns currently active members of a team (left_at IS NULL).
 func (d *DB) GetTeamMembers(teamID int64) ([]models.User, error) {
 	rows, err := d.core.Query(`
 SELECT u.id, u.email, u.name, u.role, COALESCE(u.password_hash,''), u.disabled, u.created_at
 FROM users u
 JOIN user_teams ut ON u.id = ut.user_id
-WHERE ut.team_id = ?
+WHERE ut.team_id = ? AND ut.left_at IS NULL
 ORDER BY u.name
 `, teamID)
 	if err != nil {
@@ -1215,12 +1218,74 @@ ORDER BY u.name
 	return users, rows.Err()
 }
 
+// GetAllTeamMembers returns all members of a team (active and departed), active first.
+func (d *DB) GetAllTeamMembers(teamID int64) ([]models.TeamMember, error) {
+	rows, err := d.core.Query(`
+SELECT u.id, u.email, u.name, u.role, COALESCE(u.password_hash,''), u.disabled, u.created_at, ut.left_at
+FROM users u
+JOIN user_teams ut ON u.id = ut.user_id
+WHERE ut.team_id = ?
+ORDER BY CASE WHEN ut.left_at IS NULL THEN 0 ELSE 1 END, u.name
+`, teamID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() //nolint:errcheck
+
+	var members []models.TeamMember
+	for rows.Next() {
+		var m models.TeamMember
+		if err := rows.Scan(&m.ID, &m.Email, &m.Name, &m.Roles, &m.PasswordHash, &m.Disabled, &m.CreatedAt, &m.LeftAt); err != nil {
+			return nil, err
+		}
+		m.IsLocal = m.PasswordHash != ""
+		members = append(members, m)
+	}
+	return members, rows.Err()
+}
+
+// GetTeamMembersAt returns members who were active at any point from startDate onwards
+// (left_at IS NULL, meaning still active, or left_at >= startDate, meaning they left during or after the period).
+func (d *DB) GetTeamMembersAt(teamID int64, startDate string) ([]models.User, error) {
+	rows, err := d.core.Query(`
+SELECT u.id, u.email, u.name, u.role, COALESCE(u.password_hash,''), u.disabled, u.created_at
+FROM users u
+JOIN user_teams ut ON u.id = ut.user_id
+WHERE ut.team_id = ? AND (ut.left_at IS NULL OR ut.left_at >= ?)
+ORDER BY u.name
+`, teamID, startDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() //nolint:errcheck
+
+	var users []models.User
+	for rows.Next() {
+		var u models.User
+		if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt); err != nil {
+			return nil, err
+		}
+		u.IsLocal = u.PasswordHash != ""
+		users = append(users, u)
+	}
+	return users, rows.Err()
+}
+
+// SetTeamMemberLeftAt sets or clears the departure date for a team member.
+// Pass nil to reinstate (clear left_at).
+func (d *DB) SetTeamMemberLeftAt(teamID, userID int64, leftAt *string) error {
+	_, err := d.core.Exec("UPDATE user_teams SET left_at = ? WHERE team_id = ? AND user_id = ?", leftAt, teamID, userID)
+	return err
+}
+
 func (d *DB) AddTeamMember(teamID, userID int64) error {
-	_, err := d.core.Exec(d.dialect.rebind(d.dialect.insertOrIgnore(
+	d.core.Exec(d.dialect.rebind(d.dialect.insertOrIgnore( //nolint:errcheck
 		"user_teams",
 		[]string{"team_id", "user_id"},
 		"?, ?",
 	)), teamID, userID)
+	// Reset departure date in case the member is being re-added after leaving.
+	_, err := d.core.Exec("UPDATE user_teams SET left_at = NULL WHERE team_id = ? AND user_id = ?", teamID, userID)
 	return err
 }
 
@@ -1234,7 +1299,7 @@ func (d *DB) GetUserTeams(userID int64) ([]models.Team, error) {
 SELECT t.id, t.name, t.created_at
 FROM teams t
 JOIN user_teams ut ON t.id = ut.team_id
-WHERE ut.user_id = ?
+WHERE ut.user_id = ? AND ut.left_at IS NULL
 ORDER BY t.name
 `, userID)
 	if err != nil {
@@ -1454,7 +1519,7 @@ func (d *DB) ClearPresences(userID int64, dates []string, half string) error {
 // --- Stats ---
 
 func (d *DB) GetTeamStats(teamID int64, startDate, endDate string) ([]models.UserStats, error) {
-	members, err := d.GetTeamMembers(teamID)
+	members, err := d.GetTeamMembersAt(teamID, startDate)
 	if err != nil {
 		return nil, err
 	}

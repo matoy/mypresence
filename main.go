@@ -158,6 +158,7 @@ func main() {
 	teamMux.HandleFunc("DELETE /admin/teams/{id}", adminHandler.DeleteTeam)
 	teamMux.HandleFunc("POST /admin/teams/{id}/members", adminHandler.AddTeamMember)
 	teamMux.HandleFunc("DELETE /admin/teams/{id}/members/{userId}", adminHandler.RemoveTeamMember)
+	teamMux.HandleFunc("PATCH /admin/teams/{id}/members/{userId}/left-at", adminHandler.SetTeamMemberLeftAt)
 
 	statusMux := http.NewServeMux()
 	statusMux.HandleFunc("GET /admin/statuses", adminHandler.StatusesPage)

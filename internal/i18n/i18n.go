@@ -239,6 +239,10 @@ var en = map[string]string{
 	"teams.no_users":       "No users found",
 	"teams.add_member":     "Type a name or email…",
 	"teams.delete_confirm": "Delete this team?",
+	"teams.left_at":        "Left on",
+	"teams.set_left_at":    "Record departure",
+	"teams.clear_left_at":  "Reinstate",
+	"teams.member_left":    "Left the team",
 
 	// Statuses
 	"statuses.title":            "🏷️ Statuses",
@@ -626,6 +630,10 @@ var fr = map[string]string{
 	"teams.no_users":       "Aucun utilisateur trouvé",
 	"teams.add_member":     "Tapez un nom ou email…",
 	"teams.delete_confirm": "Supprimer cette équipe ?",
+	"teams.left_at":        "Parti le",
+	"teams.set_left_at":    "Enregistrer le départ",
+	"teams.clear_left_at":  "Réintégrer",
+	"teams.member_left":    "A quitté l'équipe",
 
 	"statuses.title":            "🏷️ Statuts",
 	"statuses.add":              "Ajouter un statut",
@@ -1006,6 +1014,10 @@ var de = map[string]string{
 	"teams.no_users":       "Keine Benutzer gefunden",
 	"teams.add_member":     "Name oder E-Mail eingeben…",
 	"teams.delete_confirm": "Dieses Team löschen?",
+	"teams.left_at":        "Ausgetreten am",
+	"teams.set_left_at":    "Abgang erfassen",
+	"teams.clear_left_at":  "Wiedereingliedern",
+	"teams.member_left":    "Hat das Team verlassen",
 
 	"statuses.title":            "🏷️ Status",
 	"statuses.add":              "Status hinzufügen",
@@ -1380,6 +1392,10 @@ var es = map[string]string{
 	"teams.no_users":       "No se encontraron usuarios",
 	"teams.add_member":     "Escriba un nombre o email…",
 	"teams.delete_confirm": "¿Eliminar este equipo?",
+	"teams.left_at":        "Salida el",
+	"teams.set_left_at":    "Registrar salida",
+	"teams.clear_left_at":  "Reintegrar",
+	"teams.member_left":    "Abandonó el equipo",
 
 	"statuses.title":            "🏷️ Estados",
 	"statuses.add":              "Agregar un estado",
@@ -1758,6 +1774,10 @@ var it = map[string]string{
 	"teams.no_users":       "Nessun utente trovato",
 	"teams.add_member":     "Scrivi un nome o email…",
 	"teams.delete_confirm": "Eliminare questo team?",
+	"teams.left_at":        "Uscita il",
+	"teams.set_left_at":    "Registra uscita",
+	"teams.clear_left_at":  "Reintegra",
+	"teams.member_left":    "Ha lasciato il team",
 
 	// Statuses
 	"statuses.title":            "🏷️ Stati",

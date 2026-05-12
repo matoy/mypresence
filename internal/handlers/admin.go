@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/matoy/mypresence/internal/db"
 	"github.com/matoy/mypresence/internal/metrics"
@@ -40,7 +41,7 @@ func (h *AdminHandler) TeamsPage(w http.ResponseWriter, r *http.Request) {
 
 	type TeamWithMembers struct {
 		Team    models.Team
-		Members []models.User
+		Members []models.TeamMember
 		CanEdit bool
 	}
 
@@ -49,7 +50,7 @@ func (h *AdminHandler) TeamsPage(w http.ResponseWriter, r *http.Request) {
 		if isTeamLeader && !myTeamIDs[t.ID] {
 			continue
 		}
-		members, _ := h.DB.GetTeamMembers(t.ID)
+		members, _ := h.DB.GetAllTeamMembers(t.ID)
 		canEdit := canManageTeams || myTeamIDs[t.ID]
 		teamsList = append(teamsList, TeamWithMembers{Team: t, Members: members, CanEdit: canEdit})
 	}
@@ -195,7 +196,7 @@ func (h *AdminHandler) RemoveTeamMember(w http.ResponseWriter, r *http.Request) 
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
-// isUserInTeam checks whether a user is a member of the given team.
+// isUserInTeam checks whether a user is an active member of the given team.
 func (h *AdminHandler) isUserInTeam(userID, teamID int64) bool {
 	myTeams, _ := h.DB.GetUserTeams(userID)
 	for _, t := range myTeams {
@@ -204,6 +205,61 @@ func (h *AdminHandler) isUserInTeam(userID, teamID int64) bool {
 		}
 	}
 	return false
+}
+
+// SetTeamMemberLeftAt sets or clears the departure date for a team member.
+func (h *AdminHandler) SetTeamMemberLeftAt(w http.ResponseWriter, r *http.Request) {
+	teamID, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	userID, _ := strconv.ParseInt(r.PathValue("userId"), 10, 64)
+	currentUser := middleware.GetUser(r)
+
+	canManageTeams := currentUser != nil && currentUser.HasAnyRole(models.RoleTeamManager, models.RoleGlobal)
+	if !canManageTeams {
+		if currentUser == nil || !currentUser.HasRole(models.RoleTeamLeader) || !h.isUserInTeam(currentUser.ID, teamID) {
+			metrics.AdminOpsTotal.WithLabelValues("team", "set_left_at", "failure").Inc()
+			jsonError(w, "Access denied", http.StatusForbidden)
+			return
+		}
+	}
+
+	var req struct {
+		LeftAt *string `json:"left_at"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		metrics.AdminOpsTotal.WithLabelValues("team", "set_left_at", "failure").Inc()
+		jsonError(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+	if req.LeftAt != nil {
+		if _, err := time.Parse("2006-01-02", *req.LeftAt); err != nil {
+			metrics.AdminOpsTotal.WithLabelValues("team", "set_left_at", "failure").Inc()
+			jsonError(w, "Invalid date format (YYYY-MM-DD expected)", http.StatusBadRequest)
+			return
+		}
+	}
+
+	if err := h.DB.SetTeamMemberLeftAt(teamID, userID, req.LeftAt); err != nil {
+		metrics.AdminOpsTotal.WithLabelValues("team", "set_left_at", "failure").Inc()
+		jsonError(w, "Erreur", http.StatusInternalServerError)
+		return
+	}
+
+	memberName := strconv.FormatInt(userID, 10)
+	if u, _ := h.DB.GetUserByID(userID); u != nil {
+		memberName = u.Name
+	}
+	action := "clear_left_at"
+	details := memberName
+	if req.LeftAt != nil {
+		action = "set_left_at"
+		details = memberName + " left_at=" + *req.LeftAt
+	}
+	if currentUser != nil {
+		h.DB.LogAdminAction(currentUser.ID, "team", teamID, action, details)
+		slog.Info("admin.team."+action, "actor", currentUser.Email, "team_id", teamID, "member", memberName)
+	}
+	metrics.AdminOpsTotal.WithLabelValues("team", "set_left_at", "success").Inc()
+	jsonOK(w, map[string]string{"status": "ok"})
 }
 
 // --- Status management ---

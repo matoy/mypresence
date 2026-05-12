@@ -42,9 +42,11 @@
 
     <!-- Teams List -->
     {{range $teamItem := .Teams}}
+    {{$activeCount := 0}}
+    {{range .Members}}{{if not .LeftAt}}{{$activeCount = add $activeCount 1}}{{end}}{{end}}
     <div class="bg-white rounded-xl shadow-md p-6 mb-4"
          x-data="{ editName: false, showAddMember: false, memberSearch: '', memberIds: [{{range $i, $m := .Members}}{{if $i}},{{end}}{{$m.ID}}{{end}}] }"
-         x-show="matchesTeam({{json .Team.Name}}, {{len .Members}})"
+         x-show="matchesTeam({{json .Team.Name}}, {{$activeCount}})"
          x-cloak>
         <div class="flex items-center justify-between mb-4">
             <div class="flex items-center gap-3">
@@ -117,25 +119,55 @@
         <div class="space-y-2">
             {{if .Members}}
             {{range .Members}}
-            <div class="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg">
+            <div class="flex items-center justify-between py-2 px-3 {{if .LeftAt}}bg-gray-100{{else}}bg-gray-50{{end}} rounded-lg {{if .LeftAt}}opacity-70{{end}}">
                 <div class="flex items-center gap-2">
-                    <div class="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">
+                    <div class="h-8 w-8 rounded-full {{if .LeftAt}}bg-gray-300{{else}}bg-primary/20{{end}} flex items-center justify-center text-xs font-bold {{if .LeftAt}}text-gray-500{{else}}text-primary{{end}}">
                         {{slice .Name 0 1}}
                     </div>
                     <div>
-                        <span class="text-sm font-medium text-gray-800">{{.Name}}</span>
+                        <span class="text-sm font-medium {{if .LeftAt}}text-gray-400 line-through{{else}}text-gray-800{{end}}">{{.Name}}</span>
                         <span class="text-xs text-gray-500 ml-2">{{.Email}}</span>
+                        {{if .LeftAt}}
+                        <span class="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full ml-2">
+                            {{index $.T "teams.left_at"}} {{.LeftAt}}
+                        </span>
+                        {{end}}
                     </div>
                     {{if .HasRole "global"}}
                     <span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">Global</span>
                     {{end}}
                 </div>
-                <button @click="removeMember({{$teamItem.Team.ID}}, {{.ID}})"
-                        class="text-red-400 hover:text-red-600 transition p-1 {{if not $teamItem.CanEdit}}hidden{{end}}" title="Remove">
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
-                </button>
+                {{if $teamItem.CanEdit}}
+                <div class="flex items-center gap-1">
+                    {{if .LeftAt}}
+                    <button @click="clearLeftAt({{$teamItem.Team.ID}}, {{.ID}})"
+                            class="text-xs px-2 py-1 bg-green-100 hover:bg-green-200 text-green-700 rounded transition"
+                            title="{{index $.T "teams.clear_left_at"}}">
+                        ↩ {{index $.T "teams.clear_left_at"}}
+                    </button>
+                    {{else}}
+                    <div x-data="{ showDep: false }" class="flex items-center gap-1">
+                        <button @click="showDep = !showDep"
+                                class="text-gray-400 hover:text-orange-500 transition p-1"
+                                :title="_t['teams.set_left_at']">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                            </svg>
+                        </button>
+                        <input x-show="showDep" x-transition type="date"
+                               class="text-xs border border-orange-300 rounded px-2 py-1 text-gray-600 focus:ring-1 focus:ring-orange-400"
+                               @change="if($el.value) setLeftAt({{$teamItem.Team.ID}}, {{.ID}}, $el.value)"
+                               @keydown.escape="showDep = false">
+                    </div>
+                    <button @click="removeMember({{$teamItem.Team.ID}}, {{.ID}})"
+                            class="text-red-400 hover:text-red-600 transition p-1" title="Remove">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                    {{end}}
+                </div>
+                {{end}}
             </div>
             {{end}}
             {{else}}
