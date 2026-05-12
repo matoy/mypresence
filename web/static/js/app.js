@@ -73,6 +73,7 @@ function calendarApp(statuses, currentUserId, isAdmin, presences) {
         showSeatModal: false,
         seatFloorplans: [],
         seatFloorplanID: 0,
+        seatFloorplanImage: '',
         seatModalSeats: [],
         seatModalLoading: false,
         selectedSeatID: null,
@@ -365,6 +366,7 @@ function calendarApp(statuses, currentUserId, isAdmin, presences) {
             this.selectedSeatID = null;
             this.seatModalSeats = [];
             this.seatFloorplanID = 0;
+            this.seatFloorplanImage = '';
             try {
                 const resp = await fetch('/api/floorplans');
                 if (resp.ok) {
@@ -387,8 +389,14 @@ function calendarApp(statuses, currentUserId, isAdmin, presences) {
             if (!this.seatFloorplanID) return;
             this.seatModalLoading = true;
             this.selectedSeatID = null;
+            this.seatFloorplanImage = '';
             try {
-                const resp = await fetch(`/api/floorplans/${this.seatFloorplanID}/seats`);
+                const fp = this.seatFloorplans.find(f => f.id === this.seatFloorplanID);
+                if (fp) this.seatFloorplanImage = fp.image_path || '';
+                const dates = this.getSeatBookingDates();
+                const params = new URLSearchParams({ half: this.pendingHalf || 'full' });
+                if (dates.length > 0) params.set('dates', dates.join(','));
+                const resp = await fetch(`/api/floorplans/${this.seatFloorplanID}/seats/status?${params}`);
                 if (resp.ok) {
                     this.seatModalSeats = await resp.json();
                 }
@@ -524,6 +532,331 @@ function calendarApp(statuses, currentUserId, isAdmin, presences) {
                 if (e.key === 'Escape') {
                     this.cancelSelect();
                 }
+            });
+        }
+    };
+}
+
+// ============================================================
+// Team Calendar Component (Alpine.js)
+// Handles a multi-row presence table for team members.
+// canEdit=true for team leaders / managers / global admins.
+// allPresences: { userId: { date: { half: statusId } } }
+// ============================================================
+function teamCalendarApp(statuses, currentUserId, canEdit, allPresences) {
+    return {
+        statuses: statuses || [],
+        currentUserId,
+        canEdit,
+        allPresences: allPresences || {},
+
+        selecting: false,
+        selectedUserId: null,
+        selectedDates: [],
+        startDate: null,
+        showPicker: false,
+        pickerX: 0,
+        pickerY: 0,
+        _selectButton: 0,
+        _contextMenuViaMouseup: false,
+        showContextMenu: false,
+        contextMenuX: 0,
+        contextMenuY: 0,
+        contextMenuDate: null,
+        contextMenuUserId: null,
+        pendingHalf: 'full',
+        longPressTimer: null,
+        contextMenuForSelection: false,
+
+        // Seat reservation modal state
+        showSeatModal: false,
+        seatFloorplans: [],
+        seatFloorplanID: 0,
+        seatFloorplanImage: '',
+        seatModalSeats: [],
+        seatModalLoading: false,
+        selectedSeatID: null,
+
+        isCellBlocked(userId, date) {
+            // Scope query to this Alpine root element to avoid cross-table conflicts.
+            const root = this.$el || document;
+            const cell = root.querySelector(`[data-user-id="${userId}"][data-date="${date}"]`);
+            if (!cell) return false;
+            if (cell.dataset.weekend === 'true') return true;
+            if (cell.dataset.holiday === 'true' && cell.dataset.holidayAllowImputed !== 'true') return true;
+            return false;
+        },
+
+        startSelect(userId, date, event) {
+            if (!this.canEdit) return;
+            if (this.isCellBlocked(userId, date)) return;
+
+            this._selectButton = event ? event.button : 0;
+            const isTouch = event && event.type === 'touchstart';
+
+            if (this.longPressTimer) clearTimeout(this.longPressTimer);
+            this.longPressTimer = isTouch ? setTimeout(() => {
+                this.longPressTimer = null;
+                this.selecting = false;
+                this.selectedDates = [];
+                if (navigator.vibrate) navigator.vibrate(30);
+                const root = this.$el || document;
+                const cell = root.querySelector(`[data-user-id="${userId}"][data-date="${date}"]`);
+                const rect = cell ? cell.getBoundingClientRect() : { left: 16, bottom: 120 };
+                this.openContextMenu(userId, date, {
+                    clientX: Math.min(rect.left, window.innerWidth - 220),
+                    clientY: Math.min(rect.bottom + 4, window.innerHeight - 230)
+                });
+            }, 600) : null;
+
+            this.selecting = true;
+            this.selectedUserId = userId;
+            this.selectedDates = [date];
+            this.startDate = date;
+            this.showPicker = false;
+        },
+
+        extendSelect(userId, date) {
+            if (!this.selecting || userId !== this.selectedUserId) return;
+            if (this.isCellBlocked(userId, date)) return;
+            if (date !== this.startDate && this.longPressTimer) {
+                clearTimeout(this.longPressTimer);
+                this.longPressTimer = null;
+            }
+            const start = new Date(this.startDate);
+            const end = new Date(date);
+            const minDate = start < end ? start : end;
+            const maxDate = start < end ? end : start;
+            this.selectedDates = [];
+            const current = new Date(minDate);
+            while (current <= maxDate) {
+                const d = current.toISOString().split('T')[0];
+                if (!this.isCellBlocked(userId, d)) this.selectedDates.push(d);
+                current.setDate(current.getDate() + 1);
+            }
+        },
+
+        handleTouchMove(event) {
+            if (this.longPressTimer) { clearTimeout(this.longPressTimer); this.longPressTimer = null; }
+            if (!this.selecting) return;
+            const touch = event.touches[0];
+            const element = document.elementFromPoint(touch.clientX, touch.clientY);
+            if (element) {
+                const cell = element.closest('[data-user-id][data-date]');
+                if (cell) this.extendSelect(parseInt(cell.dataset.userId), cell.dataset.date);
+            }
+        },
+
+        isSelected(userId, date) {
+            return this.selecting && this.selectedUserId === userId && this.selectedDates.includes(date);
+        },
+
+        async applyStatus(statusId) {
+            if (!this.selectedDates.length || !this.selectedUserId) return;
+            try {
+                const resp = await fetch('/api/presences', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: this.selectedUserId, dates: this.selectedDates, status_id: statusId, half: this.pendingHalf })
+                });
+                if (resp.ok) { window.location.reload(); }
+                else { const d = await resp.json(); alert(d.error || 'Erreur'); }
+            } catch (e) { alert('Erreur de connexion'); }
+            this.pendingHalf = 'full';
+            this.cancelSelect();
+        },
+
+        async clearStatus() {
+            if (!this.selectedDates.length || !this.selectedUserId) return;
+            try {
+                const resp = await fetch('/api/presences/clear', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: this.selectedUserId, dates: this.selectedDates, half: '' })
+                });
+                if (resp.ok) window.location.reload();
+            } catch (e) { alert('Erreur de connexion'); }
+            this.pendingHalf = 'full';
+            this.cancelSelect();
+        },
+
+        // Returns dates for seat booking: active selection or just the right-clicked date.
+        getSeatBookingDates() {
+            if (this.selectedDates.length > 0) return this.selectedDates;
+            return this.contextMenuDate ? [this.contextMenuDate] : [];
+        },
+
+        // Returns the target user ID for seat operations.
+        getSeatBookingUserId() {
+            return this.contextMenuUserId || this.selectedUserId;
+        },
+
+        async openSeatModal() {
+            this.showContextMenu = false;
+            this.showSeatModal = true;
+            this.seatModalLoading = true;
+            this.selectedSeatID = null;
+            this.seatModalSeats = [];
+            this.seatFloorplanID = 0;
+            this.seatFloorplanImage = '';
+            try {
+                const resp = await fetch('/api/floorplans');
+                if (resp.ok) {
+                    this.seatFloorplans = await resp.json();
+                    if (this.seatFloorplans.length > 0) {
+                        this.seatFloorplanID = this.seatFloorplans[0].id;
+                        await this.loadSeatModalSeats();
+                    }
+                }
+            } catch (e) { /* ignore */ } finally {
+                this.seatModalLoading = false;
+            }
+        },
+
+        async loadSeatModalSeats() {
+            if (!this.seatFloorplanID) return;
+            this.seatModalLoading = true;
+            this.selectedSeatID = null;
+            this.seatFloorplanImage = '';
+            try {
+                const fp = this.seatFloorplans.find(f => f.id === this.seatFloorplanID);
+                if (fp) this.seatFloorplanImage = fp.image_path || '';
+                const dates = this.getSeatBookingDates();
+                const params = new URLSearchParams({ half: this.pendingHalf || 'full' });
+                if (dates.length > 0) params.set('dates', dates.join(','));
+                const resp = await fetch(`/api/floorplans/${this.seatFloorplanID}/seats/status?${params}`);
+                if (resp.ok) this.seatModalSeats = await resp.json();
+            } finally {
+                this.seatModalLoading = false;
+            }
+        },
+
+        async bookSeatsForSelection() {
+            if (!this.selectedSeatID) return;
+            const dates = this.getSeatBookingDates();
+            const userId = this.getSeatBookingUserId();
+            if (!dates.length || !userId) return;
+            this.showSeatModal = false;
+            try {
+                await fetch('/api/reservations/bulk', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ seat_id: this.selectedSeatID, dates, half: this.pendingHalf, user_id: userId })
+                });
+            } catch (e) { /* ignore */ }
+            window.location.reload();
+        },
+
+        async cancelSeatsForSelection() {
+            this.showContextMenu = false;
+            const dates = this.getSeatBookingDates();
+            const userId = this.getSeatBookingUserId();
+            if (!dates.length || !userId) return;
+            try {
+                await fetch('/api/reservations/bulk', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ dates, user_id: userId })
+                });
+            } catch (e) { /* ignore */ }
+            window.location.reload();
+        },
+
+        async clearDay() {
+            this.showContextMenu = false;
+            if (!this.contextMenuUserId || !this.contextMenuDate) return;
+            try {
+                const resp = await fetch('/api/presences/clear', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: this.contextMenuUserId, dates: [this.contextMenuDate], half: '' })
+                });
+                if (resp.ok) { window.location.reload(); }
+                else { const d = await resp.json(); alert(d.error || 'Erreur'); }
+            } catch (e) { alert('Erreur de connexion'); }
+        },
+
+        cancelSelect() {
+            this.selecting = false;
+            this.selectedDates = [];
+            this.selectedUserId = null;
+            this.showPicker = false;
+            this.showContextMenu = false;
+            this.pendingHalf = 'full';
+            this.contextMenuForSelection = false;
+        },
+
+        openContextMenu(userId, date, event) {
+            if (!this.canEdit) return;
+            if (this.isCellBlocked(userId, date)) return;
+            if (this.selecting) return;
+            if (this._contextMenuViaMouseup) { this._contextMenuViaMouseup = false; return; }
+            this.contextMenuForSelection = false;
+            this.showContextMenu = true;
+            this.showPicker = false;
+            this.contextMenuDate = date;
+            this.contextMenuUserId = userId;
+            this.contextMenuX = Math.min(event.clientX + 5, window.innerWidth - 220);
+            this.contextMenuY = Math.min(event.clientY + 5, window.innerHeight - 210);
+        },
+
+        selectHalf(half) {
+            this.pendingHalf = half;
+            this.showContextMenu = false;
+            this.selectedUserId = this.contextMenuUserId;
+            if (!this.contextMenuForSelection || this.selectedDates.length === 0) {
+                this.selectedDates = [this.contextMenuDate];
+            }
+            this.contextMenuForSelection = false;
+            this.pickerX = this.contextMenuX;
+            this.pickerY = this.contextMenuY;
+            this.showPicker = true;
+        },
+
+        init() {
+            document.addEventListener('mouseup', (e) => {
+                if (this.longPressTimer) { clearTimeout(this.longPressTimer); this.longPressTimer = null; }
+                if (this.selecting && this.selectedDates.length > 0) {
+                    this.selecting = false;
+                    if (e.button === 2) {
+                        this._contextMenuViaMouseup = true;
+                        this.contextMenuForSelection = this.selectedDates.length > 1;
+                        this.contextMenuUserId = this.selectedUserId;
+                        this.contextMenuDate = this.selectedDates[this.selectedDates.length - 1];
+                        this.contextMenuX = Math.min(e.clientX + 5, window.innerWidth - 220);
+                        this.contextMenuY = Math.min(e.clientY + 5, window.innerHeight - 210);
+                        this.showContextMenu = true;
+                        this.showPicker = false;
+                    } else {
+                        this.showPicker = true;
+                        this.pickerX = Math.min(e.clientX + 10, window.innerWidth - 280);
+                        this.pickerY = Math.min(e.clientY + 10, window.innerHeight - 400);
+                    }
+                }
+            });
+            document.addEventListener('touchend', (e) => {
+                if (this.longPressTimer) { clearTimeout(this.longPressTimer); this.longPressTimer = null; }
+                if (this.selecting && this.selectedDates.length > 0) {
+                    const touch = e.changedTouches[0];
+                    const x = Math.min(touch.clientX + 10, window.innerWidth - 220);
+                    const y = Math.max(10, Math.min(touch.clientY - 10, window.innerHeight - 300));
+                    if (this.selectedDates.length > 1) {
+                        this.contextMenuForSelection = true;
+                        this.contextMenuUserId = this.selectedUserId;
+                        this.contextMenuDate = this.selectedDates[this.selectedDates.length - 1];
+                        this.contextMenuX = x; this.contextMenuY = y;
+                        this.showContextMenu = true; this.showPicker = false;
+                    } else {
+                        this.showPicker = true;
+                        this.pickerX = Math.min(touch.clientX + 10, window.innerWidth - 280);
+                        this.pickerY = Math.min(touch.clientY - 200, window.innerHeight - 400);
+                        if (this.pickerY < 10) this.pickerY = 10;
+                    }
+                    this.selecting = false;
+                }
+            });
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') this.cancelSelect();
             });
         }
     };

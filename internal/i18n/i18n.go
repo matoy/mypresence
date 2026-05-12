@@ -123,6 +123,7 @@ var en = map[string]string{
 
 	// Calendar
 	"cal.not_set":          "Not set",
+	"cal.person":           "Person",
 	"cal.clear":            "Clear",
 	"cal.cancel":           "Cancel",
 	"cal.days":             "day(s)",
@@ -510,6 +511,7 @@ var fr = map[string]string{
 	"cal.day.6": "Sam",
 
 	"cal.not_set":          "Non défini",
+	"cal.person":           "Personne",
 	"cal.clear":            "Effacer",
 	"cal.cancel":           "Annuler",
 	"cal.days":             "jour(s)",
@@ -889,6 +891,7 @@ var de = map[string]string{
 	"cal.day.6": "Sa",
 
 	"cal.not_set":          "Nicht gesetzt",
+	"cal.person":           "Person",
 	"cal.clear":            "Löschen",
 	"cal.cancel":           "Abbrechen",
 	"cal.days":             "Tag(e)",
@@ -1268,6 +1271,7 @@ var es = map[string]string{
 	"cal.day.6": "Sáb",
 
 	"cal.not_set":          "Sin definir",
+	"cal.person":           "Persona",
 	"cal.clear":            "Borrar",
 	"cal.cancel":           "Cancelar",
 	"cal.days":             "día(s)",
@@ -1644,6 +1648,7 @@ var it = map[string]string{
 
 	// Calendar
 	"cal.not_set":          "Non definito",
+	"cal.person":           "Persona",
 	"cal.clear":            "Cancella",
 	"cal.cancel":           "Annulla",
 	"cal.days":             "giorno/i",

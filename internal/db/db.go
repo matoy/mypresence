@@ -2025,6 +2025,75 @@ WHERE s.floorplan_id = ? AND sr.date = ?
 	return result, nil
 }
 
+// GetSeatsWithStatusForDates returns seats for a floorplan with occupancy status
+// computed across multiple dates. A seat is "taken" if reserved by someone else
+// on any of the dates, "mine" if reserved by userID on any date, "free" otherwise.
+func (d *DB) GetSeatsWithStatusForDates(floorplanID, userID int64, dates []string, half string) ([]models.SeatWithStatus, error) {
+	seats, err := d.ListSeats(floorplanID)
+	if err != nil {
+		return nil, err
+	}
+	if len(dates) == 0 {
+		result := make([]models.SeatWithStatus, len(seats))
+		for i, s := range seats {
+			result[i] = models.SeatWithStatus{Seat: s, Status: "free"}
+		}
+		return result, nil
+	}
+
+	placeholders := make([]string, len(dates))
+	args := []interface{}{floorplanID}
+	for i, d := range dates {
+		placeholders[i] = "?"
+		args = append(args, d)
+	}
+	rows, err := d.floorplan.Query(`
+SELECT sr.seat_id, sr.user_id, sr.half
+FROM seat_reservations sr
+JOIN seats s ON sr.seat_id = s.id
+WHERE s.floorplan_id = ? AND sr.date IN (`+strings.Join(placeholders, ",")+`)
+`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() //nolint:errcheck
+
+	type seatFlags struct{ isMine, isTaken bool }
+	statusMap := make(map[int64]*seatFlags)
+	for rows.Next() {
+		var seatID, uid int64
+		var h string
+		if err := rows.Scan(&seatID, &uid, &h); err != nil {
+			return nil, err
+		}
+		if !(h == "full" || half == "full" || h == half) {
+			continue
+		}
+		if statusMap[seatID] == nil {
+			statusMap[seatID] = &seatFlags{}
+		}
+		if uid == userID {
+			statusMap[seatID].isMine = true
+		} else {
+			statusMap[seatID].isTaken = true
+		}
+	}
+
+	result := make([]models.SeatWithStatus, len(seats))
+	for i, s := range seats {
+		st := "free"
+		if sf := statusMap[s.ID]; sf != nil {
+			if sf.isMine {
+				st = "mine"
+			} else if sf.isTaken {
+				st = "taken"
+			}
+		}
+		result[i] = models.SeatWithStatus{Seat: s, Status: st}
+	}
+	return result, nil
+}
+
 func (d *DB) ReserveSeat(seatID, userID int64, date, half string) error {
 	if half == "" {
 		half = "full"

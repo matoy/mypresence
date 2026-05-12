@@ -469,6 +469,46 @@ func (h *FloorplanHandler) ListFloorplansAPI(w http.ResponseWriter, r *http.Requ
 	jsonOK(w, floorplans)
 }
 
+// ListSeatsWithStatusForDatesAPI handles GET /api/floorplans/{id}/seats/status.
+// It returns seats enriched with occupancy status computed across all provided dates
+// (query param "dates", comma-separated, e.g. "2026-05-01,2026-05-02").
+func (h *FloorplanHandler) ListSeatsWithStatusForDatesAPI(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r)
+	fpID, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if fpID == 0 {
+		metrics.FloorplanOpsTotal.WithLabelValues("list_seats_status", "failure").Inc()
+		jsonError(w, "ID manquant", http.StatusBadRequest)
+		return
+	}
+	half := r.URL.Query().Get("half")
+	if half == "" {
+		half = "full"
+	}
+	var dates []string
+	if datesStr := r.URL.Query().Get("dates"); datesStr != "" {
+		for _, d := range strings.Split(datesStr, ",") {
+			d = strings.TrimSpace(d)
+			if _, err := time.Parse("2006-01-02", d); err != nil {
+				metrics.FloorplanOpsTotal.WithLabelValues("list_seats_status", "failure").Inc()
+				jsonError(w, "Date invalide: "+d, http.StatusBadRequest)
+				return
+			}
+			dates = append(dates, d)
+		}
+	}
+	seats, err := h.DB.GetSeatsWithStatusForDates(fpID, user.ID, dates, half)
+	if err != nil {
+		metrics.FloorplanOpsTotal.WithLabelValues("list_seats_status", "failure").Inc()
+		jsonError(w, "Erreur", http.StatusInternalServerError)
+		return
+	}
+	if seats == nil {
+		seats = []models.SeatWithStatus{}
+	}
+	metrics.FloorplanOpsTotal.WithLabelValues("list_seats_status", "success").Inc()
+	jsonOK(w, seats)
+}
+
 // ListSeatsForFloorplanAPI returns the seats for a floorplan without booking status
 // (user-accessible, used by the calendar seat-picker modal).
 func (h *FloorplanHandler) ListSeatsForFloorplanAPI(w http.ResponseWriter, r *http.Request) {
@@ -500,6 +540,7 @@ func (h *FloorplanHandler) BulkReserveSeats(w http.ResponseWriter, r *http.Reque
 		SeatID int64    `json:"seat_id"`
 		Dates  []string `json:"dates"`
 		Half   string   `json:"half"`
+		UserID int64    `json:"user_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		metrics.FloorplanOpsTotal.WithLabelValues("bulk_reserve", "failure").Inc()
@@ -518,7 +559,17 @@ func (h *FloorplanHandler) BulkReserveSeats(w http.ResponseWriter, r *http.Reque
 			return
 		}
 	}
-	count := h.DB.BulkReserveSeat(req.SeatID, user.ID, req.Dates, req.Half)
+	targetUserID := user.ID
+	if req.UserID != 0 && req.UserID != user.ID {
+		if !user.HasRole(models.RoleGlobal) && !user.HasRole(models.RoleTeamManager) &&
+			(!user.HasRole(models.RoleTeamLeader) || !isTeamLeaderOf(h.DB, user.ID, req.UserID)) {
+			metrics.FloorplanOpsTotal.WithLabelValues("bulk_reserve", "failure").Inc()
+			jsonError(w, "Non autorisé", http.StatusForbidden)
+			return
+		}
+		targetUserID = req.UserID
+	}
+	count := h.DB.BulkReserveSeat(req.SeatID, targetUserID, req.Dates, req.Half)
 	metrics.FloorplanOpsTotal.WithLabelValues("bulk_reserve", "success").Inc()
 	jsonOK(w, map[string]interface{}{"booked": count})
 }
@@ -528,7 +579,8 @@ func (h *FloorplanHandler) BulkReserveSeats(w http.ResponseWriter, r *http.Reque
 func (h *FloorplanHandler) CancelReservationsByDates(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	var req struct {
-		Dates []string `json:"dates"`
+		Dates  []string `json:"dates"`
+		UserID int64    `json:"user_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		metrics.FloorplanOpsTotal.WithLabelValues("bulk_cancel", "failure").Inc()
@@ -547,7 +599,17 @@ func (h *FloorplanHandler) CancelReservationsByDates(w http.ResponseWriter, r *h
 			return
 		}
 	}
-	if err := h.DB.CancelUserReservationsForDates(user.ID, req.Dates); err != nil {
+	targetUserID := user.ID
+	if req.UserID != 0 && req.UserID != user.ID {
+		if !user.HasRole(models.RoleGlobal) && !user.HasRole(models.RoleTeamManager) &&
+			(!user.HasRole(models.RoleTeamLeader) || !isTeamLeaderOf(h.DB, user.ID, req.UserID)) {
+			metrics.FloorplanOpsTotal.WithLabelValues("bulk_cancel", "failure").Inc()
+			jsonError(w, "Non autorisé", http.StatusForbidden)
+			return
+		}
+		targetUserID = req.UserID
+	}
+	if err := h.DB.CancelUserReservationsForDates(targetUserID, req.Dates); err != nil {
 		metrics.FloorplanOpsTotal.WithLabelValues("bulk_cancel", "failure").Inc()
 		jsonError(w, "Erreur", http.StatusInternalServerError)
 		return

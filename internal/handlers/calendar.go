@@ -24,6 +24,15 @@ type CalendarHandler struct {
 	DisableFloorplans bool
 }
 
+// teamCalendarView holds display data for one team's presence sub-table.
+type teamCalendarView struct {
+	Team         models.Team
+	Members      []models.User
+	Presences    map[int64]map[string]map[string]int64 // userID → date → half → statusID
+	Reservations map[int64]map[string]bool             // userID → date → bool
+	CanEdit      bool
+}
+
 // CalendarPage renders the monthly calendar view for the logged-in user.
 func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
@@ -80,6 +89,42 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 	// Get statuses (only active ones for the picker)
 	statuses, _ := h.DB.ListActiveStatuses()
 
+	// Build per-team presence views for members
+	canEditTeam := user.HasAnyRole(models.RoleTeamLeader, models.RoleTeamManager, models.RoleGlobal)
+	myTeams, _ := h.DB.GetUserTeams(user.ID)
+	var teamViews []teamCalendarView
+	for _, team := range myTeams {
+		members, _ := h.DB.GetTeamMembers(team.ID)
+		if len(members) == 0 {
+			continue
+		}
+		userIDs := make([]int64, len(members))
+		for i, m := range members {
+			userIDs[i] = m.ID
+		}
+		tp, _ := h.DB.GetPresences(userIDs, startDate, endDate)
+		if tp == nil {
+			tp = make(map[int64]map[string]map[string]int64)
+		}
+		teamReservations := make(map[int64]map[string]bool, len(members))
+		if !h.DisableFloorplans {
+			for _, m := range members {
+				r, _ := h.DB.GetUserReservationDates(m.ID, startDate, endDate)
+				if r == nil {
+					r = make(map[string]bool)
+				}
+				teamReservations[m.ID] = r
+			}
+		}
+		teamViews = append(teamViews, teamCalendarView{
+			Team:         team,
+			Members:      members,
+			Presences:    tp,
+			Reservations: teamReservations,
+			CanEdit:      canEditTeam,
+		})
+	}
+
 	h.Render(w, r, "calendar", map[string]interface{}{
 		"Year":             year,
 		"Month":            month,
@@ -96,6 +141,7 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 		"CalendarComplete": calendarComplete,
 		"DeclarableDays":   declarableDays,
 		"DeclaredDays":     declaredDays,
+		"TeamViews":        teamViews,
 	})
 }
 
@@ -114,10 +160,12 @@ func (h *CalendarHandler) SetPresences(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate: only allow editing own presences (managers/global can edit anyone)
+	// Validate: allow own edits, managers/global, and team leaders editing their team members.
 	if !user.HasRole(models.RoleGlobal) && !user.HasRole(models.RoleTeamManager) && req.UserID != user.ID {
-		jsonError(w, "Non autorisé", http.StatusForbidden)
-		return
+		if !user.HasRole(models.RoleTeamLeader) || !isTeamLeaderOf(h.DB, user.ID, req.UserID) {
+			jsonError(w, "Non autorisé", http.StatusForbidden)
+			return
+		}
 	}
 
 	// Validate date format and collect date range for holiday lookup
@@ -181,8 +229,10 @@ func (h *CalendarHandler) ClearPresences(w http.ResponseWriter, r *http.Request)
 	}
 
 	if !user.HasRole(models.RoleGlobal) && !user.HasRole(models.RoleTeamManager) && req.UserID != user.ID {
-		jsonError(w, "Non autorisé", http.StatusForbidden)
-		return
+		if !user.HasRole(models.RoleTeamLeader) || !isTeamLeaderOf(h.DB, user.ID, req.UserID) {
+			jsonError(w, "Non autorisé", http.StatusForbidden)
+			return
+		}
 	}
 
 	if err := h.DB.ClearPresences(req.UserID, req.Dates, req.Half); err != nil {
@@ -240,6 +290,29 @@ func (h *CalendarHandler) GetPresencesAPI(w http.ResponseWriter, r *http.Request
 	}
 
 	jsonOK(w, presences)
+}
+
+// isTeamLeaderOf returns true if leaderID and targetID share at least one common team.
+// The caller must verify that leaderID has the team_leader role.
+func isTeamLeaderOf(database *db.DB, leaderID, targetID int64) bool {
+	leaderTeams, err := database.GetUserTeams(leaderID)
+	if err != nil || len(leaderTeams) == 0 {
+		return false
+	}
+	leaderTeamIDs := make(map[int64]bool, len(leaderTeams))
+	for _, t := range leaderTeams {
+		leaderTeamIDs[t.ID] = true
+	}
+	targetTeams, err := database.GetUserTeams(targetID)
+	if err != nil {
+		return false
+	}
+	for _, t := range targetTeams {
+		if leaderTeamIDs[t.ID] {
+			return true
+		}
+	}
+	return false
 }
 
 // parseYearMonth reads year and month from the request query string, falling
