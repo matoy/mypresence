@@ -2093,6 +2093,11 @@ WHERE s.floorplan_id = ? AND sr.date = ?
 // GetSeatsWithStatusForDates returns seats for a floorplan with occupancy status
 // computed across multiple dates. A seat is "taken" if reserved by someone else
 // on any of the dates, "mine" if reserved by userID on any date, "free" otherwise.
+// halfOverlaps reports whether a reservation with half h overlaps the requested half.
+func halfOverlaps(h, half string) bool {
+	return h == "full" || half == "full" || h == half
+}
+
 func (d *DB) GetSeatsWithStatusForDates(floorplanID, userID int64, dates []string, half string) ([]models.SeatWithStatus, error) {
 	seats, err := d.ListSeats(floorplanID)
 	if err != nil {
@@ -2131,7 +2136,7 @@ WHERE s.floorplan_id = ? AND sr.date IN (`+strings.Join(placeholders, ",")+`)
 		if err := rows.Scan(&seatID, &uid, &h); err != nil {
 			return nil, err
 		}
-		if h != "full" && half != "full" && h != half {
+		if !halfOverlaps(h, half) {
 			continue
 		}
 		if statusMap[seatID] == nil {
