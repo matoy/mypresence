@@ -23,22 +23,6 @@ func funcMap(t *testing.T) template.FuncMap {
 	return buildTemplateFuncMap(&config.Config{OnsiteRatioThreshold: 60})
 }
 
-func callFunc[T any](t *testing.T, name string, args ...any) T {
-	t.Helper()
-	fm := funcMap(t)
-	fn, ok := fm[name]
-	if !ok {
-		t.Fatalf("function %q not found in FuncMap", name)
-	}
-	// Use reflect via template execution to avoid unsafe casts.
-	// Build a tiny template that calls the function.
-	// Instead, we cast directly — the concrete types are known.
-	_ = ok
-	_ = fn
-	var zero T
-	return zero
-}
-
 func TestFuncMap_Add(t *testing.T) {
 	add := funcMap(t)["add"].(func(int, int) int)
 	if got := add(3, 4); got != 7 {
