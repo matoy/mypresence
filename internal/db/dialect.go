@@ -312,7 +312,7 @@ func (d dialect) addColumnIfNotExists(table, col, colDef string) string {
 // type. oldType is only used by SQL Server (where the column must be re-declared
 // with all its constraints). SQLite does not support ALTER COLUMN; we emit a
 // no-op SELECT so the caller can safely ignore the error.
-func (d dialect) modifyColumnType(table, col, newType, oldType string) string {
+func (d dialect) modifyColumnType(table, col, newType, _ string) string {
 	switch d.driver {
 	case "postgres":
 		return fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s TYPE %s", table, col, newType)

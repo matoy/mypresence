@@ -2,6 +2,7 @@
 
 <!-- Replace matoy/myPresence and matoy with actual values -->
 [![CI](https://github.com/matoy/mypresence/actions/workflows/ci.yml/badge.svg)](https://github.com/matoy/mypresence/actions/workflows/ci.yml)
+[![Vulnerability check](https://github.com/matoy/mypresence/actions/workflows/vuln.yml/badge.svg)](https://github.com/matoy/mypresence/actions/workflows/vuln.yml)
 [![Release](https://github.com/matoy/mypresence/actions/workflows/release.yml/badge.svg)](https://github.com/matoy/mypresence/actions/workflows/release.yml)
 [![Docker Pulls](https://img.shields.io/docker/pulls/matoy/mypresence)](https://hub.docker.com/r/matoy/mypresence)
 [![Docker Image Size](https://img.shields.io/docker/image-size/matoy/mypresence/latest)](https://hub.docker.com/r/matoy/mypresence)

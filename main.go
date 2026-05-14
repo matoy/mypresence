@@ -281,7 +281,7 @@ func registerMetricsCollectors(database *db.DB, healthHandler *handlers.HealthHa
 
 // registerOptionalPublicRoutes registers public HTTP routes for optional features:
 // floorplan images, API documentation, and password reset.
-func registerOptionalPublicRoutes(mux *http.ServeMux, cfg *config.Config, resetPasswordHandler *handlers.ResetPasswordHandler, floorplanHandler *handlers.FloorplanHandler) {
+func registerOptionalPublicRoutes(mux *http.ServeMux, cfg *config.Config, resetPasswordHandler *handlers.ResetPasswordHandler, _ *handlers.FloorplanHandler) {
 	if !cfg.DisableFloorplans {
 		mux.Handle("GET /floorplan-img/", floorplanImgHandler(cfg.DataDir))
 	}
