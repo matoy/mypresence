@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -11,6 +12,21 @@ import (
 	"github.com/matoy/mypresence/internal/middleware"
 	"github.com/matoy/mypresence/internal/models"
 )
+
+// minimalSAMLMetadataServer starts an httptest.Server that returns a minimal
+// but syntactically valid SAML IdP EntityDescriptor, sufficient for
+// samlsp.FetchMetadata to parse without errors.
+func minimalSAMLMetadataServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		fmt.Fprint(w, `<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://idp.test">
+  <IDPSSODescriptor WantAuthnRequestsSigned="false" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://idp.test/sso"/>
+  </IDPSSODescriptor>
+</EntityDescriptor>`)
+	}))
+}
 
 // ---- AuthHandler SAML nil-SP branches ----
 
@@ -66,6 +82,65 @@ func TestInitSAML_InvalidIDPURL(t *testing.T) {
 	err := h.InitSAML()
 	if err == nil {
 		t.Fatal("expected error for invalid IDP metadata URL")
+	}
+}
+
+// TestInitSAML_FetchMetadataFails covers auth.go:58-70 — the httpClient + FetchMetadata
+// call path. The IDP server is closed before the request so we get connection-refused.
+func TestInitSAML_FetchMetadataFails(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	addr := srv.URL
+	srv.Close() // close immediately → connection refused on request
+
+	h := &AuthHandler{Config: &config.Config{
+		SAMLEnabled:        true,
+		SAMLRootURL:        "http://sp.example.com",
+		SAMLIDPMetadataURL: addr + "/metadata",
+	}}
+	err := h.InitSAML()
+	if err == nil {
+		t.Fatal("expected error when IDP metadata server is unreachable")
+	}
+}
+
+// TestInitSAML_LoadX509KeyPairFails covers auth.go:73-78 — FetchMetadata succeeds
+// but tls.LoadX509KeyPair fails because the cert files don't exist.
+func TestInitSAML_LoadX509KeyPairFails(t *testing.T) {
+	srv := minimalSAMLMetadataServer(t)
+	defer srv.Close()
+
+	h := &AuthHandler{Config: &config.Config{
+		SAMLEnabled:        true,
+		SAMLRootURL:        "http://sp.example.com",
+		SAMLIDPMetadataURL: srv.URL,
+		SAMLCertFile:       "/nonexistent-cert.pem",
+		SAMLKeyFile:        "/nonexistent-key.pem",
+	}}
+	err := h.InitSAML()
+	if err == nil {
+		t.Fatal("expected error for nonexistent cert/key files")
+	}
+}
+
+// TestInitSAML_SelfSignedSuccess covers auth.go:79-107 — FetchMetadata succeeds,
+// no cert files configured so generateSelfSignedCert is called, and InitSAML
+// completes successfully with h.SP set.
+func TestInitSAML_SelfSignedSuccess(t *testing.T) {
+	srv := minimalSAMLMetadataServer(t)
+	defer srv.Close()
+
+	h := &AuthHandler{Config: &config.Config{
+		SAMLEnabled:        true,
+		SAMLRootURL:        "http://sp.example.com",
+		SAMLIDPMetadataURL: srv.URL,
+		SAMLEntityID:       "http://sp.example.com/saml/metadata",
+		// SAMLCertFile / SAMLKeyFile empty → generateSelfSignedCert path
+	}}
+	if err := h.InitSAML(); err != nil {
+		t.Fatalf("InitSAML unexpected error: %v", err)
+	}
+	if h.SP == nil {
+		t.Fatal("expected h.SP to be initialised after InitSAML")
 	}
 }
 
