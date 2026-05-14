@@ -23,7 +23,7 @@ func TestOpenSQLiteMulti_FloorplanIsDir(t *testing.T) {
 		if err != nil {
 			t.Fatalf("pre-create %s: %v", name, err)
 		}
-		db.Close()
+		db.Close() //nolint:errcheck
 	}
 	// Make floorplan.db a directory — openSQLiteConn will fail on it.
 	if err := os.Mkdir(filepath.Join(dir, "floorplan.db"), 0o755); err != nil {
@@ -45,7 +45,7 @@ func TestOpenSQLiteMulti_AuditIsDir(t *testing.T) {
 		if err != nil {
 			t.Fatalf("pre-create %s: %v", name, err)
 		}
-		db.Close()
+		db.Close() //nolint:errcheck
 	}
 	if err := os.Mkdir(filepath.Join(dir, "audit.db"), 0o755); err != nil {
 		t.Fatalf("mkdir audit.db: %v", err)
@@ -66,7 +66,7 @@ func TestOpenSQLiteMulti_ProjectsIsDir(t *testing.T) {
 		if err != nil {
 			t.Fatalf("pre-create %s: %v", name, err)
 		}
-		db.Close()
+		db.Close() //nolint:errcheck
 	}
 	if err := os.Mkdir(filepath.Join(dir, "projects.db"), 0o755); err != nil {
 		t.Fatalf("mkdir projects.db: %v", err)
