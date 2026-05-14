@@ -1,3 +1,4 @@
+//nolint:misspell // file contains French and Italian translations; flagged words are not English misspellings
 package i18n
 
 import "net/http"
