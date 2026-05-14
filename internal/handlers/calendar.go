@@ -145,6 +145,24 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// dateRange validates a slice of YYYY-MM-DD strings and returns the min/max.
+// If any date is invalid, it is returned as the third value (others are zero).
+func dateRange(dates []string) (minDate, maxDate, invalid string) {
+	minDate, maxDate = dates[0], dates[0]
+	for _, d := range dates {
+		if _, err := time.Parse("2006-01-02", d); err != nil {
+			return "", "", d
+		}
+		if d < minDate {
+			minDate = d
+		}
+		if d > maxDate {
+			maxDate = d
+		}
+	}
+	return minDate, maxDate, ""
+}
+
 // SetPresences handles bulk presence setting via API.
 func (h *CalendarHandler) SetPresences(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
@@ -173,18 +191,10 @@ func (h *CalendarHandler) SetPresences(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "Aucune date fournie", http.StatusBadRequest)
 		return
 	}
-	minDate, maxDate := req.Dates[0], req.Dates[0]
-	for _, d := range req.Dates {
-		if _, err := time.Parse("2006-01-02", d); err != nil {
-			jsonError(w, "Date invalide: "+d, http.StatusBadRequest)
-			return
-		}
-		if d < minDate {
-			minDate = d
-		}
-		if d > maxDate {
-			maxDate = d
-		}
+	minDate, maxDate, badDate := dateRange(req.Dates)
+	if badDate != "" {
+		jsonError(w, "Date invalide: "+badDate, http.StatusBadRequest)
+		return
 	}
 
 	// Reject dates that fall on non-imputable holidays
