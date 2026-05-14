@@ -60,10 +60,11 @@ const (
 // It blocks an IP for loginBlockDuration after loginMaxFailures failures
 // within loginWindow.
 type LoginRateLimiter struct {
-	mu       sync.Mutex
-	attempts map[string]*loginAttempt
-	stopCh   chan struct{}
-	stopOnce sync.Once
+	mu               sync.Mutex
+	attempts         map[string]*loginAttempt
+	stopCh           chan struct{}
+	stopOnce         sync.Once
+	testTickInterval time.Duration // non-zero overrides 10-min ticker (tests only)
 }
 
 // NewLoginRateLimiter creates a ready-to-use limiter and starts background cleanup.
@@ -148,7 +149,11 @@ func (l *LoginRateLimiter) Reset(r *http.Request) {
 
 // cleanupLoop removes stale entries every 10 minutes.
 func (l *LoginRateLimiter) cleanupLoop() {
-	ticker := time.NewTicker(10 * time.Minute)
+	interval := 10 * time.Minute
+	if l.testTickInterval > 0 {
+		interval = l.testTickInterval
+	}
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
 		select {

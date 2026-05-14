@@ -505,3 +505,72 @@ func TestGetTeamIDsForUser_QueryError(t *testing.T) {
 		t.Fatal("expected error after closing core db")
 	}
 }
+
+// -----------------------------------------------------------------------
+// GetAllTeamMembers — query error (core DB closed)
+// -----------------------------------------------------------------------
+
+func TestGetAllTeamMembers_QueryError(t *testing.T) {
+	d := newTestDB(t)
+	d.core.Close() //nolint:errcheck
+	_, err := d.GetAllTeamMembers(1)
+	if err == nil {
+		t.Fatal("expected error after closing core db")
+	}
+}
+
+// -----------------------------------------------------------------------
+// GetTeamMembersAt — query error (core DB closed)
+// -----------------------------------------------------------------------
+
+func TestGetTeamMembersAt_QueryError(t *testing.T) {
+	d := newTestDB(t)
+	d.core.Close() //nolint:errcheck
+	_, err := d.GetTeamMembersAt(1, "2026-05-01")
+	if err == nil {
+		t.Fatal("expected error after closing core db")
+	}
+}
+
+// -----------------------------------------------------------------------
+// SetTeamMemberLeftAt — exec error (core DB closed)
+// -----------------------------------------------------------------------
+
+func TestSetTeamMemberLeftAt_ExecError(t *testing.T) {
+	d := newTestDB(t)
+	d.core.Close() //nolint:errcheck
+	leftAt := "2026-06-30"
+	err := d.SetTeamMemberLeftAt(1, 1, &leftAt)
+	if err == nil {
+		t.Fatal("expected error after closing core db")
+	}
+}
+
+// -----------------------------------------------------------------------
+// GetSeatsWithStatusForDates — query error (floorplan DB closed)
+// -----------------------------------------------------------------------
+
+func TestGetSeatsWithStatusForDates_QueryError(t *testing.T) {
+	d := newTestDB(t)
+	fpID, _ := seedFloorplanAndSeat(t, d, "QErrFP")
+	d.floorplan.Close() //nolint:errcheck
+	_, err := d.GetSeatsWithStatusForDates(fpID, 1, []string{"2026-06-01"}, "full")
+	if err == nil {
+		t.Fatal("expected error after closing floorplan db")
+	}
+}
+
+// -----------------------------------------------------------------------
+// BulkReserveSeat — query error (floorplan DB closed)
+// -----------------------------------------------------------------------
+
+func TestBulkReserveSeat_ExecError(t *testing.T) {
+	d := newTestDB(t)
+	_, seatID := seedFloorplanAndSeat(t, d, "BulkErrFP")
+	uid := seedUser(t, d, "bulkrsv_err@test.com")
+	d.floorplan.Close() //nolint:errcheck
+	count := d.BulkReserveSeat(seatID, uid, []string{"2026-06-01"}, "full")
+	if count != 0 {
+		t.Fatalf("expected 0 reservations after closing floorplan db, got %d", count)
+	}
+}

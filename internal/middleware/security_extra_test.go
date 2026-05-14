@@ -146,3 +146,40 @@ func TestClientIP_NoPort(t *testing.T) {
 		t.Errorf("expected RemoteAddr as-is, got %q", got)
 	}
 }
+
+// TestCleanupLoop_TickerPath exercises the ticker.C branch of cleanupLoop,
+// including the inner delete-expired branch, using a very short tick interval.
+func TestCleanupLoop_TickerPath(t *testing.T) {
+	l := &LoginRateLimiter{
+		attempts:         make(map[string]*loginAttempt),
+		stopCh:           make(chan struct{}),
+		testTickInterval: time.Millisecond,
+	}
+
+	// Add a stale entry (expired window, expired block)
+	l.attempts["1.2.3.4"] = &loginAttempt{
+		count:     2,
+		firstFail: time.Now().Add(-loginWindow - time.Second),
+		blockedAt: time.Time{},
+	}
+	// Add a fresh entry that should NOT be deleted
+	l.attempts["9.9.9.9"] = &loginAttempt{
+		count:     1,
+		firstFail: time.Now(),
+	}
+
+	go l.cleanupLoop()
+
+	// Wait for at least one tick to fire
+	time.Sleep(20 * time.Millisecond)
+	l.Close()
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if _, exists := l.attempts["1.2.3.4"]; exists {
+		t.Error("expected stale entry to be removed by ticker cleanup")
+	}
+	if _, exists := l.attempts["9.9.9.9"]; !exists {
+		t.Error("expected fresh entry to remain after ticker cleanup")
+	}
+}
