@@ -2090,6 +2090,27 @@ WHERE s.floorplan_id = ? AND sr.date = ?
 	return result, nil
 }
 
+// seatFlags tracks reservation ownership for one seat across the requested dates.
+type seatFlags struct{ isMine, isTaken bool }
+
+// buildSeatResults constructs the SeatWithStatus slice from seats and their status flags.
+// A nil statusMap treats every seat as free.
+func buildSeatResults(seats []models.Seat, statusMap map[int64]*seatFlags) []models.SeatWithStatus {
+	result := make([]models.SeatWithStatus, len(seats))
+	for i, s := range seats {
+		st := "free"
+		if sf := statusMap[s.ID]; sf != nil {
+			if sf.isMine {
+				st = "mine"
+			} else if sf.isTaken {
+				st = "taken"
+			}
+		}
+		result[i] = models.SeatWithStatus{Seat: s, Status: st}
+	}
+	return result
+}
+
 // GetSeatsWithStatusForDates returns seats for a floorplan with occupancy status
 // computed across multiple dates. A seat is "taken" if reserved by someone else
 // on any of the dates, "mine" if reserved by userID on any date, "free" otherwise.
@@ -2104,11 +2125,7 @@ func (d *DB) GetSeatsWithStatusForDates(floorplanID, userID int64, dates []strin
 		return nil, err
 	}
 	if len(dates) == 0 {
-		result := make([]models.SeatWithStatus, len(seats))
-		for i, s := range seats {
-			result[i] = models.SeatWithStatus{Seat: s, Status: "free"}
-		}
-		return result, nil
+		return buildSeatResults(seats, nil), nil
 	}
 
 	placeholders := make([]string, len(dates))
@@ -2128,7 +2145,6 @@ WHERE s.floorplan_id = ? AND sr.date IN (`+strings.Join(placeholders, ",")+`)
 	}
 	defer rows.Close() //nolint:errcheck
 
-	type seatFlags struct{ isMine, isTaken bool }
 	statusMap := make(map[int64]*seatFlags)
 	for rows.Next() {
 		var seatID, uid int64
@@ -2148,20 +2164,7 @@ WHERE s.floorplan_id = ? AND sr.date IN (`+strings.Join(placeholders, ",")+`)
 			statusMap[seatID].isTaken = true
 		}
 	}
-
-	result := make([]models.SeatWithStatus, len(seats))
-	for i, s := range seats {
-		st := "free"
-		if sf := statusMap[s.ID]; sf != nil {
-			if sf.isMine {
-				st = "mine"
-			} else if sf.isTaken {
-				st = "taken"
-			}
-		}
-		result[i] = models.SeatWithStatus{Seat: s, Status: st}
-	}
-	return result, nil
+	return buildSeatResults(seats, statusMap), nil
 }
 
 func (d *DB) ReserveSeat(seatID, userID int64, date, half string) error {

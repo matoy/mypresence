@@ -179,11 +179,9 @@ func (h *CalendarHandler) SetPresences(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate: allow own edits, managers/global, and team leaders editing their team members.
-	if !user.HasRole(models.RoleGlobal) && !user.HasRole(models.RoleTeamManager) && req.UserID != user.ID {
-		if !user.HasRole(models.RoleTeamLeader) || !isTeamLeaderOf(h.DB, user.ID, req.UserID) {
-			jsonError(w, "Non autorisé", http.StatusForbidden)
-			return
-		}
+	if !canEditPresenceFor(h.DB, user, req.UserID) {
+		jsonError(w, "Non autorisé", http.StatusForbidden)
+		return
 	}
 
 	// Validate date format and collect date range for holiday lookup
@@ -323,6 +321,14 @@ func isTeamLeaderOf(database *db.DB, leaderID, targetID int64) bool {
 		}
 	}
 	return false
+}
+
+// canEditPresenceFor reports whether user is allowed to set or clear presences for targetID.
+func canEditPresenceFor(database *db.DB, user *models.User, targetID int64) bool {
+	if user.HasRole(models.RoleGlobal) || user.HasRole(models.RoleTeamManager) || targetID == user.ID {
+		return true
+	}
+	return user.HasRole(models.RoleTeamLeader) && isTeamLeaderOf(database, user.ID, targetID)
 }
 
 // parseYearMonth reads year and month from the request query string, falling
