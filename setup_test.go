@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/matoy/mypresence/internal/config"
+	"github.com/matoy/mypresence/internal/db"
 	"github.com/matoy/mypresence/internal/models"
 )
 
@@ -379,4 +380,183 @@ func TestLangSwitcherHandler_RefererExternal(t *testing.T) {
 	if loc != "/" {
 		t.Errorf("expected redirect to /, got %q", loc)
 	}
+}
+
+// ---------------------------------------------------------------------------
+// buildTemplateFuncMap — safehtml and activityRocket closures
+// ---------------------------------------------------------------------------
+
+func TestFuncMap_Safehtml(t *testing.T) {
+	safehtml := funcMap(t)["safehtml"].(func(string) template.HTML)
+	got := safehtml("<b>bold</b>")
+	if got != "<b>bold</b>" {
+		t.Errorf("safehtml: got %q, want %q", got, "<b>bold</b>")
+	}
+}
+
+func TestFuncMap_ActivityRocket(t *testing.T) {
+	// funcMap uses OnsiteRatioThreshold: 60.
+	activityRocket := funcMap(t)["activityRocket"].(func(float64, float64, float64, float64) bool)
+	// notSet=0, onSiteDays=9, billableDays=15 → 60% ≥ 60 threshold, projectActivity=100 → true.
+	if !activityRocket(0, 9, 15, 100) {
+		t.Error("activityRocket: expected true for valid rocket criteria")
+	}
+	// notSet > 0 → false.
+	if activityRocket(1, 9, 15, 100) {
+		t.Error("activityRocket: expected false when notSet > 0")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// newRenderPage — inner closure coverage
+// ---------------------------------------------------------------------------
+
+// openMainTestDB opens a fresh SQLite DB seeded with a global admin.
+func openMainTestDB(t *testing.T) *db.DB {
+	t.Helper()
+	cfg := &config.Config{
+		DBDriver:      "sqlite",
+		DataDir:       t.TempDir(),
+		AdminUser:     "admin@setup-test.com",
+		AdminPassword: "P@ssw0rd!",
+	}
+	d, err := db.Open(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.SetBcryptCost(4)
+	if err := d.SeedDefaults(cfg.AdminUser, cfg.AdminPassword); err != nil {
+		d.Close()
+		t.Fatal(err)
+	}
+	t.Cleanup(d.Close)
+	return d
+}
+
+// buildTestRender creates a render func using real embedded templates and the given config/DB.
+func buildTestRender(t *testing.T, cfg *config.Config, d *db.DB) func(http.ResponseWriter, *http.Request, string, interface{}) {
+	t.Helper()
+	fm := buildTemplateFuncMap(cfg)
+	tmpls := loadTemplates(fm)
+	return newRenderPage(cfg, d, tmpls)
+}
+
+// TestNewRenderPage_LoginPage covers the main path through the inner closure:
+// user lookup, lang detection, logo detection (absent), no cookies → no CSRF / no impersonation,
+// PageData construction, template lookup, Content-Type header, and ExecuteTemplate.
+func TestNewRenderPage_LoginPage(t *testing.T) {
+	cfg := &config.Config{DataDir: t.TempDir(), DefaultLang: "en", SecretKey: "test-secret-key"}
+	render := buildTestRender(t, cfg, nil)
+	req := httptest.NewRequest(http.MethodGet, "/login", nil)
+	w := httptest.NewRecorder()
+	render(w, req, "login", nil)
+	if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
+		t.Errorf("unexpected Content-Type: %q", ct)
+	}
+}
+
+// TestNewRenderPage_UnknownPage covers the "template not found → 500" branch.
+func TestNewRenderPage_UnknownPage(t *testing.T) {
+	cfg := &config.Config{DataDir: t.TempDir(), DefaultLang: "en", SecretKey: "test-secret-key"}
+	render := buildTestRender(t, cfg, nil)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	w := httptest.NewRecorder()
+	render(w, req, "nonexistent_page_xyz", nil)
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500 for unknown page, got %d", w.Code)
+	}
+}
+
+// TestNewRenderPage_CustomLogoPathMissing covers cfg.LogoPath != "" (logoFile = custom name)
+// where the file does not exist, so logoExists stays false.
+func TestNewRenderPage_CustomLogoPathMissing(t *testing.T) {
+	cfg := &config.Config{
+		DataDir:     t.TempDir(),
+		DefaultLang: "en",
+		SecretKey:   "test-secret-key",
+		LogoPath:    "custom_logo.png",
+	}
+	render := buildTestRender(t, cfg, nil)
+	req := httptest.NewRequest(http.MethodGet, "/login", nil)
+	w := httptest.NewRecorder()
+	render(w, req, "login", nil)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+// TestNewRenderPage_DefaultLogoExists covers logoExists=true and the LogoURL insertion into Config.
+func TestNewRenderPage_DefaultLogoExists(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "logo.png"), []byte("PNG"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{DataDir: dir, DefaultLang: "en", SecretKey: "test-secret-key"}
+	render := buildTestRender(t, cfg, nil)
+	req := httptest.NewRequest(http.MethodGet, "/login", nil)
+	w := httptest.NewRecorder()
+	render(w, req, "login", nil)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+// TestNewRenderPage_SessionCookieCSRF covers the CSRF token generation path
+// when a "session" cookie is present in the request.
+func TestNewRenderPage_SessionCookieCSRF(t *testing.T) {
+	cfg := &config.Config{DataDir: t.TempDir(), DefaultLang: "en", SecretKey: "test-secret-key"}
+	render := buildTestRender(t, cfg, nil)
+	req := httptest.NewRequest(http.MethodGet, "/login", nil)
+	req.AddCookie(&http.Cookie{Name: "session", Value: "any-session-token"})
+	w := httptest.NewRecorder()
+	render(w, req, "login", nil)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+// TestNewRenderPage_RealSessionImpersonation covers the real_session cookie path:
+// GetSessionUser succeeds for a global admin → realAdmin is set in PageData.
+func TestNewRenderPage_RealSessionImpersonation(t *testing.T) {
+	d := openMainTestDB(t)
+	admin, err := d.GetUserByEmail("admin@setup-test.com")
+	if err != nil {
+		t.Fatalf("GetUserByEmail: %v", err)
+	}
+	tok, err := d.CreateSession(admin.ID)
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+
+	cfg := &config.Config{DataDir: t.TempDir(), DefaultLang: "en", SecretKey: "test-secret-key"}
+	render := buildTestRender(t, cfg, d)
+	req := httptest.NewRequest(http.MethodGet, "/login", nil)
+	req.AddCookie(&http.Cookie{Name: "real_session", Value: tok})
+	w := httptest.NewRecorder()
+	render(w, req, "login", nil)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+// failResponseWriter is a ResponseWriter whose Write always fails, used to
+// trigger a template-execution error and cover the log.Printf path.
+type failResponseWriter struct {
+	header http.Header
+}
+
+func (fw *failResponseWriter) Header() http.Header         { return fw.header }
+func (fw *failResponseWriter) WriteHeader(code int)        {}
+func (fw *failResponseWriter) Write(b []byte) (int, error) { return 0, os.ErrClosed }
+
+// TestNewRenderPage_TemplateExecuteError covers the log.Printf branch that is
+// reached when tmpl.ExecuteTemplate returns an error (here caused by the writer
+// refusing all bytes).
+func TestNewRenderPage_TemplateExecuteError(t *testing.T) {
+	cfg := &config.Config{DataDir: t.TempDir(), DefaultLang: "en", SecretKey: "test-secret-key"}
+	render := buildTestRender(t, cfg, nil)
+	req := httptest.NewRequest(http.MethodGet, "/login", nil)
+	fw := &failResponseWriter{header: make(http.Header)}
+	render(fw, req, "login", nil)
+	// If we reach here without panic, the error-logging branch was exercised.
 }
