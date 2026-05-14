@@ -257,7 +257,7 @@ func TestGetUserLogs_WithNonZeroSince(t *testing.T) {
 	d := newTestDB(t)
 	uid := seedUser(t, d, "logssince@test.com")
 	statusID := seedOnSiteStatus(t, d)
-	d.SetPresences(uid, []string{"2026-06-01"}, statusID, "") //nolint:errcheck
+	d.SetPresences(uid, []string{"2026-06-01"}, statusID, "")                  //nolint:errcheck
 	d.LogPresenceAction(uid, uid, "set", []string{"2026-06-01"}, statusID, "") //nolint:errcheck
 
 	// Use a non-zero time to exercise the `if !since.IsZero()` branch.
