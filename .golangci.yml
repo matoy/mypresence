@@ -1,7 +1,8 @@
 version: "2"
 
-issues:
-  exclude-rules:
-    - path: internal/i18n/i18n.go
-      linters:
-        - misspell
+linters:
+  exclusions:
+    rules:
+      - path: internal/i18n/i18n.go
+        linters:
+          - misspell
