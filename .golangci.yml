@@ -1,0 +1,5 @@
+issues:
+  exclude-rules:
+    - path: internal/i18n/i18n.go
+      linters:
+        - misspell
