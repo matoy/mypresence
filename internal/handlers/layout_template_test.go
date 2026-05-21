@@ -31,6 +31,9 @@ func renderLayoutForUser(t *testing.T, user *models.User, disableProjects bool) 
 			b, _ := json.Marshal(v)
 			return template.JS(b)
 		},
+		"safeNewsContent": func(s string) template.HTML {
+			return template.HTML(template.HTMLEscapeString(s))
+		},
 	}
 	base := string(layoutBytes) + `{{define "content"}}content{{end}}`
 	tmpl, err := template.New("layout.html").Funcs(funcMap).Parse(base)
@@ -67,6 +70,9 @@ func TestLayoutTemplate_AdminMenu_HiddenForBasicUser(t *testing.T) {
 	if strings.Contains(html, "/admin/projects") {
 		t.Fatal("admin projects link should not be present for basic user")
 	}
+	if strings.Contains(html, "/admin/news") {
+		t.Fatal("news link should not be present for basic user")
+	}
 }
 
 func TestLayoutTemplate_AdminMenu_ShowsProjectsAndImpersonateForGlobal(t *testing.T) {
@@ -91,5 +97,33 @@ func TestLayoutTemplate_AdminMenu_ShowsForProjectsAdminOnly(t *testing.T) {
 	}
 	if !strings.Contains(html, "/admin/projects") {
 		t.Fatal("admin projects link should be present for projects_admin")
+	}
+}
+
+func TestLayoutTemplate_AdminMenu_ShowsNewsForActivityViewer(t *testing.T) {
+	html := renderLayoutForUser(t, &models.User{ID: 1, Name: "Activity Viewer", Roles: models.RoleActivityViewer}, false)
+
+	if !strings.Contains(html, "adminMenuOpen") {
+		t.Fatal("admin menu should be visible for activity_viewer")
+	}
+	if c := strings.Count(html, "/admin/news"); c < 2 {
+		t.Fatalf("expected news link in both desktop and mobile admin menus, got %d occurrences", c)
+	}
+}
+
+func TestLayoutTemplate_AdminMenu_NewsAppearsBeforeFloorplans(t *testing.T) {
+	// A user with both activity_viewer and floorplan_manager should see news first.
+	html := renderLayoutForUser(t, &models.User{ID: 1, Name: "Multi", Roles: models.RoleActivityViewer + "," + models.RoleFloorplanManager}, false)
+
+	newsIdx := strings.Index(html, "/admin/news")
+	fpIdx := strings.Index(html, "/admin/floorplans")
+	if newsIdx < 0 {
+		t.Fatal("news link not found")
+	}
+	if fpIdx < 0 {
+		t.Fatal("floorplans link not found")
+	}
+	if newsIdx > fpIdx {
+		t.Fatal("news link should appear before floorplans link in the admin menu")
 	}
 }

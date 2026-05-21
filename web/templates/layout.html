@@ -44,7 +44,7 @@
 </head>
 <body class="h-full bg-gray-50 font-sans">
     {{if .User}}
-    {{$hasAdminNav := or (and (not .DisableFloorplans) (.User.HasRole "floorplan_manager")) (or (.User.HasRole "team_manager") (.User.HasRole "team_leader")) (.User.HasRole "global") (.User.HasRole "status_manager") (and (not .DisableProjects) (.User.HasRole "projects_admin"))}}
+    {{$hasAdminNav := or (and (not .DisableFloorplans) (.User.HasRole "floorplan_manager")) (or (.User.HasRole "team_manager") (.User.HasRole "team_leader")) (.User.HasRole "global") (.User.HasRole "status_manager") (and (not .DisableProjects) (.User.HasRole "projects_admin")) (.User.HasRole "activity_viewer")}}
     <!-- Navigation -->
     <nav class="bg-gradient-to-r from-primary to-secondary shadow-lg" x-data="{ mobileMenu: false }">
         <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
@@ -101,7 +101,7 @@
                          x-data="{ adminMenuOpen: false }"
                          @click.outside="adminMenuOpen = false">
                         <button @click="adminMenuOpen = !adminMenuOpen"
-                                class="flex items-center gap-2 text-white/80 hover:text-white transition px-2 py-1 rounded-md {{if or (eq .Page "admin_floorplans") (eq .Page "admin_teams") (eq .Page "admin_holidays") (eq .Page "admin_statuses") (eq .Page "admin_projects") (eq .Page "admin_users") (eq .Page "admin_user_logs") (eq .Page "admin_general_settings")}}bg-white/20 text-white{{end}}">
+                                class="flex items-center gap-2 text-white/80 hover:text-white transition px-2 py-1 rounded-md {{if or (eq .Page "admin_floorplans") (eq .Page "admin_teams") (eq .Page "admin_holidays") (eq .Page "admin_statuses") (eq .Page "admin_projects") (eq .Page "admin_users") (eq .Page "admin_user_logs") (eq .Page "admin_general_settings") (eq .Page "admin_news")}}bg-white/20 text-white{{end}}">
                             <span class="text-sm font-medium">Admin</span>
                             <svg class="h-3.5 w-3.5 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -115,6 +115,11 @@
                              x-transition:leave-start="opacity-100"
                              x-transition:leave-end="opacity-0"
                              class="absolute right-0 top-full mt-2 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 min-w-[220px] z-50">
+                            {{if .User.HasRole "activity_viewer"}}
+                            <a href="/admin/news" class="flex items-center gap-2.5 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition {{if eq .Page "admin_news"}}font-semibold{{end}}">
+                                {{index .T "nav.news"}}
+                            </a>
+                            {{end}}
                             {{if and (not .DisableFloorplans) (.User.HasRole "floorplan_manager")}}
                             <a href="/admin/floorplans" class="flex items-center gap-2.5 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition {{if eq .Page "admin_floorplans"}}font-semibold{{end}}">
                                 {{index .T "nav.floorplans_admin"}}
@@ -149,6 +154,7 @@
                                 {{index .T "nav.general_settings"}}
                             </a>
                             {{end}}
+
                             {{if and (.User.HasRole "global") (not .RealAdmin)}}
                             <div class="border-t border-gray-100 my-1"></div>
                             <a href="/impersonate"
@@ -274,6 +280,9 @@
                 {{if $hasAdminNav}}
                 <div class="border-t border-white/20 pt-2 mt-2">
                     <p class="px-3 text-xs font-semibold text-white/50 uppercase tracking-wide">Admin</p>
+                    {{if .User.HasRole "activity_viewer"}}
+                    <a href="/admin/news" class="block text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">{{index .T "nav.news"}}</a>
+                    {{end}}
                     {{if and (not .DisableFloorplans) (.User.HasRole "floorplan_manager")}}
                     <a href="/admin/floorplans" class="block text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">{{index .T "nav.floorplans_admin"}}</a>
                     {{end}}
@@ -358,6 +367,16 @@
                 {{index .T "nav.impersonate.exit"}}
             </button>
         </form>
+    </div>
+    {{end}}
+    {{range .ActiveNewsMessages}}
+    <!-- News banner -->
+    <div class="news-banner-container overflow-hidden" style="background-color: {{.BgColor}};">
+        <div class="news-banner-track whitespace-nowrap inline-block py-2 px-4 text-white text-sm font-medium">
+            {{safeNewsContent .Content}}
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#10023;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+            {{safeNewsContent .Content}}
+        </div>
     </div>
     {{end}}
     {{end}}

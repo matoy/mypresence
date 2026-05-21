@@ -107,6 +107,64 @@ Revoke a token owned by the caller.
 
 ---
 
+### News Banners
+
+#### `GET /api/news`
+Returns currently active news messages (start_date ≤ today ≤ end_date). Requires authentication only.
+
+**Response 200**
+```json
+[
+  {
+    "id": 1,
+    "title": "Summer closure",
+    "content": "Offices closed Aug 11–22. See [details](https://example.com).",
+    "start_date": "2026-08-01",
+    "end_date": "2026-08-10",
+    "bg_color": "#d97706"
+  }
+]
+```
+
+#### `GET /api/admin/news`
+Returns all news messages (active and past). Requires `activity_viewer` role.
+
+**Response 200** — same schema as above, all messages.
+
+#### `POST /api/admin/news`
+Create a news banner. Requires `activity_viewer` role.
+
+**Request**
+```json
+{
+  "title": "Planned maintenance",
+  "content": "System will be down Saturday 8–12h.",
+  "start_date": "2026-06-08",
+  "end_date": "2026-06-13",
+  "bg_color": "#dc2626"
+}
+```
+`bg_color` must be a valid 3- or 6-digit hex code (e.g. `#f00` or `#dc2626`). Defaults to `#dc2626` if omitted.
+
+**Response 200**
+```json
+{ "id": 4, "status": "ok" }
+```
+**Error 400** — missing or invalid fields
+
+#### `PUT /api/admin/news/{id}`
+Update a news banner. Requires `activity_viewer` role. Same request/response schema as POST.
+
+#### `DELETE /api/admin/news/{id}`
+Delete a news banner. Requires `activity_viewer` role.
+
+**Response 200**
+```json
+{ "status": "ok" }
+```
+
+---
+
 ### Presences
 
 #### `GET /api/presences?team_id=&year=&month=`

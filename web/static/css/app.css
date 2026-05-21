@@ -1,5 +1,27 @@
 /* Custom styles for Presence App */
 
+/* News banner marquee animation */
+.news-banner-container {
+    width: 100%;
+    overflow: hidden;
+}
+
+.news-banner-track {
+    display: inline-block;
+    white-space: nowrap;
+    animation: newsBannerScroll 30s linear infinite;
+}
+
+@keyframes newsBannerScroll {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+}
+
+.news-banner-track a {
+    color: inherit;
+    text-decoration: underline;
+}
+
 /* Smooth scrolling for calendar */
 .overflow-x-auto {
     -webkit-overflow-scrolling: touch;

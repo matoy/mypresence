@@ -260,6 +260,17 @@ type PersonalAccessToken struct {
 	CreatedAt   time.Time  `json:"created_at"`
 }
 
+// NewsMessage represents an active news/announcement banner.
+type NewsMessage struct {
+	ID        int64  `json:"id"`
+	Title     string `json:"title"`
+	Content   string `json:"content"`
+	StartDate string `json:"start_date"` // YYYY-MM-DD
+	EndDate   string `json:"end_date"`   // YYYY-MM-DD
+	BgColor   string `json:"bg_color"`   // hex color, e.g. "#dc2626"
+	Recurring bool   `json:"recurring"`  // repeat every month using start/end day-of-month
+}
+
 // PageData is the common data passed to all templates.
 type PageData struct {
 	Config            interface{}
@@ -283,6 +294,8 @@ type PageData struct {
 	RealAdmin *User // non-nil when an admin is currently impersonating another user
 	// Features
 	DisableProjects bool
+	// News banners active today
+	ActiveNewsMessages []NewsMessage
 }
 
 // Project represents a billable project that users can log time against.

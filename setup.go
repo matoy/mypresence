@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -28,6 +29,9 @@ func buildTemplateFuncMap(cfg *config.Config) template.FuncMap {
 		// safehtml marks a string as safe HTML so html/template does not escape it.
 		// Only use with strings originating from our own controlled i18n data.
 		"safehtml": func(s string) template.HTML { return template.HTML(s) }, //nolint:gosec
+		// safeNewsContent escapes the content and converts [text](url) syntax to safe anchor tags.
+		// Only http/https URLs are allowed.
+		"safeNewsContent": safeNewsContent,
 		"seq": func(n int) []int {
 			s := make([]int, n)
 			for i := range s {
@@ -115,7 +119,7 @@ func loadTemplates(funcMap template.FuncMap) map[string]*template.Template {
 		"admin_holidays", "admin_users", "admin_user_logs", "floorplan", "admin_floorplans",
 		"pat", "settings_change_password", "forgot_password", "reset_password",
 		"impersonate", "projects", "admin_projects", "admin_projects_report",
-		"admin_general_settings",
+		"admin_general_settings", "admin_news",
 	}
 	templates := make(map[string]*template.Template)
 	for _, page := range pages {
@@ -188,6 +192,12 @@ func newRenderPage(cfg *config.Config, database *db.DB, templates map[string]*te
 			CSRFToken:         csrfToken,
 			RealAdmin:         realAdmin,
 		}
+		// Fetch active news banners for authenticated users.
+		if user != nil {
+			if activeNews, err := database.GetActiveNewsMessages(); err == nil {
+				pd.ActiveNewsMessages = activeNews
+			}
+		}
 		if logoExists {
 			pd.Config.(map[string]string)["LogoURL"] = "/data/logo.png"
 		}
@@ -202,6 +212,32 @@ func newRenderPage(cfg *config.Config, database *db.DB, templates map[string]*te
 			log.Printf("Template render error: %v", err)
 		}
 	}
+}
+
+// safeNewsContent escapes all HTML in s, then converts [text](url) markdown-link
+// syntax to safe <a> anchor tags. Only http:// and https:// URLs are accepted.
+// The returned value is marked as template.HTML so it renders without escaping.
+var newsLinkRE = regexp.MustCompile(`\[([^\]]+)\]\((https?://[^)]+)\)`)
+
+func safeNewsContent(s string) template.HTML {
+	// First escape all HTML to prevent XSS.
+	escaped := template.HTMLEscapeString(s)
+	// Then replace [text](url) with safe anchor tags.
+	result := newsLinkRE.ReplaceAllStringFunc(escaped, func(match string) string {
+		parts := newsLinkRE.FindStringSubmatch(match)
+		if len(parts) != 3 {
+			return match
+		}
+		text := parts[1] // already HTML-escaped by template.HTMLEscapeString above
+		rawURL := parts[2]
+		// Validate scheme (must be http or https).
+		if !strings.HasPrefix(rawURL, "http://") && !strings.HasPrefix(rawURL, "https://") {
+			return match
+		}
+		urlEscaped := template.HTMLEscapeString(rawURL)
+		return `<a href="` + urlEscaped + `" target="_blank" rel="noopener noreferrer" class="underline">` + text + `</a>`
+	})
+	return template.HTML(result) //nolint:gosec
 }
 
 // floorplanImgHandler returns a handler that serves floorplan image files from
