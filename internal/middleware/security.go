@@ -18,8 +18,8 @@ func LimitRequestBody(next http.Handler) http.Handler {
 }
 
 // SecurityHeaders adds defensive HTTP response headers to every response.
-// CSP allows CDN scripts/styles used by the application (Tailwind, Alpine.js,
-// Google Fonts) while blocking everything else by default.
+// CSP blocks everything not explicitly allowed; scripts are self-hosted.
+// Google Fonts is allowed for optional custom font configuration.
 func SecurityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
@@ -32,7 +32,7 @@ func SecurityHeaders(next http.Handler) http.Handler {
 		}
 		h.Set("Content-Security-Policy",
 			"default-src 'self'; "+
-				"script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; "+
+				"script-src 'self' 'unsafe-inline' 'unsafe-eval'; "+
 				"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "+
 				"font-src 'self' https://fonts.gstatic.com; "+
 				"img-src 'self' data:; "+
