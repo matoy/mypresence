@@ -152,3 +152,41 @@ func TestActivityAPI_MissingParams(t *testing.T) {
 		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
 	}
 }
+
+// TestActivityPage_ActivityViewerGetsExecSummary verifies that the ActivityPage
+// handler passes ShowExecSummary=true when the authenticated user has the
+// activity_viewer role.
+func TestActivityPage_ActivityViewerGetsExecSummary(t *testing.T) {
+	d := newExtraTestDB(t)
+
+	// Create a second team and a member so exec summary aggregates across teams.
+	statusID, _ := d.CreateStatus(models.Status{Name: "Office", Color: "#00ff00", Billable: true, OnSite: true, SortOrder: 1})
+	memberID, _ := d.CreateLocalUser("execmember@test.com", "ExecMember", "password1")
+	teamID, _ := d.CreateTeam("ExecTeam")
+	d.AddTeamMember(teamID, memberID)                              //nolint:errcheck
+	d.SetPresences(memberID, []string{"2026-03-02"}, statusID, "") //nolint:errcheck
+
+	var showExecSummaryGot interface{}
+	captureRender := func(w http.ResponseWriter, r *http.Request, page string, data interface{}) {
+		if m, ok := data.(map[string]interface{}); ok {
+			showExecSummaryGot = m["ShowExecSummary"]
+		}
+	}
+
+	h := &ActivityHandler{DB: d, Render: captureRender, DisableProjects: false}
+
+	req := createAuthedReq(t, d, http.MethodGet,
+		"/admin/activity?year=2026&month=3&team="+strconvI64(teamID),
+		"viewer@exec.com", "ExecViewer", "password1",
+		string(models.RoleActivityViewer), nil)
+	w := httptest.NewRecorder()
+	w.Body = new(bytes.Buffer)
+	middleware.Auth(d, http.HandlerFunc(h.ActivityPage)).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if showExecSummaryGot != true {
+		t.Fatalf("ShowExecSummary should be true for activity_viewer, got %v", showExecSummaryGot)
+	}
+}
