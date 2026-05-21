@@ -83,6 +83,7 @@ func main() {
 	generalSettingsHandler := &handlers.GeneralSettingsHandler{DataDir: cfg.DataDir, Render: renderPage}
 	resetPasswordHandler := &handlers.ResetPasswordHandler{DB: database, Config: cfg, Render: renderPage, RateLimiter: middleware.NewLoginRateLimiter()}
 	patHandler, projectsHandler := initOptionalHandlers(cfg, database, renderPage)
+	newsHandler := &handlers.NewsHandler{DB: database, Render: renderPage}
 
 	// Initialize SAML if configured
 	if cfg.SAMLEnabled {
@@ -146,6 +147,9 @@ func main() {
 	authMux.HandleFunc("GET /impersonate", settingsHandler.ImpersonatePage)
 	authMux.Handle("POST /impersonate", middleware.ValidateCSRF(cfg.SecretKey)(http.HandlerFunc(settingsHandler.ImpersonatePost)))
 	authMux.Handle("POST /impersonate-exit", middleware.ValidateCSRF(cfg.SecretKey)(http.HandlerFunc(settingsHandler.ImpersonateExitPost)))
+
+	// Active news (all authenticated users)
+	authMux.HandleFunc("GET /api/news", newsHandler.GetActiveNewsAPI)
 
 	registerOptionalAuthRoutes(authMux, cfg, patHandler, floorplanHandler)
 
@@ -214,6 +218,21 @@ func main() {
 	generalSettingsMux.HandleFunc("DELETE /admin/settings/logo", generalSettingsHandler.DeleteLogo)
 	mux.Handle("/admin/settings", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(generalSettingsMux)))
 	mux.Handle("/admin/settings/", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(generalSettingsMux)))
+
+	newsMux := http.NewServeMux()
+	newsMux.HandleFunc("GET /admin/news", newsHandler.NewsPage)
+	newsMux.HandleFunc("POST /admin/news", newsHandler.CreateNews)
+	newsMux.HandleFunc("PUT /admin/news/{id}", newsHandler.UpdateNews)
+	newsMux.HandleFunc("DELETE /admin/news/{id}", newsHandler.DeleteNews)
+	newsMux.HandleFunc("GET /api/admin/news", newsHandler.ListNewsAPI)
+	newsMux.HandleFunc("POST /api/admin/news", newsHandler.CreateNews)
+	newsMux.HandleFunc("PUT /api/admin/news/{id}", newsHandler.UpdateNews)
+	newsMux.HandleFunc("DELETE /api/admin/news/{id}", newsHandler.DeleteNews)
+	mux.Handle("/admin/news", middleware.Auth(database, middleware.RequireRole(models.RoleActivityViewer)(newsMux)))
+	mux.Handle("/admin/news/", middleware.Auth(database, middleware.RequireRole(models.RoleActivityViewer)(newsMux)))
+	mux.Handle("/api/admin/news", middleware.Auth(database, middleware.RequireRole(models.RoleActivityViewer)(newsMux)))
+	mux.Handle("/api/admin/news/", middleware.Auth(database, middleware.RequireRole(models.RoleActivityViewer)(newsMux)))
+
 	registerOptionalAdminRoutes(mux, authMux, cfg, database, floorplanHandler, projectsHandler)
 
 	mux.Handle("/", middleware.AuthWithOptions(database, !cfg.DisableAPI, authMux))

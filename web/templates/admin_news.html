@@ -1,0 +1,257 @@
+{{define "content"}}
+{{with .Data}}
+<div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8" x-data="newsAdmin({{json .Messages}})">
+
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-bold text-gray-900">{{index $.T "news.title"}}</h1>
+        <div class="flex items-center gap-3">
+            <span class="text-sm text-gray-400" x-text="messages.length + ' ' + {{json (index $.T "news.col_title")}}"></span>
+            <button @click="openCreate()"
+                    class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
+                {{index $.T "news.add"}}
+            </button>
+        </div>
+    </div>
+
+    {{if .Error}}
+    <div class="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-4 text-red-700 text-sm">
+        {{.Error}}
+    </div>
+    {{end}}
+
+    <!-- Messages table -->
+    <div class="bg-white rounded-xl shadow-md overflow-x-auto">
+        {{if not .Messages}}
+        <div class="px-6 py-10 text-center text-gray-400">
+            <p class="text-lg">{{index $.T "news.none"}}</p>
+            <p class="text-sm mt-1">{{index $.T "news.none_hint"}}</p>
+        </div>
+        {{else}}
+        <table class="w-full">
+            <thead>
+                <tr class="bg-gray-50 border-b border-gray-200">
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T "news.col_title"}}</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T "news.col_start"}}</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T "news.col_end"}}</th>
+                    <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">{{index $.T "news.col_recurring"}}</th>
+                    <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">{{index $.T "admin.status"}}</th>
+                    <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">{{index $.T "admin.actions"}}</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+                <template x-for="msg in messages" :key="msg.id">
+                    <tr class="hover:bg-gray-50 transition">
+                        <td class="px-4 py-3">
+                            <div class="flex items-center gap-2">
+                                <span class="inline-block w-3 h-3 rounded-full flex-shrink-0" :style="'background-color:' + msg.bg_color"></span>
+                                <span class="text-sm font-medium text-gray-800" x-text="msg.title"></span>
+                            </div>
+                        </td>
+                        <td class="px-4 py-3 text-sm font-mono text-gray-600" x-text="msg.start_date"></td>
+                        <td class="px-4 py-3 text-sm font-mono text-gray-600" x-text="msg.end_date"></td>
+                        <td class="px-4 py-3 text-center">
+                            <span x-show="msg.recurring"
+                                  class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700"
+                                  x-text="_t['news.recurring_badge']"></span>
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                            <span x-show="isActive(msg)"
+                                  class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"
+                                  x-text="_t['news.active_badge']"></span>
+                            <span x-show="!isActive(msg)"
+                                  class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500"
+                                  x-text="_t['admin.disabled']"></span>
+                        </td>
+                        <td class="px-4 py-3 text-right">
+                            <div class="flex items-center justify-end gap-1.5">
+                                <button @click="openEdit(msg)"
+                                        class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium"
+                                        x-text="_t['admin.edit']"></button>
+                                <button @click="del(msg)"
+                                        class="text-xs px-2.5 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg transition font-medium"
+                                        x-text="_t['admin.delete']"></button>
+                            </div>
+                        </td>
+                    </tr>
+                </template>
+            </tbody>
+        </table>
+        {{end}}
+    </div>
+
+    <!-- Create / Edit modal -->
+    <div x-show="showModal"
+         x-cloak
+         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+         @click.self="showModal = false">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg" @click.stop>
+            <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                <h2 class="text-base font-semibold text-gray-800"
+                    x-text="editingId ? _t['admin.edit'] : _t['news.add']"></h2>
+                <button @click="showModal = false" class="text-gray-400 hover:text-gray-600 transition">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="px-6 py-4 space-y-4">
+                <!-- Error -->
+                <p x-show="formError" class="text-red-600 text-sm" x-text="formError"></p>
+
+                <!-- Title -->
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1" x-text="_t['news.col_title']"></label>
+                    <input type="text" x-model="form.title"
+                           :placeholder="_t['news.title_placeholder']"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+                </div>
+
+                <!-- Content -->
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1" x-text="_t['news.col_content']"></label>
+                    <textarea x-model="form.content"
+                              :placeholder="_t['news.content_placeholder']"
+                              rows="3"
+                              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm resize-y"></textarea>
+                    <p class="mt-1 text-xs text-gray-400" x-text="_t['news.link_syntax']"></p>
+                </div>
+
+                <!-- Dates -->
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1" x-text="_t['news.col_start']"></label>
+                        <input type="date" x-model="form.start_date"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm font-mono">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1" x-text="_t['news.col_end']"></label>
+                        <input type="date" x-model="form.end_date"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm font-mono">
+                    </div>
+                </div>
+
+                <!-- Recurring -->
+                <div class="flex items-center gap-3">
+                    <input type="checkbox" id="news-recurring" x-model="form.recurring"
+                           class="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary">
+                    <label for="news-recurring" class="text-sm text-gray-700 cursor-pointer" x-text="_t['news.col_recurring']"></label>
+                    <span class="text-xs text-gray-400" x-show="form.recurring" x-text="_t['news.recurring_hint']"></span>
+                </div>
+
+                <!-- Color -->
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1" x-text="_t['news.col_color']"></label>
+                    <div class="flex items-center gap-3">
+                        <input type="color" x-model="form.bg_color"
+                               class="h-9 w-12 rounded border border-gray-300 cursor-pointer p-0.5">
+                        <input type="text" x-model="form.bg_color"
+                               :placeholder="_t['news.col_color_hint']"
+                               pattern="#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?"
+                               class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm font-mono">
+                        <!-- Preview -->
+                        <div class="h-9 w-20 rounded-lg border border-gray-200 overflow-hidden flex items-center justify-center text-white text-xs font-medium"
+                             :style="'background-color:' + form.bg_color">
+                            <span>{{index $.T "news.active_badge"}}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-2">
+                <button @click="showModal = false"
+                        class="text-xs px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium"
+                        x-text="_t['admin.cancel']"></button>
+                <button @click="save()"
+                        class="text-xs px-3 py-1.5 bg-primary text-white hover:opacity-90 rounded-lg transition font-medium"
+                        x-text="_t['admin.save']"></button>
+            </div>
+        </div>
+    </div>
+
+</div>
+{{end}}
+
+<script>
+function newsAdmin(initialMessages) {
+    const today = new Date().toISOString().slice(0, 10);
+    return {
+        messages: initialMessages || [],
+        showModal: false,
+        editingId: null,
+        formError: '',
+        form: {
+            title: '',
+            content: '',
+            start_date: today,
+            end_date: today,
+            bg_color: '#dc2626',
+        },
+
+        isActive(msg) {
+            if (msg.recurring) {
+                const todayDay = new Date().getDate();
+                const startDay = parseInt(msg.start_date.slice(8, 10), 10);
+                const endDay   = parseInt(msg.end_date.slice(8, 10), 10);
+                return todayDay >= startDay && todayDay <= endDay;
+            }
+            return msg.start_date <= today && msg.end_date >= today;
+        },
+
+        openCreate() {
+            this.editingId = null;
+            this.formError = '';
+            this.form = {
+                title: '',
+                content: '',
+                start_date: today,
+                end_date: today,
+                bg_color: '#dc2626',
+                recurring: false,
+            };
+            this.showModal = true;
+        },
+
+        openEdit(msg) {
+            this.editingId = msg.id;
+            this.formError = '';
+            this.form = {
+                title: msg.title,
+                content: msg.content,
+                start_date: msg.start_date,
+                end_date: msg.end_date,
+                bg_color: msg.bg_color,
+                recurring: msg.recurring || false,
+            };
+            this.showModal = true;
+        },
+
+        async save() {
+            this.formError = '';
+            const url = this.editingId ? '/admin/news/' + this.editingId : '/admin/news';
+            const method = this.editingId ? 'PUT' : 'POST';
+            const resp = await fetch(url, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(this.form),
+            });
+            if (resp.ok) {
+                window.location.reload();
+            } else {
+                const d = await resp.json().catch(() => ({}));
+                this.formError = d.error || 'Error';
+            }
+        },
+
+        async del(msg) {
+            if (!confirm(_t['news.delete_confirm'])) return;
+            const resp = await fetch('/admin/news/' + msg.id, { method: 'DELETE' });
+            if (resp.ok) {
+                window.location.reload();
+            } else {
+                const d = await resp.json().catch(() => ({}));
+                alert(d.error || 'Error');
+            }
+        },
+    };
+}
+</script>
+{{end}}

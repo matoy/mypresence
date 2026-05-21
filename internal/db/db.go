@@ -250,6 +250,9 @@ func (d *DB) migrate() error {
 	if err := d.migrateProjects(); err != nil {
 		return fmt.Errorf("migrateProjects: %w", err)
 	}
+	if err := d.migrateNews(); err != nil {
+		return fmt.Errorf("migrateNews: %w", err)
+	}
 	return nil
 }
 

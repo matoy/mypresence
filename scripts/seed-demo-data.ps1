@@ -481,3 +481,55 @@ foreach ($key in $projectAlloc.Keys) {
 }
 
 Write-Host "`nSeed complete!"
+
+# ── 11. News banners ──────────────────────────────────────────────────────────
+Write-Host "`nCreating news banners..."
+$newsItems = @(
+    @{
+        title      = "🎉 Bienvenue sur myPresence !"
+        content    = "Cette démo illustre toutes les fonctionnalités de myPresence. Consultez la [documentation](https://github.com/matoy/mypresence) pour en savoir plus."
+        start_date = "2026-01-01"
+        end_date   = "2026-12-31"
+        bg_color   = "#16a34a"
+        recurring  = $false
+    },
+    @{
+        title      = "📅 Rappel : saisie des présences de mai"
+        content    = "Pensez à renseigner vos présences pour le mois de mai avant le 31/05. Contact : [RH](mailto:rh@corp.local)"
+        start_date = "2026-05-01"
+        end_date   = "2026-05-31"
+        bg_color   = "#2563eb"
+        recurring  = $false
+    },
+    @{
+        title      = "🏖️ Fermeture estivale"
+        content    = "Les bureaux seront fermés du 11 au 22 août 2026. Bonnes vacances à tous !"
+        start_date = "2026-08-01"
+        end_date   = "2026-08-10"
+        bg_color   = "#d97706"
+        recurring  = $false
+    },
+    @{
+        title      = "⚠️ Maintenance planifiée"
+        content    = "Une maintenance du système est prévue le samedi 14 juin de 8h à 12h. myPresence sera indisponible pendant cette période."
+        start_date = "2026-06-08"
+        end_date   = "2026-06-13"
+        bg_color   = "#dc2626"
+        recurring  = $false
+    },
+    @{
+        title      = "📋 Rappel mensuel : saisie des présences"
+        content    = "Rappel : pensez à saisir vos présences avant le 25 de chaque mois. Questions ? Contactez [les RH](mailto:rh@corp.local)."
+        start_date = "2026-01-20"
+        end_date   = "2026-01-25"
+        bg_color   = "#7c3aed"
+        recurring  = $true
+    }
+)
+foreach ($n in $newsItems) {
+    $r = PostJSON "$Base/api/admin/news" $n
+    if ($r -and $r.id) { Write-Host "  '$($n.title)' id=$($r.id)" }
+    else                { Write-Warning "  Failed to create news '$($n.title)'" }
+}
+
+Write-Host "`nSeed complete (with news banners)!"
