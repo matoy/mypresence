@@ -1,6 +1,6 @@
 {{define "content"}}
 {{with .Data}}
-{{$allStatuses := .Statuses}}{{$selectedTeamID := .SelectedTeamID}}{{$days := .Days}}{{$presenceMap := .PresenceMap}}{{$statusTotals := .StatusTotals}}{{$workingDays := .WorkingDays}}{{$workingDaysExcl := .WorkingDaysExcl}}{{$holidayCount := .HolidayCount}}{{$dayBillable := .DayBillable}}{{$dayOnSite := .DayOnSite}}{{$showProjectActivity := .ShowProjectActivity}}{{$projectActivityByUser := .ProjectActivityByUser}}
+{{$allStatuses := .Statuses}}{{$selectedTeamID := .SelectedTeamID}}{{$days := .Days}}{{$presenceMap := .PresenceMap}}{{$statusTotals := .StatusTotals}}{{$workingDays := .WorkingDays}}{{$workingDaysExcl := .WorkingDaysExcl}}{{$holidayCount := .HolidayCount}}{{$dayBillable := .DayBillable}}{{$dayOnSite := .DayOnSite}}{{$showProjectActivity := .ShowProjectActivity}}{{$projectActivityByUser := .ProjectActivityByUser}}{{$showExecSummary := .ShowExecSummary}}{{$execStatusTotals := .ExecStatusTotals}}{{$execTotalBillable := .ExecTotalBillable}}{{$execTotalOnSite := .ExecTotalOnSite}}{{$execTotalNotSet := .ExecTotalNotSet}}{{$execTotalWorkingDays := .ExecTotalWorkingDays}}{{$execProjectActivityPct := .ExecProjectActivityPct}}{{$execUserCount := .ExecUserCount}}
 <div class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
     <div class="flex items-center justify-between mb-6">
         <h1 class="text-2xl font-bold text-gray-900">{{index $.T "activity.title"}}</h1>
@@ -51,9 +51,115 @@
         </div>
     </div>
 
+    <!-- Executive Summary Table (activity_viewer only) -->
+    {{if $showExecSummary}}
+    <div class="bg-gradient-to-r from-slate-50 to-blue-50 rounded-xl shadow-md overflow-x-auto mb-6 border border-blue-100">
+        <div class="flex items-center justify-between px-4 pt-4 pb-2">
+            <h2 class="text-lg font-semibold text-gray-800">{{index $.T "activity.executive_summary"}}</h2>
+        </div>
+        <table id="exec-summary-table" class="w-full border-collapse">
+            <thead>
+                <tr class="bg-blue-50">
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase border-b border-blue-100">
+                        {{index $.T "activity.employee"}}
+                    </th>
+                    {{range .Statuses}}
+                    <th class="px-3 py-3 text-center text-xs font-semibold border-b border-blue-100 min-w-[80px]"
+                        style="color: {{.Color}}">
+                        {{.Name}}
+                    </th>
+                    {{end}}
+                    <th class="px-4 py-3 text-center text-xs font-semibold text-gray-400 uppercase border-b border-blue-100 bg-gray-50">
+                        {{index $.T "activity.not_set"}}
+                    </th>
+                    <th class="px-4 py-3 text-center text-xs font-semibold text-green-600 uppercase border-b border-blue-100 bg-green-50">
+                        {{index $.T "activity.total_billable_kpi"}}
+                    </th>
+                    <th class="px-4 py-3 text-center text-xs font-semibold text-blue-600 uppercase border-b border-blue-100 bg-blue-50">
+                        {{index $.T "activity.on_site_ratio"}}
+                    </th>
+                    <th class="px-4 py-3 text-center text-xs font-semibold text-purple-600 uppercase border-b border-blue-100 bg-purple-50">
+                        {{index $.T "activity.activity_rate"}}
+                    </th>
+                    {{if $showProjectActivity}}
+                    <th class="px-4 py-3 text-center text-xs font-semibold text-indigo-600 uppercase border-b border-blue-100 bg-indigo-50">
+                        {{index $.T "activity.project_activity"}}
+                    </th>
+                    <th class="px-2 py-3 text-center text-xs font-semibold border-b border-blue-100 bg-indigo-50"></th>
+                    {{end}}
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="bg-white">
+                    <td class="px-4 py-3 text-sm font-medium text-gray-800">
+                        🌐 {{index $.T "activity.all_teams"}} ({{$execUserCount}} {{index $.T "activity.employees"}})
+                    </td>
+                    {{range .Statuses}}
+                    <td class="px-3 py-3 text-center">
+                        {{$countF := getCountF $execStatusTotals .ID}}
+                        {{if $countF}}
+                        <div class="inline-flex items-center justify-center min-w-[28px] h-7 rounded-full text-white text-xs font-bold"
+                             style="background-color: {{.Color}}">
+                            {{fmtF $countF}}
+                        </div>
+                        {{else}}
+                        <span class="text-gray-300">-</span>
+                        {{end}}
+                    </td>
+                    {{end}}
+                    <td class="px-4 py-3 text-center bg-gray-50">
+                        {{if $execTotalNotSet}}
+                        <span class="inline-flex items-center justify-center min-w-[28px] h-7 rounded-full bg-gray-300 text-gray-700 text-xs font-bold">
+                            {{fmtF $execTotalNotSet}}
+                        </span>
+                        {{else}}
+                        <span class="text-gray-300">-</span>
+                        {{end}}
+                    </td>
+                    <td class="px-4 py-3 text-center bg-green-50">
+                        <span class="inline-flex items-center justify-center min-w-[28px] h-7 rounded-full bg-green-500 text-white text-xs font-bold">
+                            {{fmtF $execTotalBillable}}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 text-center bg-blue-50">
+                        {{if $execTotalBillable}}
+                        <span class="text-sm font-medium text-blue-700">{{percentF $execTotalOnSite $execTotalBillable}}%</span>
+                        {{else}}
+                        <span class="text-gray-300">—</span>
+                        {{end}}
+                    </td>
+                    <td class="px-4 py-3 text-center bg-purple-50">
+                        {{if $execTotalWorkingDays}}
+                        <span class="text-sm font-medium text-purple-700">{{percentF $execTotalBillable $execTotalWorkingDays}}%</span>
+                        {{else}}
+                        <span class="text-gray-300">—</span>
+                        {{end}}
+                    </td>
+                    {{if $showProjectActivity}}
+                    <td class="px-4 py-3 text-center bg-indigo-50">
+                        {{if $execTotalBillable}}
+                        <span class="text-sm font-medium text-indigo-700">{{fmtF $execProjectActivityPct}}%</span>
+                        {{else}}
+                        <span class="text-gray-300">—</span>
+                        {{end}}
+                    </td>
+                    <td class="px-2 py-3 text-center bg-indigo-50">
+                        {{if activityRocket $execTotalNotSet $execTotalOnSite $execTotalBillable $execProjectActivityPct}}
+                        <span title="Goal achieved">🚀</span>
+                        {{else}}
+                        <span class="text-gray-300">—</span>
+                        {{end}}
+                    </td>
+                    {{end}}
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    {{end}}
+
     <!-- Summary Stats Table -->
     <div class="flex items-center justify-between mb-3">
-        <h2 class="text-lg font-semibold text-gray-800">{{index $.T "activity.summary"}}</h2>
+        <h2 class="text-lg font-semibold text-gray-800">{{index $.T "activity.team_summary"}}</h2>
         <button onclick="exportTable('summary-table', 'recap_{{index $.T (printf `cal.month.%d` .Month)}}_{{.Year}}')" class="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 shadow-sm transition">
             {{index $.T "admin.export"}}
         </button>

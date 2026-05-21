@@ -68,37 +68,55 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 	// Per-day billable / on-site counts for daily breakdown footer
 	dayBillable, dayOnSite := computeDayBillableOnSite(presenceMap, statuses)
 
+	// Executive summary — only visible to activity_viewer (and global admins)
+	showExecSummary := currentUser != nil && currentUser.HasRole(models.RoleActivityViewer)
+	execStatusTotals := make(map[int64]float64)
+	var execTotalBillable, execTotalOnSite, execTotalNotSet, execTotalWorkingDays, execProjectActivityPct float64
+	var execUserCount int
+	if showExecSummary && len(allTeams) > 0 {
+		execStatusTotals, execTotalBillable, execTotalOnSite, execTotalNotSet, execTotalWorkingDays, execProjectActivityPct, execUserCount =
+			h.computeExecSummary(allTeams, startDate, endDate, workingDaysExcluded, year, month)
+	}
+
 	prevTime := time.Date(year, time.Month(month)-1, 1, 0, 0, 0, 0, time.UTC)
 	nextTime := time.Date(year, time.Month(month)+1, 1, 0, 0, 0, 0, time.UTC)
 
 	h.Render(w, r, "admin_activity", map[string]interface{}{
-		"Teams":                 teams,
-		"Statuses":              statuses,
-		"Stats":                 stats,
-		"ShowProjectActivity":   !h.DisableProjects,
-		"ProjectActivityByUser": projectActivityByUser,
-		"TotalProjectDeclared":  totalProjectDeclared,
-		"SelectedTeamID":        teamID,
-		"Year":                  year,
-		"Month":                 month,
-		"ViewMode":              viewMode,
-		"TotalBillable":         totalBillable,
-		"TotalNotSet":           totalNotSet,
-		"TotalOnSite":           totalOnSite,
-		"TotalWorkingDays":      totalWorkingDays,
-		"WorkingDays":           workingDays,
-		"WorkingDaysExcl":       workingDaysExcluded,
-		"HolidayCount":          holidayCount,
-		"DayBillable":           dayBillable,
-		"DayOnSite":             dayOnSite,
-		"StatusTotals":          statusTotals,
-		"PrevYear":              prevTime.Year(),
-		"PrevMonth":             int(prevTime.Month()),
-		"NextYear":              nextTime.Year(),
-		"NextMonth":             int(nextTime.Month()),
-		"Days":                  days,
-		"Users":                 members,
-		"PresenceMap":           presenceMap,
+		"Teams":                  teams,
+		"Statuses":               statuses,
+		"Stats":                  stats,
+		"ShowProjectActivity":    !h.DisableProjects,
+		"ProjectActivityByUser":  projectActivityByUser,
+		"TotalProjectDeclared":   totalProjectDeclared,
+		"SelectedTeamID":         teamID,
+		"Year":                   year,
+		"Month":                  month,
+		"ViewMode":               viewMode,
+		"TotalBillable":          totalBillable,
+		"TotalNotSet":            totalNotSet,
+		"TotalOnSite":            totalOnSite,
+		"TotalWorkingDays":       totalWorkingDays,
+		"WorkingDays":            workingDays,
+		"WorkingDaysExcl":        workingDaysExcluded,
+		"HolidayCount":           holidayCount,
+		"DayBillable":            dayBillable,
+		"DayOnSite":              dayOnSite,
+		"StatusTotals":           statusTotals,
+		"PrevYear":               prevTime.Year(),
+		"PrevMonth":              int(prevTime.Month()),
+		"NextYear":               nextTime.Year(),
+		"NextMonth":              int(nextTime.Month()),
+		"Days":                   days,
+		"Users":                  members,
+		"PresenceMap":            presenceMap,
+		"ShowExecSummary":        showExecSummary,
+		"ExecStatusTotals":       execStatusTotals,
+		"ExecTotalBillable":      execTotalBillable,
+		"ExecTotalOnSite":        execTotalOnSite,
+		"ExecTotalNotSet":        execTotalNotSet,
+		"ExecTotalWorkingDays":   execTotalWorkingDays,
+		"ExecProjectActivityPct": execProjectActivityPct,
+		"ExecUserCount":          execUserCount,
 	})
 }
 
@@ -222,6 +240,53 @@ func computeDayBillableOnSite(presenceMap map[int64]map[string]map[string]int64,
 				}
 			}
 		}
+	}
+	return
+}
+
+// computeExecSummary aggregates stats across all teams (deduplicating users) to
+// produce a single executive summary row for activity_viewer users.
+func (h *ActivityHandler) computeExecSummary(
+	allTeams []models.Team,
+	startDate, endDate string,
+	workingDaysExcl, year, month int,
+) (statusTotals map[int64]float64, totalBillable, totalOnSite, totalNotSet, totalWorkingDays, projectActivityPct float64, userCount int) {
+	statusTotals = make(map[int64]float64)
+	seen := make(map[int64]bool)
+	totalSetDays := 0.0
+	totalProjectDeclared := 0.0
+	for _, team := range allTeams {
+		stats, err := h.DB.GetTeamStats(team.ID, startDate, endDate)
+		if err != nil {
+			continue
+		}
+		for _, s := range stats {
+			if seen[s.User.ID] {
+				continue
+			}
+			seen[s.User.ID] = true
+			userCount++
+			totalBillable += s.BillableDays
+			totalOnSite += s.OnSiteDays
+			for sid, count := range s.StatusCounts {
+				statusTotals[sid] += count
+				totalSetDays += count
+			}
+			if !h.DisableProjects {
+				declared, err := h.DB.GetUserTotalDeclaredForMonth(s.User.ID, year, month)
+				if err == nil {
+					totalProjectDeclared += declared
+				}
+			}
+		}
+	}
+	totalWorkingDays = float64(workingDaysExcl) * float64(userCount)
+	totalNotSet = totalWorkingDays - totalSetDays
+	if totalNotSet < 0 {
+		totalNotSet = 0
+	}
+	if totalBillable > 0 {
+		projectActivityPct = (totalProjectDeclared / totalBillable) * 100.0
 	}
 	return
 }

@@ -88,6 +88,14 @@ func baseActivityPageData() map[string]interface{} {
 				"2026-05-05": {"full": 1},
 			},
 		},
+		"ShowExecSummary":        false,
+		"ExecStatusTotals":       map[int64]float64{},
+		"ExecTotalBillable":      0.0,
+		"ExecTotalOnSite":        0.0,
+		"ExecTotalNotSet":        0.0,
+		"ExecTotalWorkingDays":   0.0,
+		"ExecProjectActivityPct": 0.0,
+		"ExecUserCount":          0,
 	}
 }
 
@@ -183,4 +191,34 @@ func testActivityRocket(notSet, onSiteDays, billableDays, projectActivity float6
 		return false
 	}
 	return projectActivity >= 99.999 && projectActivity <= 100.001
+}
+
+func TestAdminActivityTemplate_ExecSummaryHiddenForNonViewer(t *testing.T) {
+	data := baseActivityPageData()
+	data["ShowExecSummary"] = false
+	html := renderAdminActivityContent(t, data)
+
+	if strings.Contains(html, `id="exec-summary-table"`) {
+		t.Fatal("exec summary table should not be rendered for non-viewer")
+	}
+}
+
+func TestAdminActivityTemplate_ExecSummaryRendered(t *testing.T) {
+	data := baseActivityPageData()
+	data["ShowExecSummary"] = true
+	data["ExecStatusTotals"] = map[int64]float64{1: 40.0}
+	data["ExecTotalBillable"] = 40.0
+	data["ExecTotalOnSite"] = 27.0
+	data["ExecTotalNotSet"] = 0.0
+	data["ExecTotalWorkingDays"] = 40.0
+	data["ExecProjectActivityPct"] = 100.0
+	data["ExecUserCount"] = 2
+	html := renderAdminActivityContent(t, data)
+
+	if !strings.Contains(html, `id="exec-summary-table"`) {
+		t.Fatal("exec summary table should be rendered for activity_viewer")
+	}
+	if strings.Count(html, `title="Goal achieved"`) < 1 {
+		t.Fatal("exec summary row should show rocket when criteria met")
+	}
 }
