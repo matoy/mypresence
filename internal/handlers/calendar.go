@@ -209,6 +209,15 @@ func (h *CalendarHandler) SetPresences(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Cancel seat reservations on all affected dates: any status change invalidates an existing reservation.
+	if !h.DisableFloorplans {
+		if err := h.DB.CancelUserReservationsForDates(req.UserID, req.Dates); err != nil {
+			slog.Warn("presence.set: failed to cancel reservations", "target_id", req.UserID, "err", err)
+		} else {
+			slog.Info("presence.set: reservations cancelled", "target_id", req.UserID, "dates", len(req.Dates))
+		}
+	}
+
 	h.DB.LogPresenceAction(user.ID, req.UserID, "set", req.Dates, req.StatusID, req.Half) //nolint:errcheck
 	slog.Info("presence.set", "actor", user.Email, "target_id", req.UserID, "dates", len(req.Dates), "status_id", req.StatusID, "half", req.Half)
 
@@ -246,6 +255,23 @@ func (h *CalendarHandler) ClearPresences(w http.ResponseWriter, r *http.Request)
 	if err := h.DB.ClearPresences(req.UserID, req.Dates, req.Half); err != nil {
 		jsonError(w, "Erreur suppression", http.StatusInternalServerError)
 		return
+	}
+
+	// Cancel seat reservations on dates where the user is no longer on-site.
+	if !h.DisableFloorplans {
+		var datesToCancel []string
+		for _, date := range req.Dates {
+			if onSite, err := h.DB.GetUserOnSiteStatus(req.UserID, date); err == nil && !onSite {
+				datesToCancel = append(datesToCancel, date)
+			}
+		}
+		if len(datesToCancel) > 0 {
+			if err := h.DB.CancelUserReservationsForDates(req.UserID, datesToCancel); err != nil {
+				slog.Warn("presence.clear: failed to cancel reservations", "target_id", req.UserID, "err", err)
+			} else {
+				slog.Info("presence.clear: reservations cancelled", "target_id", req.UserID, "dates", len(datesToCancel))
+			}
+		}
 	}
 
 	h.DB.LogPresenceAction(user.ID, req.UserID, "clear", req.Dates, 0, req.Half) //nolint:errcheck
