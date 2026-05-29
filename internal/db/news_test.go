@@ -256,8 +256,8 @@ func TestGetActiveNewsMessages_Recurring(t *testing.T) {
 		startDay = 1
 	}
 	endDay := todayDay + 2
-	if endDay > 28 {
-		endDay = 28
+	if endDay > 31 {
+		endDay = 31
 	}
 
 	startDate := time.Date(2026, 1, startDay, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
