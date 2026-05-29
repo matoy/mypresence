@@ -160,7 +160,7 @@
     <!-- Summary Stats Table -->
     <div class="flex items-center justify-between mb-3">
         <h2 class="text-lg font-semibold text-gray-800">{{index $.T "activity.team_summary"}}</h2>
-        <button onclick="exportTable('summary-table', 'recap_{{index $.T (printf `cal.month.%d` .Month)}}_{{.Year}}')" class="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 shadow-sm transition">
+        <button onclick="exportTable('summary-table', 'recap_{{index $.T (printf `cal.month.%d` .Month)}}_{{.Year}}', '{{index $.T (printf `cal.month.%d` .Month)}} {{.Year}}')" class="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 shadow-sm transition">
             {{index $.T "admin.export"}}
         </button>
     </div>
@@ -200,7 +200,7 @@
             <tbody class="divide-y divide-gray-100">
                 {{range $stat := .Stats}}
                 <tr class="hover:bg-gray-50 transition">
-                    <td class="px-4 py-3 text-sm font-medium text-gray-800">
+                    <td class="px-4 py-3 text-sm font-medium text-gray-800" data-v="{{.User.Name}}">
                         <div class="flex items-center gap-2">
                             <div class="h-7 w-7 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">
                                 {{slice .User.Name 0 1}}
@@ -331,7 +331,7 @@
     <!-- Daily Breakdown Table -->
     <div class="flex items-center justify-between mb-3">
         <h2 class="text-lg font-semibold text-gray-800">{{index $.T "activity.daily"}}</h2>
-        <button onclick="exportTable('daily-table', 'daily_{{index $.T (printf `cal.month.%d` .Month)}}_{{.Year}}')" class="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 shadow-sm transition">
+        <button onclick="exportTable('daily-table', 'daily_{{index $.T (printf `cal.month.%d` .Month)}}_{{.Year}}', '{{index $.T (printf `cal.month.%d` .Month)}} {{.Year}}')" class="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 shadow-sm transition">
             {{index $.T "admin.export"}}
         </button>
     </div>
@@ -443,14 +443,14 @@
 </div>
 <script src="/static/js/xlsx.full.min.js"></script>
 <script>
-function exportTable(tableId, filename) {
+function exportTable(tableId, filename, sheetName) {
     if (typeof XLSX === 'undefined') {
         alert('Impossible de charger la librairie Excel. Vérifiez votre connexion.');
         return;
     }
     const el = document.getElementById(tableId);
     if (!el) return;
-    const wb = XLSX.utils.table_to_book(el, { sheet: 'Données', raw: false });
+    const wb = XLSX.utils.table_to_book(el, { sheet: sheetName || 'Données', raw: false });
     XLSX.writeFile(wb, filename.replace(/[^a-zA-Z0-9_\-]/g, '_') + '.xlsx');
 }
 </script>
