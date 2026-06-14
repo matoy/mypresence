@@ -1,6 +1,6 @@
 module github.com/matoy/mypresence
 
-go 1.25.10
+go 1.25.11
 
 require (
 	github.com/crewjam/saml v0.4.14
