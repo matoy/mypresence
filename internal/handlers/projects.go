@@ -384,22 +384,61 @@ func (h *ProjectsHandler) UpdateProject(w http.ResponseWriter, r *http.Request) 
 
 // ─── Projects Report ──────────────────────────────────────────────────────────
 
+// buildMonthKeysFromRange generates sorted month keys ("YYYY-MM") covering
+// [dateFrom, dateTo] (both inclusive). dateFrom and dateTo may be "YYYY-MM" or
+// "YYYY-MM-DD". Returns nil on invalid or reversed input. Capped at 24 months.
+func buildMonthKeysFromRange(dateFrom, dateTo string) []string {
+	if len(dateFrom) < 7 || len(dateTo) < 7 {
+		return nil
+	}
+	fromKey := dateFrom[:7]
+	toKey := dateTo[:7]
+	if fromKey > toKey {
+		return nil
+	}
+	fromT, err := time.Parse("2006-01", fromKey)
+	if err != nil {
+		return nil
+	}
+	toT, err := time.Parse("2006-01", toKey)
+	if err != nil {
+		return nil
+	}
+	var keys []string
+	for t := fromT; !t.After(toT) && len(keys) < 24; t = t.AddDate(0, 1, 0) {
+		keys = append(keys, t.Format("2006-01"))
+	}
+	return keys
+}
+
 // ProjectsReportPage renders the projects report page (GET /admin/projects-report).
 func (h *ProjectsHandler) ProjectsReportPage(w http.ResponseWriter, r *http.Request) {
 	currentUser := middleware.GetUser(r)
 	now := time.Now()
 
-	// Build 3 month keys: current + 2 previous
-	monthKeys := make([]string, 3)
-	for i := 0; i < 3; i++ {
-		t := now.AddDate(0, -i, 0)
-		monthKeys[2-i] = fmt.Sprintf("%04d-%02d", t.Year(), int(t.Month()))
+	// Apply optional UI filters
+	query := r.URL.Query()
+	filterDateFrom := query.Get("date_from")
+	filterDateTo := query.Get("date_to")
+
+	// Build month keys: from date range when provided, else current + 2 previous.
+	var monthKeys []string
+	if filterDateFrom != "" && filterDateTo != "" {
+		monthKeys = buildMonthKeysFromRange(filterDateFrom, filterDateTo)
+	}
+	if len(monthKeys) == 0 {
+		monthKeys = make([]string, 3)
+		for i := 0; i < 3; i++ {
+			t := now.AddDate(0, -i, 0)
+			monthKeys[2-i] = fmt.Sprintf("%04d-%02d", t.Year(), int(t.Month()))
+		}
+		// Clear invalid range filters so the template shows empty inputs
+		filterDateFrom = ""
+		filterDateTo = ""
 	}
 
 	allProjects, allTeams := h.buildProjectReportRows(currentUser, monthKeys)
 
-	// Apply optional UI filters
-	query := r.URL.Query()
 	filterText := query.Get("q")
 	filterActive := query.Get("active") // "1", "0", or ""
 	if _, hasActive := query["active"]; !hasActive {
@@ -412,13 +451,15 @@ func (h *ProjectsHandler) ProjectsReportPage(w http.ResponseWriter, r *http.Requ
 	filtered := filterReportRows(allProjects, filterText, filterActive, filterTeam)
 
 	h.Render(w, r, "admin_projects_report", map[string]interface{}{
-		"Rows":         filtered,
-		"MonthKeys":    monthKeys,
-		"CurrentMonth": monthKeys[len(monthKeys)-1],
-		"Teams":        allTeams,
-		"FilterText":   filterText,
-		"FilterActive": filterActive,
-		"FilterTeam":   filterTeam,
+		"Rows":           filtered,
+		"MonthKeys":      monthKeys,
+		"CurrentMonth":   monthKeys[len(monthKeys)-1],
+		"Teams":          allTeams,
+		"FilterText":     filterText,
+		"FilterActive":   filterActive,
+		"FilterTeam":     filterTeam,
+		"FilterDateFrom": filterDateFrom,
+		"FilterDateTo":   filterDateTo,
 	})
 	metrics.ProjectOpsTotal.WithLabelValues("report", "success").Inc()
 	slog.Info("project.report.view", "user", currentUser.Email, "rows", len(filtered), "filter_active", filterActive, "filter_team", filterTeam)
@@ -430,15 +471,26 @@ func (h *ProjectsHandler) ProjectsReportAPI(w http.ResponseWriter, r *http.Reque
 	currentUser := middleware.GetUser(r)
 	now := time.Now()
 
-	monthKeys := make([]string, 3)
-	for i := 0; i < 3; i++ {
-		t := now.AddDate(0, -i, 0)
-		monthKeys[2-i] = fmt.Sprintf("%04d-%02d", t.Year(), int(t.Month()))
+	query := r.URL.Query()
+	filterDateFrom := query.Get("date_from")
+	filterDateTo := query.Get("date_to")
+
+	var monthKeys []string
+	if filterDateFrom != "" && filterDateTo != "" {
+		monthKeys = buildMonthKeysFromRange(filterDateFrom, filterDateTo)
+	}
+	if len(monthKeys) == 0 {
+		monthKeys = make([]string, 3)
+		for i := 0; i < 3; i++ {
+			t := now.AddDate(0, -i, 0)
+			monthKeys[2-i] = fmt.Sprintf("%04d-%02d", t.Year(), int(t.Month()))
+		}
+		filterDateFrom = ""
+		filterDateTo = ""
 	}
 
 	reportRows, allTeams := h.buildProjectReportRows(currentUser, monthKeys)
 
-	query := r.URL.Query()
 	filterText := query.Get("q")
 	filterActive := query.Get("active")
 	if _, hasActive := query["active"]; !hasActive {
@@ -449,13 +501,15 @@ func (h *ProjectsHandler) ProjectsReportAPI(w http.ResponseWriter, r *http.Reque
 	filtered := filterReportRows(reportRows, filterText, filterActive, filterTeam)
 
 	jsonOK(w, map[string]interface{}{
-		"rows":          filtered,
-		"month_keys":    monthKeys,
-		"teams":         allTeams,
-		"filter_text":   filterText,
-		"filter_active": filterActive,
-		"filter_team":   filterTeam,
-		"project_scope": len(reportRows),
+		"rows":             filtered,
+		"month_keys":       monthKeys,
+		"teams":            allTeams,
+		"filter_text":      filterText,
+		"filter_active":    filterActive,
+		"filter_team":      filterTeam,
+		"filter_date_from": filterDateFrom,
+		"filter_date_to":   filterDateTo,
+		"project_scope":    len(reportRows),
 	})
 	metrics.ProjectOpsTotal.WithLabelValues("report", "success").Inc()
 	slog.Info("project.report.api", "user", currentUser.Email, "rows", len(filtered), "filter_active", filterActive, "filter_team", filterTeam)

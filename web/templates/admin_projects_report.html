@@ -18,7 +18,7 @@
 
     <!-- Filters -->
     <form method="GET" action="/admin/projects-report"
-          class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
+          class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
         <div class="flex flex-wrap gap-3 items-end">
             <div class="flex-1 min-w-[180px]">
                 <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "projects.report.filter_text"}}</label>
@@ -45,12 +45,31 @@
                 </select>
             </div>
             {{end}}
+            <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "projects.report.date_from"}}</label>
+                <input type="month" name="date_from" value="{{.FilterDateFrom}}"
+                       onchange="scheduleDateRangeSubmit(this.form)"
+                       class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "projects.report.date_to"}}</label>
+                <input type="month" name="date_to" value="{{.FilterDateTo}}"
+                       onchange="scheduleDateRangeSubmit(this.form)"
+                       class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+            </div>
             <a href="/admin/projects-report"
                class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
                 {{index $.T "admin.reset"}}
             </a>
         </div>
     </form>
+
+    <!-- Export button -->
+    <div class="flex justify-end mb-6">
+        <button onclick="exportProjectsReport()" class="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 shadow-sm transition">
+            {{index $.T "admin.export"}}
+        </button>
+    </div>
 
     {{if not .Rows}}
     <div class="bg-white rounded-xl shadow-sm border border-gray-100 px-6 py-10 text-center text-gray-400">
@@ -125,5 +144,73 @@
     {{end}}
     {{end}}
 </div>
+
+<!-- Hidden flat table used for Excel export -->
+<table id="projects-export-table" style="display:none" aria-hidden="true">
+    <thead>
+        <tr>
+            <th>{{index $.T "projects.report.user"}}</th>
+            <th>Project</th>
+            <th>Code</th>
+            {{range $mk := .MonthKeys}}<th>{{$mk}}</th>{{end}}
+            <th>{{index $.T "projects.report.total_past"}}</th>
+            <th>{{index $.T "projects.report.total_todate"}}</th>
+            <th>{{index $.T "projects.report.total_all"}}</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{range $row := .Rows}}
+        {{range $urow := $row.UserRows}}
+        <tr>
+            <td>{{$urow.User.Name}}</td>
+            <td>{{$row.Project.Name}}</td>
+            <td>{{$row.Project.Code}}</td>
+            {{range $mk := $.Data.MonthKeys}}<td>{{fmtF (index $urow.MonthlyDays $mk)}}</td>{{end}}
+            <td>{{fmtF $urow.TotalPastDays}}</td>
+            <td>{{fmtF $urow.TotalToDateDays}}</td>
+            <td>{{fmtF $urow.TotalDays}}</td>
+        </tr>
+        {{end}}
+        <tr>
+            <td>{{index $.T "projects.report.total"}}</td>
+            <td>{{$row.Project.Name}}</td>
+            <td>{{$row.Project.Code}}</td>
+            {{range $mk := $.Data.MonthKeys}}<td>{{fmtF (index $row.MonthTotals $mk)}}</td>{{end}}
+            <td>{{fmtF $row.TotalPastDays}}</td>
+            <td>{{fmtF $row.TotalToDateDays}}</td>
+            <td>{{fmtF $row.TotalDays}}</td>
+        </tr>
+        {{end}}
+    </tbody>
+</table>
+
+<script src="/static/js/xlsx.full.min.js"></script>
+<script>
+var _dateRangeTimer;
+function scheduleDateRangeSubmit(form) {
+    clearTimeout(_dateRangeTimer);
+    _dateRangeTimer = setTimeout(function() {
+        var from = form.querySelector('[name=date_from]').value;
+        var to   = form.querySelector('[name=date_to]').value;
+        // Submit only when both fields are filled (apply filter)
+        // or both are empty (reset to default 3-month view).
+        if ((from && to) || (!from && !to)) {
+            form.requestSubmit();
+        }
+    }, 400);
+}
+
+function exportProjectsReport() {
+    if (typeof XLSX === 'undefined') {
+        alert('Impossible de charger la librairie Excel. Vérifiez votre connexion.');
+        return;
+    }
+    const el = document.getElementById('projects-export-table');
+    if (!el) return;
+    const wb = XLSX.utils.table_to_book(el, { sheet: 'Projets', raw: false });
+    XLSX.writeFile(wb, 'projects_report.xlsx');
+}
+</script>
+
 {{end}}
 {{end}}
