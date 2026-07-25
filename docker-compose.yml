@@ -63,7 +63,7 @@ services:
       - SECRET_KEY="dev-only-secret-32chars!!!!!!!!"
 
       # Enable WebAuthn / Passkeys authentication (FIDO2)
-      - ENABLE_PASSKEYS=true
+      - ENABLE_PASSKEYS=false
       - PASSKEY_RP_ID=presence.example.com          # domaine sans scheme ni port
       - PASSKEY_RP_ORIGIN=https://presence.example.com  # origin complète (doit être HTTPS)
 
