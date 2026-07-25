@@ -353,6 +353,11 @@ func (d *DB) migrateCore() error {
 	if !dl.isSQLite() {
 		nameType = dl.varcharType(255)
 	}
+	// Credential IDs are base64url-encoded raw bytes; typically ≤128 chars for modern authenticators.
+	credIDType := dl.varcharType(256)
+	if dl.isSQLite() {
+		credIDType = "TEXT"
+	}
 
 	stmts := []string{
 		dl.createTableIfNotExists("users", fmt.Sprintf(`
@@ -407,6 +412,16 @@ expires_at %s NOT NULL,
 created_at %s DEFAULT CURRENT_TIMESTAMP,
 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 `, ai, dl.varcharType(64), dt, dt)),
+
+		dl.createTableIfNotExists("webauthn_credentials", fmt.Sprintf(`
+id %s NOT NULL PRIMARY KEY,
+user_id BIGINT NOT NULL,
+name %s NOT NULL DEFAULT '',
+credential_json %s NOT NULL,
+created_at %s DEFAULT CURRENT_TIMESTAMP,
+last_used_at %s,
+FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+`, credIDType, dl.varcharType(128), text, dt, dt)),
 	}
 
 	for _, stmt := range stmts {

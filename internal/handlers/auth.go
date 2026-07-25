@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/matoy/mypresence/internal/config"
 	"github.com/matoy/mypresence/internal/db"
 	"github.com/matoy/mypresence/internal/metrics"
@@ -36,6 +37,10 @@ type AuthHandler struct {
 	// pendingSAMLRequests stores in-flight SAML request IDs (id -> expiry time).
 	// Used to validate InResponseTo in the ACS response.
 	pendingSAMLRequests sync.Map
+	// WebAuthn instance (nil when passkeys are disabled).
+	WebAuthn *webauthn.WebAuthn
+	// passkeySessions stores in-flight WebAuthn ceremonies keyed by a random session token.
+	passkeySessions sync.Map
 }
 
 // InitSAML initializes the SAML service provider if configured.

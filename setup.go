@@ -117,7 +117,7 @@ func loadTemplates(funcMap template.FuncMap) map[string]*template.Template {
 	pages := []string{
 		"login", "calendar", "admin_teams", "admin_statuses", "admin_activity",
 		"admin_holidays", "admin_users", "admin_user_logs", "floorplan", "admin_floorplans",
-		"pat", "settings_change_password", "forgot_password", "reset_password",
+		"pat", "settings_change_password", "settings_passkeys", "forgot_password", "reset_password",
 		"impersonate", "projects", "admin_projects", "admin_projects_report",
 		"admin_general_settings", "admin_news",
 	}
@@ -185,12 +185,11 @@ func newRenderPage(cfg *config.Config, database *db.DB, templates map[string]*te
 			AppVersion:        config.Version,
 			DisableFloorplans: cfg.DisableFloorplans,
 			DisableAPI:        cfg.DisableAPI,
-			DisableProjects:   cfg.DisableProjects,
-			T:                 i18n.T(lang),
-			Lang:              lang,
-			SupportedLangs:    i18n.Supported,
-			CSRFToken:         csrfToken,
-			RealAdmin:         realAdmin,
+			DisableProjects:   cfg.DisableProjects, PasskeysEnabled: cfg.EnablePasskeys, T: i18n.T(lang),
+			Lang:           lang,
+			SupportedLangs: i18n.Supported,
+			CSRFToken:      csrfToken,
+			RealAdmin:      realAdmin,
 		}
 		// Fetch active news banners for authenticated users.
 		if user != nil {

@@ -115,6 +115,20 @@ func (d dialect) realType() string {
 	return "REAL"
 }
 
+// blobType returns the SQL column type for arbitrary binary data.
+func (d dialect) blobType() string {
+	switch d.driver {
+	case "postgres":
+		return "BYTEA"
+	case "mysql":
+		return "LONGBLOB"
+	case "sqlserver":
+		return "VARBINARY(MAX)"
+	default: // sqlite
+		return "BLOB"
+	}
+}
+
 // insertIgnore returns the SQL verb/suffix to insert a row while ignoring
 // unique-constraint conflicts.
 // For SQLServer a different approach (MERGE) is needed; callers should use

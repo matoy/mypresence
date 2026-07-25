@@ -77,6 +77,11 @@ type Config struct {
 	SMTPURL  string
 	SMTPFrom string
 	AppURL   string
+
+	// Passkeys (WebAuthn)
+	EnablePasskeys  bool
+	PasskeyRPID     string // Relying Party ID (domain, e.g. "presence.example.com")
+	PasskeyRPOrigin string // Full origin (e.g. "https://presence.example.com")
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -137,6 +142,10 @@ func Load() *Config {
 		SMTPURL:  getEnv("SMTP_URL", ""),
 		SMTPFrom: getEnv("SMTP_FROM", "noreply@presence.local"),
 		AppURL:   getEnv("APP_URL", ""),
+
+		EnablePasskeys:  getEnvBool("ENABLE_PASSKEYS", false),
+		PasskeyRPID:     getEnv("PASSKEY_RP_ID", ""),
+		PasskeyRPOrigin: getEnv("PASSKEY_RP_ORIGIN", ""),
 	}
 	c.SAMLEnabled = c.SAMLIDPMetadataURL != "" && c.SAMLEntityID != ""
 	return c
