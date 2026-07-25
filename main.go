@@ -93,6 +93,14 @@ func main() {
 		}
 	}
 
+	// Initialize WebAuthn / passkeys if enabled
+	if cfg.EnablePasskeys {
+		if err := authHandler.InitWebAuthn(); err != nil {
+			slog.Warn("WebAuthn initialization failed — passkeys disabled", "error", err)
+			cfg.EnablePasskeys = false
+		}
+	}
+
 	registerMetricsCollectors(database, healthHandler)
 
 	// Router
@@ -126,6 +134,12 @@ func main() {
 	mux.HandleFunc("GET /saml/login", authHandler.SAMLLogin)
 	mux.HandleFunc("POST /saml/acs", authHandler.SAMLACS)
 
+	// WebAuthn / passkey routes (public: login ceremony; authenticated: registration ceremony)
+	if cfg.EnablePasskeys {
+		mux.HandleFunc("POST /webauthn/login/begin", authHandler.PasskeyLoginBegin)
+		mux.HandleFunc("POST /webauthn/login/finish", authHandler.PasskeyLoginFinish)
+	}
+
 	// Protected routes
 	authMux := http.NewServeMux()
 
@@ -142,6 +156,14 @@ func main() {
 	authMux.HandleFunc("GET /settings/my-logs", settingsHandler.MyLogsPage)
 	authMux.HandleFunc("GET /settings/change-password", settingsHandler.ChangePasswordPage)
 	authMux.Handle("POST /settings/change-password", middleware.ValidateCSRF(cfg.SecretKey)(http.HandlerFunc(settingsHandler.ChangePasswordPost)))
+
+	// Passkeys settings (only when enabled)
+	if cfg.EnablePasskeys {
+		authMux.HandleFunc("GET /settings/passkeys", authHandler.PasskeysPage)
+		authMux.HandleFunc("POST /webauthn/register/begin", authHandler.PasskeyRegisterBegin)
+		authMux.HandleFunc("POST /webauthn/register/finish", authHandler.PasskeyRegisterFinish)
+		authMux.Handle("POST /settings/passkeys/delete", middleware.ValidateCSRF(cfg.SecretKey)(http.HandlerFunc(authHandler.PasskeyDeletePost)))
+	}
 
 	// Impersonation (global admin only)
 	authMux.HandleFunc("GET /impersonate", settingsHandler.ImpersonatePage)

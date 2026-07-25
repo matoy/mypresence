@@ -294,6 +294,8 @@ type PageData struct {
 	RealAdmin *User // non-nil when an admin is currently impersonating another user
 	// Features
 	DisableProjects bool
+	// Passkeys
+	PasskeysEnabled bool
 	// News banners active today
 	ActiveNewsMessages []NewsMessage
 }
