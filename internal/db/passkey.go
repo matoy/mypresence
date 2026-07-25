@@ -28,7 +28,7 @@ func (d *DB) GetWebAuthnCredentials(userID int64) ([]webauthn.Credential, error)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var creds []webauthn.Credential
 	for rows.Next() {
@@ -113,7 +113,7 @@ func (d *DB) ListWebAuthnCredentials(userID int64) ([]WebAuthnCredentialInfo, er
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var list []WebAuthnCredentialInfo
 	for rows.Next() {
