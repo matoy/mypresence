@@ -96,6 +96,8 @@ func baseActivityPageData() map[string]interface{} {
 		"ExecTotalWorkingDays":   0.0,
 		"ExecProjectActivityPct": 0.0,
 		"ExecUserCount":          0,
+		"YTDBillableByUser":      map[int64]float64{1: 60.0},
+		"TotalYTDBillable":       60.0,
 	}
 }
 
