@@ -292,6 +292,7 @@ var en = map[string]string{
 	"activity.employee":           "Employee",
 	"activity.holiday_s":          "public holiday",
 	"activity.holiday_p":          "public holidays",
+	"activity.ytd_billable":       "YTD Billable",
 
 	// Logs
 	"logs.title":                "📋 Logs",
@@ -729,6 +730,7 @@ var fr = map[string]string{
 	"activity.employee":           "Employé",
 	"activity.holiday_s":          "j. férié",
 	"activity.holiday_p":          "j. fériés",
+	"activity.ytd_billable":       "Facturables YTD",
 
 	"logs.title":                "📋 Journaux",
 	"logs.period":               "Période :",
@@ -1162,6 +1164,7 @@ var de = map[string]string{
 	"activity.employee":           "Mitarbeiter",
 	"activity.holiday_s":          "Feiertag",
 	"activity.holiday_p":          "Feiertage",
+	"activity.ytd_billable":       "Fakturierbar YTD",
 
 	"logs.title":                "📋 Protokolle",
 	"logs.period":               "Zeitraum:",
@@ -1589,6 +1592,7 @@ var es = map[string]string{
 	"activity.employee":           "Empleado",
 	"activity.holiday_s":          "festivo",
 	"activity.holiday_p":          "festivos",
+	"activity.ytd_billable":       "Facturables YTD",
 
 	"logs.title":                "📋 Registros",
 	"logs.period":               "Período:",
@@ -2023,6 +2027,7 @@ var it = map[string]string{
 	"activity.employee":           "Dipendente",
 	"activity.holiday_s":          "festività",
 	"activity.holiday_p":          "festività",
+	"activity.ytd_billable":       "Fatturabili YTD",
 
 	// Logs
 	"logs.title":                "📋 Log",

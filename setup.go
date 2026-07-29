@@ -59,6 +59,14 @@ func buildTemplateFuncMap(cfg *config.Config) template.FuncMap {
 			}
 			return ""
 		},
+		"statusBillable": func(statuses []models.Status, id int64) bool {
+			for _, s := range statuses {
+				if s.ID == id {
+					return s.Billable
+				}
+			}
+			return false
+		},
 		"hasKey": func(m map[string]int64, key string) bool {
 			_, ok := m[key]
 			return ok

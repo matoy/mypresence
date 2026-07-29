@@ -68,6 +68,18 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 	// Per-day billable / on-site counts for daily breakdown footer
 	dayBillable, dayOnSite := computeDayBillableOnSite(presenceMap, statuses)
 
+	// YTD billable days per user (Jan 1 → end of current month)
+	ytdBillableByUser := make(map[int64]float64)
+	totalYTDBillable := 0.0
+	if teamID > 0 {
+		ytdStart := fmt.Sprintf("%04d-01-01", year)
+		ytdStats, _ := h.DB.GetTeamStats(teamID, ytdStart, endDate)
+		for _, s := range ytdStats {
+			ytdBillableByUser[s.User.ID] = s.BillableDays
+			totalYTDBillable += s.BillableDays
+		}
+	}
+
 	// Executive summary — only visible to activity_viewer (and global admins)
 	showExecSummary := currentUser != nil && currentUser.HasRole(models.RoleActivityViewer)
 	execStatusTotals := make(map[int64]float64)
@@ -117,6 +129,8 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 		"ExecTotalWorkingDays":   execTotalWorkingDays,
 		"ExecProjectActivityPct": execProjectActivityPct,
 		"ExecUserCount":          execUserCount,
+		"YTDBillableByUser":      ytdBillableByUser,
+		"TotalYTDBillable":       totalYTDBillable,
 	})
 }
 
