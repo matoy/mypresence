@@ -349,6 +349,8 @@ var en = map[string]string{
 	"settings.general.error.invalid_content": "File content is not a valid PNG image.",
 	"settings.general.error.write_error":     "Failed to save the logo. Please try again.",
 	"settings.general.success.logo_uploaded": "Logo updated successfully.",
+	"settings.general.version":               "Application Version",
+	"settings.general.env_vars":              "Environment Variables",
 
 	// Change password
 	"cp.title":   "🔐 Change password",
@@ -785,6 +787,8 @@ var fr = map[string]string{
 	"settings.general.error.invalid_content": "Le contenu du fichier n'est pas une image PNG valide.",
 	"settings.general.error.write_error":     "Impossible d'enregistrer le logo. Veuillez réessayer.",
 	"settings.general.success.logo_uploaded": "Logo mis à jour avec succès.",
+	"settings.general.version":               "Version de l'application",
+	"settings.general.env_vars":              "Variables d'environnement",
 
 	"cp.title":   "🔐 Changer le mot de passe",
 	"cp.current": "Mot de passe actuel",
@@ -1219,6 +1223,8 @@ var de = map[string]string{
 	"settings.general.error.invalid_content": "Der Dateiinhalt ist kein gültiges PNG-Bild.",
 	"settings.general.error.write_error":     "Logo konnte nicht gespeichert werden. Bitte versuchen Sie es erneut.",
 	"settings.general.success.logo_uploaded": "Logo erfolgreich aktualisiert.",
+	"settings.general.version":               "Anwendungsversion",
+	"settings.general.env_vars":              "Umgebungsvariablen",
 
 	"cp.title":   "🔐 Passwort ändern",
 	"cp.current": "Aktuelles Passwort",
@@ -1647,6 +1653,8 @@ var es = map[string]string{
 	"settings.general.error.invalid_content": "El contenido del archivo no es una imagen PNG válida.",
 	"settings.general.error.write_error":     "No se pudo guardar el logo. Por favor, inténtelo de nuevo.",
 	"settings.general.success.logo_uploaded": "Logo actualizado correctamente.",
+	"settings.general.version":               "Versión de la aplicación",
+	"settings.general.env_vars":              "Variables de entorno",
 
 	"cp.title":   "🔐 Cambiar contraseña",
 	"cp.current": "Contraseña actual",
@@ -2084,6 +2092,8 @@ var it = map[string]string{
 	"settings.general.error.invalid_content": "Il contenuto del file non è un'immagine PNG valida.",
 	"settings.general.error.write_error":     "Impossibile salvare il logo. Riprova.",
 	"settings.general.success.logo_uploaded": "Logo aggiornato con successo.",
+	"settings.general.version":               "Versione dell'applicazione",
+	"settings.general.env_vars":              "Variabili d'ambiente",
 
 	// Change password
 	"cp.title":   "🔐 Cambia password",

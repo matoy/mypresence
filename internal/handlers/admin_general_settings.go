@@ -7,10 +7,17 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/matoy/mypresence/internal/middleware"
 )
+
+// EnvEntry holds a single environment variable key-value pair.
+type EnvEntry struct {
+	Key   string
+	Value string
+}
 
 // GeneralSettingsHandler handles the general admin settings page.
 type GeneralSettingsHandler struct {
@@ -22,10 +29,20 @@ type GeneralSettingsHandler struct {
 func (h *GeneralSettingsHandler) GeneralSettingsPage(w http.ResponseWriter, r *http.Request) {
 	_, err := os.Stat(filepath.Join(h.DataDir, "logo.png"))
 	logoExists := err == nil
+
+	rawEnv := os.Environ()
+	sort.Strings(rawEnv)
+	envVars := make([]EnvEntry, 0, len(rawEnv))
+	for _, e := range rawEnv {
+		k, v, _ := strings.Cut(e, "=")
+		envVars = append(envVars, EnvEntry{Key: k, Value: v})
+	}
+
 	h.Render(w, r, "admin_general_settings", map[string]interface{}{
 		"LogoExists": logoExists,
 		"Error":      r.URL.Query().Get("error"),
 		"Success":    r.URL.Query().Get("success"),
+		"EnvVars":    envVars,
 	})
 }
 
