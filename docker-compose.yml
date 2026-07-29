@@ -12,8 +12,8 @@
 
 services:
   mypresence:
-    build: .
-    #image: matoy/mypresence:latest
+    #build: .
+    image: matoy/mypresence:latest
     container_name: mypresence-app
     restart: unless-stopped
     healthcheck:
