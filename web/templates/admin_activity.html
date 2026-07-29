@@ -1,6 +1,6 @@
 {{define "content"}}
 {{with .Data}}
-{{$allStatuses := .Statuses}}{{$selectedTeamID := .SelectedTeamID}}{{$days := .Days}}{{$presenceMap := .PresenceMap}}{{$statusTotals := .StatusTotals}}{{$workingDays := .WorkingDays}}{{$workingDaysExcl := .WorkingDaysExcl}}{{$holidayCount := .HolidayCount}}{{$dayBillable := .DayBillable}}{{$dayOnSite := .DayOnSite}}{{$showProjectActivity := .ShowProjectActivity}}{{$projectActivityByUser := .ProjectActivityByUser}}{{$showExecSummary := .ShowExecSummary}}{{$execStatusTotals := .ExecStatusTotals}}{{$execTotalBillable := .ExecTotalBillable}}{{$execTotalOnSite := .ExecTotalOnSite}}{{$execTotalNotSet := .ExecTotalNotSet}}{{$execTotalWorkingDays := .ExecTotalWorkingDays}}{{$execProjectActivityPct := .ExecProjectActivityPct}}{{$execUserCount := .ExecUserCount}}
+{{$allStatuses := .Statuses}}{{$selectedTeamID := .SelectedTeamID}}{{$days := .Days}}{{$presenceMap := .PresenceMap}}{{$statusTotals := .StatusTotals}}{{$workingDays := .WorkingDays}}{{$workingDaysExcl := .WorkingDaysExcl}}{{$holidayCount := .HolidayCount}}{{$dayBillable := .DayBillable}}{{$dayOnSite := .DayOnSite}}{{$showProjectActivity := .ShowProjectActivity}}{{$projectActivityByUser := .ProjectActivityByUser}}{{$showExecSummary := .ShowExecSummary}}{{$execStatusTotals := .ExecStatusTotals}}{{$execTotalBillable := .ExecTotalBillable}}{{$execTotalOnSite := .ExecTotalOnSite}}{{$execTotalNotSet := .ExecTotalNotSet}}{{$execTotalWorkingDays := .ExecTotalWorkingDays}}{{$execProjectActivityPct := .ExecProjectActivityPct}}{{$execUserCount := .ExecUserCount}}{{$ytdBillableByUser := .YTDBillableByUser}}{{$totalYTDBillable := .TotalYTDBillable}}
 <div class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
     <div class="flex items-center justify-between mb-6">
         <h1 class="text-2xl font-bold text-gray-900">{{index $.T "activity.title"}}</h1>
@@ -195,6 +195,9 @@
                     </th>
                     <th class="px-2 py-3 text-center text-xs font-semibold border-b border-gray-200 bg-indigo-50"></th>
                     {{end}}
+                    <th class="px-4 py-3 text-center text-xs font-semibold text-orange-600 uppercase border-b border-gray-200 bg-orange-50">
+                        {{index $.T "activity.ytd_billable"}}
+                    </th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
@@ -268,6 +271,11 @@
                         {{end}}
                     </td>
                     {{end}}
+                    <td class="px-4 py-3 text-center bg-orange-50">
+                        <span class="inline-flex items-center justify-center min-w-[28px] h-7 rounded-full bg-orange-400 text-white text-xs font-bold">
+                            {{fmtF (getCountF $ytdBillableByUser .User.ID)}}
+                        </span>
+                    </td>
                 </tr>
                 {{end}}
             </tbody>
@@ -323,6 +331,9 @@
                         <span class="text-gray-300">—</span>
                     </td>
                     {{end}}
+                    <td class="px-4 py-3 text-center bg-orange-50">
+                        <span class="text-orange-600 font-bold text-lg">{{fmtF $totalYTDBillable}}</span>
+                    </td>
                 </tr>
             </tfoot>
         </table>
@@ -368,13 +379,13 @@
                                 {{$amSid   := presenceHalf $userPresences .Date "AM"}}
                                 {{$pmSid   := presenceHalf $userPresences .Date "PM"}}
                                 {{if $fullSid}}
-                                <div class="mx-auto h-5 w-5 rounded" style="background-color: {{statusColor $allStatuses $fullSid}}" title="{{statusName $allStatuses $fullSid}}"></div>
+                                <div class="mx-auto h-5 w-5 rounded flex items-center justify-center text-white text-[8px] font-bold leading-none" style="background-color: {{statusColor $allStatuses $fullSid}}" title="{{statusName $allStatuses $fullSid}}">{{if statusBillable $allStatuses $fullSid}}1{{end}}</div>
                                 {{else if or $amSid $pmSid}}
                                 <div class="mx-auto h-5 w-5 rounded overflow-hidden flex flex-col">
-                                    <div class="flex-1" style="background-color: {{if $amSid}}{{statusColor $allStatuses $amSid}}{{else}}#e5e7eb{{end}}"
-                                         title="AM{{if $amSid}}: {{statusName $allStatuses $amSid}}{{end}}"></div>
-                                    <div class="flex-1" style="background-color: {{if $pmSid}}{{statusColor $allStatuses $pmSid}}{{else}}#e5e7eb{{end}}"
-                                         title="PM{{if $pmSid}}: {{statusName $allStatuses $pmSid}}{{end}}"></div>
+                                    <div class="flex-1 flex items-center justify-center text-white text-[7px] font-bold leading-none" style="background-color: {{if $amSid}}{{statusColor $allStatuses $amSid}}{{else}}#e5e7eb{{end}}"
+                                         title="AM{{if $amSid}}: {{statusName $allStatuses $amSid}}{{end}}">{{if $amSid}}{{if statusBillable $allStatuses $amSid}}½{{end}}{{end}}</div>
+                                    <div class="flex-1 flex items-center justify-center text-white text-[7px] font-bold leading-none" style="background-color: {{if $pmSid}}{{statusColor $allStatuses $pmSid}}{{else}}#e5e7eb{{end}}"
+                                         title="PM{{if $pmSid}}: {{statusName $allStatuses $pmSid}}{{end}}">{{if $pmSid}}{{if statusBillable $allStatuses $pmSid}}½{{end}}{{end}}</div>
                                 </div>
                                 {{else}}
                                 <span class="text-gray-300">·</span>
