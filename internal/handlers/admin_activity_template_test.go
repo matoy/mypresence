@@ -177,6 +177,14 @@ func buildActivityTemplateFuncMap() template.FuncMap {
 			}
 			return ""
 		},
+		"statusBillable": func(statuses []models.Status, id int64) bool {
+			for _, s := range statuses {
+				if s.ID == id {
+					return s.Billable
+				}
+			}
+			return false
+		},
 		"activityRocket": testActivityRocket,
 	}
 }
