@@ -388,6 +388,7 @@ func registerOptionalAdminRoutes(mux, authMux *http.ServeMux, cfg *config.Config
 		authMux.HandleFunc("GET /api/projects", projectsHandler.ProjectsAPI)
 		authMux.HandleFunc("GET /api/project-time", projectsHandler.ProjectTimeAPI)
 		authMux.HandleFunc("POST /api/project-time", projectsHandler.SetProjectTime)
+		authMux.HandleFunc("POST /api/project-favorite/{id}", projectsHandler.ToggleProjectFavoriteAPI)
 		projAdminMux := http.NewServeMux()
 		projAdminMux.HandleFunc("GET /admin/projects", projectsHandler.AdminProjectsPage)
 		projAdminMux.HandleFunc("POST /admin/projects", projectsHandler.CreateProject)

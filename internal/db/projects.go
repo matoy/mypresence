@@ -45,6 +45,13 @@ func (d *DB) migrateProjects() error {
   UNIQUE(project_id, user_id),
   FOREIGN KEY (project_id) REFERENCES projects(id)
 `),
+
+		dl.createTableIfNotExists("project_favorites", `
+  project_id BIGINT NOT NULL,
+  user_id    BIGINT NOT NULL,
+  UNIQUE(project_id, user_id),
+  FOREIGN KEY (project_id) REFERENCES projects(id)
+`),
 	}
 
 	for _, stmt := range stmts {
@@ -215,6 +222,41 @@ func (d *DB) IsUserAssignedToProject(userID, projectID int64) (bool, error) {
 		projectID, userID,
 	).Scan(&count)
 	return count > 0, err
+}
+
+// GetUserFavoriteProjectIDs returns the IDs of projects the user has starred.
+func (d *DB) GetUserFavoriteProjectIDs(userID int64) ([]int64, error) {
+	rows, err := d.projects.Query(
+		`SELECT project_id FROM project_favorites WHERE user_id = ? ORDER BY project_id`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() //nolint:errcheck
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// ToggleProjectFavorite flips the favorite state for (userID, projectID).
+// Returns true when the project is now a favorite, false when it was removed.
+func (d *DB) ToggleProjectFavorite(userID, projectID int64) (bool, error) {
+	res, err := d.projects.Exec(
+		`DELETE FROM project_favorites WHERE user_id = ? AND project_id = ?`, userID, projectID)
+	if err != nil {
+		return false, err
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		return false, nil
+	}
+	_, err = d.projects.Exec(
+		`INSERT INTO project_favorites (user_id, project_id) VALUES (?, ?)`, userID, projectID)
+	return err == nil, err
 }
 
 // ListActiveProjectsForMonthAndUser returns active projects accessible to
