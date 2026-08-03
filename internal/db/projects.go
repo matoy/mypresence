@@ -181,7 +181,7 @@ func (d *DB) SetProjectMembers(projectID int64, userIDs []int64) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Tx.Rollback() //nolint:errcheck
+	defer tx.Rollback() //nolint:errcheck
 	if _, err := tx.Exec(`DELETE FROM project_members WHERE project_id = ?`, projectID); err != nil {
 		return err
 	}
@@ -193,7 +193,7 @@ func (d *DB) SetProjectMembers(projectID int64, userIDs []int64) error {
 			return err
 		}
 	}
-	return tx.Tx.Commit()
+	return tx.Commit()
 }
 
 // IsUserAssignedToProject returns true when the user may declare time on the
