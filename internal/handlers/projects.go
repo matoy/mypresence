@@ -45,6 +45,10 @@ func (h *ProjectsHandler) ProjectsAPI(w http.ResponseWriter, r *http.Request) {
 	entries, _ := h.DB.GetUserProjectEntriesForMonth(user.ID, year, month)
 	billableDays, _ := h.DB.GetUserBillableDaysForMonth(user.ID, year, month)
 	totalDeclared, _ := h.DB.GetUserTotalDeclaredForMonth(user.ID, year, month)
+	favIDs, _ := h.DB.GetUserFavoriteProjectIDs(user.ID)
+	if favIDs == nil {
+		favIDs = []int64{}
+	}
 
 	entryMap := make(map[int64]float64)
 	for _, e := range entries {
@@ -59,6 +63,7 @@ func (h *ProjectsHandler) ProjectsAPI(w http.ResponseWriter, r *http.Request) {
 		"entry_map":      entryMap,
 		"billable_days":  billableDays,
 		"total_declared": totalDeclared,
+		"favorites":      favIDs,
 	})
 	metrics.ProjectOpsTotal.WithLabelValues("list", "success").Inc()
 	slog.Info("project.api.list", "user", user.Email, "year", year, "month", month, "count", len(projects))
@@ -120,6 +125,10 @@ func (h *ProjectsHandler) ProjectsPage(w http.ResponseWriter, r *http.Request) {
 	entries, _ := h.DB.GetUserProjectEntriesForMonth(user.ID, year, month)
 	billableDays, _ := h.DB.GetUserBillableDaysForMonth(user.ID, year, month)
 	totalDeclared, _ := h.DB.GetUserTotalDeclaredForMonth(user.ID, year, month)
+	favIDs, _ := h.DB.GetUserFavoriteProjectIDs(user.ID)
+	if favIDs == nil {
+		favIDs = []int64{}
+	}
 
 	// Build entry map: projectID -> days
 	entryMap := make(map[int64]float64)
@@ -132,6 +141,7 @@ func (h *ProjectsHandler) ProjectsPage(w http.ResponseWriter, r *http.Request) {
 		"EntryMap":      entryMap,
 		"BillableDays":  billableDays,
 		"TotalDeclared": totalDeclared,
+		"FavoriteIDs":   favIDs,
 		"Year":          year,
 		"Month":         month,
 		"PrevYear":      prevYM(year, month),
@@ -527,6 +537,24 @@ func (h *ProjectsHandler) ProjectsReportAPI(w http.ResponseWriter, r *http.Reque
 	})
 	metrics.ProjectOpsTotal.WithLabelValues("report", "success").Inc()
 	slog.Info("project.report.api", "user", currentUser.Email, "rows", len(filtered), "filter_active", filterActive, "filter_team", filterTeam)
+}
+
+// ToggleProjectFavoriteAPI toggles the starred state of a project for the current user.
+// POST /api/project-favorite/{id}
+func (h *ProjectsHandler) ToggleProjectFavoriteAPI(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r)
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		jsonError(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+	isFav, err := h.DB.ToggleProjectFavorite(user.ID, id)
+	if err != nil {
+		slog.Error("project.favorite.toggle", "error", err)
+		jsonError(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	jsonOK(w, map[string]bool{"favorite": isFav})
 }
 
 // listProjectsForUser returns active projects for a given month, filtered by

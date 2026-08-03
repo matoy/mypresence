@@ -1,8 +1,6 @@
 {{define "content"}}
 {{with .Data}}
-{{$year := .Year}}
-{{$month := .Month}}
-<div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8" x-data="projectsApp({{.BillableDays}}, {{.TotalDeclared}}, {{json .EntryMap}})">
+<div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8" x-data="projectsApp({{.BillableDays}}, {{.TotalDeclared}}, {{json .EntryMap}}, {{json .FavoriteIDs}}, {{json .Projects}}, {{.Year}}, {{.Month}})">
 
     <!-- Header + month nav -->
     <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
@@ -67,12 +65,11 @@
          class="border rounded-xl px-4 py-3 mb-4 text-sm" x-text="toast"></div>
 
     <!-- Project list -->
-    {{if not .Projects}}
-    <div class="bg-white rounded-xl shadow-sm border border-gray-100 px-6 py-10 text-center text-gray-400">
+    <div x-show="projects.length === 0" x-cloak
+         class="bg-white rounded-xl shadow-sm border border-gray-100 px-6 py-10 text-center text-gray-400">
         {{index $.T "projects.none"}}
     </div>
-    {{else}}
-    <div class="bg-white rounded-xl shadow-md overflow-hidden">
+    <div x-show="projects.length > 0" class="bg-white rounded-xl shadow-md overflow-hidden">
         <table class="w-full text-sm">
             <thead class="bg-gray-50 text-gray-500 uppercase text-xs tracking-wide">
                 <tr>
@@ -80,41 +77,50 @@
                     <th class="px-4 py-3 text-left">{{index $.T "admin.projects.name"}}</th>
                     <th class="px-4 py-3 text-left hidden sm:table-cell">{{index $.T "admin.projects.team"}}</th>
                     <th class="px-4 py-3 text-right w-36">{{index $.T "projects.days"}}</th>
-                    <th class="px-4 py-3 w-20"></th>
+                    <th class="px-4 py-3 w-28"></th>
                 </tr>
             </thead>
             <tbody>
-                {{range .Projects}}
-                <tr class="border-t border-gray-100 hover:bg-gray-50 transition"
-                    x-show="matchesFilter({{.ID}}, {{json .Code}}, {{json .Name}})">
-                    <td class="px-4 py-3 font-mono text-xs font-medium text-gray-600">{{.Code}}</td>
-                    <td class="px-4 py-3 font-medium text-gray-900">{{.Name}}</td>
-                    <td class="px-4 py-3 text-gray-500 hidden sm:table-cell">{{.TeamName}}</td>
-                    <td class="px-4 py-3 text-right">
-                        <input type="number" min="0" max="31" step="0.5"
-                               :value="entries[{{.ID}}] || 0"
-                               @change="entries[{{.ID}}] = parseFloat($event.target.value) || 0"
-                               class="w-24 text-right px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm"
-                               :class="{'border-red-400': entries[{{.ID}}] > 0 && totalDeclared > billable}">
-                    </td>
-                    <td class="px-4 py-3">
-                        <button @click="save({{.ID}}, {{$year}}, {{$month}})"
-                                class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium"
-                                :disabled="saving == {{.ID}}"
-                                :class="{'opacity-50 cursor-wait': saving == {{.ID}}}">
-                            {{index $.T "admin.save"}}
-                        </button>
-                    </td>
-                </tr>
-                {{end}}
+                <template x-for="p in sortedProjects" :key="p.id">
+                    <tr class="border-t border-gray-100 hover:bg-gray-50 transition">
+                        <td class="px-4 py-3 font-mono text-xs font-medium text-gray-600" x-text="p.code"></td>
+                        <td class="px-4 py-3 font-medium text-gray-900" x-text="p.name"></td>
+                        <td class="px-4 py-3 text-gray-500 hidden sm:table-cell" x-text="p.team_name"></td>
+                        <td class="px-4 py-3 text-right">
+                            <input type="number" min="0" max="31" step="0.5"
+                                   :value="entries[p.id] || 0"
+                                   @change="entries[p.id] = parseFloat($event.target.value) || 0"
+                                   class="w-24 text-right px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm"
+                                   :class="{'border-red-400': entries[p.id] > 0 && totalDeclared > billable}">
+                        </td>
+                        <td class="px-4 py-3">
+                            <div class="flex items-center gap-1.5">
+                                <button @click="save(p.id)"
+                                        class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium"
+                                        :disabled="saving == p.id"
+                                        :class="{'opacity-50 cursor-wait': saving == p.id}">
+                                    {{index $.T "admin.save"}}
+                                </button>
+                                <button @click="toggleFavorite(p.id)"
+                                        class="p-1.5 rounded-lg hover:bg-yellow-50 transition"
+                                        :class="favorites[p.id] ? 'text-yellow-400' : 'text-gray-300 hover:text-yellow-300'">
+                                    <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                </template>
             </tbody>
         </table>
     </div>
-    {{end}}
 </div>
 
 <script>
-function projectsApp(billable, totalDeclared, initialEntries) {
+function projectsApp(billable, totalDeclared, initialEntries, favoriteIDs, allProjects, year, month) {
+    const fav = {};
+    (favoriteIDs || []).forEach(id => { fav[id] = true; });
     return {
         billable: billable,
         totalDeclared: totalDeclared,
@@ -123,19 +129,38 @@ function projectsApp(billable, totalDeclared, initialEntries) {
         saving: null,
         toast: '',
         toastError: false,
+        projects: allProjects || [],
+        favorites: fav,
+        year: year,
+        month: month,
+
+        get sortedProjects() {
+            const q = this.filter.toLowerCase();
+            return this.projects
+                .filter(p => !q || p.code.toLowerCase().includes(q) || p.name.toLowerCase().includes(q))
+                .sort((a, b) => {
+                    const fa = !!this.favorites[a.id], fb = !!this.favorites[b.id];
+                    if (fa !== fb) return fa ? -1 : 1;
+                    return a.name.localeCompare(b.name);
+                });
+        },
 
         fmtDays(n) {
             if (n === Math.floor(n)) return n.toFixed(0);
             return n.toFixed(1);
         },
 
-        matchesFilter(id, code, name) {
-            if (!this.filter) return true;
-            const q = this.filter.toLowerCase();
-            return code.toLowerCase().includes(q) || name.toLowerCase().includes(q);
+        async toggleFavorite(projectId) {
+            try {
+                const resp = await fetch(`/api/project-favorite/${projectId}`, { method: 'POST' });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    this.favorites[projectId] = data.favorite;
+                }
+            } catch(e) { /* ignore */ }
         },
 
-        async save(projectId, year, month) {
+        async save(projectId) {
             this.saving = projectId;
             this.toast = '';
             const days = parseFloat(this.entries[projectId]) || 0;
@@ -143,7 +168,7 @@ function projectsApp(billable, totalDeclared, initialEntries) {
                 const resp = await fetch('/api/project-time', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ project_id: projectId, year, month, days })
+                    body: JSON.stringify({ project_id: projectId, year: this.year, month: this.month, days })
                 });
                 const data = await resp.json();
                 if (!resp.ok) {
