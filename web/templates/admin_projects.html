@@ -1,6 +1,6 @@
 {{define "content"}}
 {{with .Data}}
-<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8" x-data="adminProjectsApp({{json .Projects}}, {{json .Teams}})">
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8" x-data="adminProjectsApp({{json .Projects}}, {{json .Teams}}, {{json .AllUsers}})">
 
     <div class="flex items-center justify-between mb-6">
         <h1 class="text-2xl font-bold text-gray-900 inline-flex items-center gap-2">
@@ -159,6 +159,32 @@
                            class="h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary">
                     <label for="proj_active" class="text-sm text-gray-700">{{index $.T "admin.projects.active"}}</label>
                 </div>
+
+                <!-- Member assignment -->
+                <div x-show="editId">
+                    <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "admin.projects.members"}}</label>
+                    <p class="text-xs text-gray-400 mb-2">{{index $.T "admin.projects.members_hint"}}</p>
+                    <div class="mb-2">
+                        <input type="text" x-model="memberSearch" placeholder="{{index $.T "admin.projects.members_search"}}"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+                    </div>
+                    <div class="max-h-40 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+                        <template x-for="u in filteredAllUsers" :key="u.id">
+                            <label class="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                                <input type="checkbox"
+                                       :value="u.id"
+                                       :checked="memberIDs.includes(u.id)"
+                                       @change="toggleMember(u.id)"
+                                       class="h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary">
+                                <span class="text-sm text-gray-700" x-text="u.name + ' (' + u.email + ')'"></span>
+                            </label>
+                        </template>
+                        <div x-show="filteredAllUsers.length === 0" class="px-3 py-3 text-xs text-gray-400 text-center">{{index $.T "admin.projects.members_none"}}</div>
+                    </div>
+                    <p class="mt-1 text-xs text-gray-400" x-show="memberIDs.length === 0">{{index $.T "admin.projects.members_open"}}</p>
+                    <p class="mt-1 text-xs text-gray-600 font-medium" x-show="memberIDs.length > 0"
+                       x-text="memberIDs.length + ' {{index $.T "admin.projects.members_assigned"}}'"></p>
+                </div>
             </div>
 
             <p x-show="formError" x-text="formError" class="mt-3 text-sm text-red-600"></p>
@@ -180,17 +206,20 @@
 </div>
 
 <script>
-function adminProjectsApp(initialProjects, teams) {
+function adminProjectsApp(initialProjects, teams, allUsers) {
     const today = new Date().toISOString().slice(0, 10);
     const plus6m = new Date(Date.now() + 6*30*24*60*60*1000).toISOString().slice(0, 10);
 
     return {
         projects: initialProjects || [],
         teams: teams || [],
+        allUsers: allUsers || [],
         showModal: false,
         editId: null,
         teamSearch: '',
         showTeamList: false,
+        memberSearch: '',
+        memberIDs: [],
         saving: false,
         toast: '',
         toastError: false,
@@ -203,26 +232,52 @@ function adminProjectsApp(initialProjects, teams) {
             return this.teams.filter(t => t.name.toLowerCase().includes(q));
         },
 
+        get filteredAllUsers() {
+            if (!this.memberSearch) return this.allUsers;
+            const q = this.memberSearch.toLowerCase();
+            return this.allUsers.filter(u =>
+                u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
+            );
+        },
+
         getTeamName(id) {
             const t = this.teams.find(t => t.id === id);
             return t ? t.name : '';
         },
 
+        toggleMember(uid) {
+            const idx = this.memberIDs.indexOf(uid);
+            if (idx >= 0) { this.memberIDs.splice(idx, 1); }
+            else { this.memberIDs.push(uid); }
+        },
+
         openCreate() {
             this.editId = null;
             this.teamSearch = '';
+            this.memberSearch = '';
+            this.memberIDs = [];
             this.formError = '';
             this.form = { name: '', code: '', team_id: 0, active: true, start_date: today, end_date: plus6m };
             this.showModal = true;
         },
 
-        openEdit(id) {
+        async openEdit(id) {
             const p = this.projects.find(p => p.id === id);
             if (!p) return;
             this.editId = id;
             this.teamSearch = '';
+            this.memberSearch = '';
+            this.memberIDs = [];
             this.formError = '';
             this.form = { name: p.name, code: p.code, team_id: p.team_id, active: p.active, start_date: p.start_date, end_date: p.end_date };
+            // Fetch current members
+            try {
+                const resp = await fetch(`/api/admin/projects/${id}/members`);
+                if (resp.ok) {
+                    const data = await resp.json();
+                    this.memberIDs = data.user_ids || [];
+                }
+            } catch(e) { /* ignore */ }
             this.showModal = true;
         },
 
@@ -235,12 +290,20 @@ function adminProjectsApp(initialProjects, teams) {
             try {
                 const resp = await fetch(url, { method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(this.form) });
                 const data = await resp.json();
-                if (!resp.ok) { this.formError = data.error || 'Error'; }
-                else {
-                    this.showModal = false;
-                    this.showToast('✓', false);
-                    setTimeout(() => location.reload(), 600);
+                if (!resp.ok) { this.formError = data.error || 'Error'; this.saving = false; return; }
+                // Save members (for create, use the newly returned id)
+                const projId = this.editId || data.id;
+                if (projId) {
+                    const mResp = await fetch(`/api/admin/projects/${projId}/members`, {
+                        method: 'PUT',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ user_ids: this.memberIDs })
+                    });
+                    if (!mResp.ok) { this.formError = 'Project saved but members could not be updated'; this.saving = false; return; }
                 }
+                this.showModal = false;
+                this.showToast('✓', false);
+                setTimeout(() => location.reload(), 600);
             } catch(e) { this.formError = 'Network error'; }
             this.saving = false;
         },
