@@ -40,7 +40,8 @@ func (h *ProjectsHandler) ProjectsAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	projects, _ := h.DB.ListActiveProjectsForMonth(year, month)
+	projects := h.listProjectsForUser(user, year, month)
+
 	entries, _ := h.DB.GetUserProjectEntriesForMonth(user.ID, year, month)
 	billableDays, _ := h.DB.GetUserBillableDaysForMonth(user.ID, year, month)
 	totalDeclared, _ := h.DB.GetUserTotalDeclaredForMonth(user.ID, year, month)
@@ -114,7 +115,8 @@ func (h *ProjectsHandler) ProjectsPage(w http.ResponseWriter, r *http.Request) {
 		month = int(now.Month())
 	}
 
-	projects, _ := h.DB.ListActiveProjectsForMonth(year, month)
+	projects := h.listProjectsForUser(user, year, month)
+
 	entries, _ := h.DB.GetUserProjectEntriesForMonth(user.ID, year, month)
 	billableDays, _ := h.DB.GetUserBillableDaysForMonth(user.ID, year, month)
 	totalDeclared, _ := h.DB.GetUserTotalDeclaredForMonth(user.ID, year, month)
@@ -180,6 +182,16 @@ func (h *ProjectsHandler) SetProjectTime(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// Check assignment: only assigned users (or open projects) may declare time.
+	if !user.HasAnyRole(models.RoleProjectsAdmin, models.RoleProjectsViewer) {
+		assigned, aErr := h.DB.IsUserAssignedToProject(user.ID, req.ProjectID)
+		if aErr != nil || !assigned {
+			metrics.ProjectOpsTotal.WithLabelValues("set_time", "failure").Inc()
+			jsonError(w, "Not assigned to this project", http.StatusForbidden)
+			return
+		}
+	}
+
 	if req.Days > 0 && h.exceedsBillableCap(user.ID, req.ProjectID, req.Year, req.Month, req.Days) {
 		metrics.ProjectOpsTotal.WithLabelValues("set_time", "failure").Inc()
 		jsonError(w, "Exceeds billable days cap", http.StatusUnprocessableEntity)
@@ -210,6 +222,7 @@ func (h *ProjectsHandler) SetProjectTime(w http.ResponseWriter, r *http.Request)
 func (h *ProjectsHandler) AdminProjectsPage(w http.ResponseWriter, r *http.Request) {
 	projects, _ := h.DB.ListProjects()
 	teams, _ := h.DB.ListTeams()
+	allUsers, _ := h.DB.ListUsers()
 
 	query := r.URL.Query()
 	filterText := query.Get("q")
@@ -239,6 +252,7 @@ func (h *ProjectsHandler) AdminProjectsPage(w http.ResponseWriter, r *http.Reque
 	h.Render(w, r, "admin_projects", map[string]interface{}{
 		"Projects":     filtered,
 		"Teams":        teams,
+		"AllUsers":     allUsers,
 		"FilterText":   filterText,
 		"FilterActive": filterActive,
 		"FilterTeam":   filterTeam,
@@ -513,6 +527,66 @@ func (h *ProjectsHandler) ProjectsReportAPI(w http.ResponseWriter, r *http.Reque
 	})
 	metrics.ProjectOpsTotal.WithLabelValues("report", "success").Inc()
 	slog.Info("project.report.api", "user", currentUser.Email, "rows", len(filtered), "filter_active", filterActive, "filter_team", filterTeam)
+}
+
+// listProjectsForUser returns active projects for a given month, filtered by
+// user assignment unless the user holds an admin/viewer role.
+func (h *ProjectsHandler) listProjectsForUser(user *models.User, year, month int) []models.Project {
+	if user.HasAnyRole(models.RoleProjectsAdmin, models.RoleProjectsViewer) {
+		projects, _ := h.DB.ListActiveProjectsForMonth(year, month)
+		return projects
+	}
+	projects, _ := h.DB.ListActiveProjectsForMonthAndUser(year, month, user.ID)
+	return projects
+}
+
+// ─── Admin: project member management ────────────────────────────────────────
+
+// GetProjectMembersAPI returns the user IDs assigned to a project.
+// GET /api/admin/projects/{id}/members
+func (h *ProjectsHandler) GetProjectMembersAPI(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		jsonError(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+	userIDs, err := h.DB.GetProjectMembers(id)
+	if err != nil {
+		slog.Error("admin.project.members.get", "error", err)
+		jsonError(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	if userIDs == nil {
+		userIDs = []int64{}
+	}
+	jsonOK(w, map[string]interface{}{"user_ids": userIDs})
+}
+
+// SetProjectMembersAPI replaces all members of a project.
+// PUT /api/admin/projects/{id}/members
+// Body: {"user_ids": [1, 2, 3]}  — empty array removes all restrictions.
+func (h *ProjectsHandler) SetProjectMembersAPI(w http.ResponseWriter, r *http.Request) {
+	actor := middleware.GetUser(r)
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		jsonError(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		UserIDs []int64 `json:"user_ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+	if err := h.DB.SetProjectMembers(id, req.UserIDs); err != nil {
+		slog.Error("admin.project.members.set", "error", err)
+		jsonError(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	h.DB.LogAdminAction(actor.ID, "project", id, "set_members", fmt.Sprintf("count=%d", len(req.UserIDs))) //nolint:errcheck
+	slog.Info("admin.project.members.set", "actor", actor.Email, "project_id", id, "count", len(req.UserIDs))
+	jsonOK(w, map[string]string{"status": "ok"})
 }
 
 // ─── helpers ──────────────────────────────────────────────────────────────────

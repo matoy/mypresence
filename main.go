@@ -395,6 +395,8 @@ func registerOptionalAdminRoutes(mux, authMux *http.ServeMux, cfg *config.Config
 		projAdminMux.HandleFunc("GET /api/admin/projects", projectsHandler.AdminProjectsAPI)
 		projAdminMux.HandleFunc("POST /api/admin/projects", projectsHandler.CreateProject)
 		projAdminMux.HandleFunc("PUT /api/admin/projects/{id}", projectsHandler.UpdateProject)
+		projAdminMux.HandleFunc("GET /api/admin/projects/{id}/members", projectsHandler.GetProjectMembersAPI)
+		projAdminMux.HandleFunc("PUT /api/admin/projects/{id}/members", projectsHandler.SetProjectMembersAPI)
 		mux.Handle("/admin/projects", middleware.Auth(database, middleware.RequireRole(models.RoleProjectsAdmin)(projAdminMux)))
 		mux.Handle("/admin/projects/", middleware.Auth(database, middleware.RequireRole(models.RoleProjectsAdmin)(projAdminMux)))
 		mux.Handle("/api/admin/projects", middleware.Auth(database, middleware.RequireRole(models.RoleProjectsAdmin)(projAdminMux)))

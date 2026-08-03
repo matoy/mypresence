@@ -20,6 +20,17 @@ Write-Host "  Session: $($sc.Substring(0,30))..."
 
 $jh = @{ Cookie = $sc; "Content-Type" = "application/json" }
 
+# ── Date references (all seeding is relative to today) ───────────────────────
+$Now       = Get-Date
+$CurYear   = $Now.Year
+# Three completed months used for presences and time declarations
+$m1        = $Now.AddMonths(-1)   # last month
+$m2        = $Now.AddMonths(-2)   # detailed-pattern month
+$m3        = $Now.AddMonths(-3)   # simple-pattern month
+# Helper: last day of a given month
+function Last-Day ($year, $month) { [DateTime]::new($year, $month, [DateTime]::DaysInMonth($year, $month)).ToString("yyyy-MM-dd") }
+function First-Day ($year, $month) { "$year-$('{0:D2}' -f $month)-01" }
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 function PostJSON ($url, $obj) {
     $body = $obj | ConvertTo-Json -Compress -Depth 10
@@ -104,20 +115,18 @@ $U = @{
 }
 Write-Host "  User IDs: admin=$($U.admin), alice=$($U.alice), bob=$($U.bob) ..."
 
-# ── 2. Create holidays (French 2026) ─────────────────────────────────────────
-Write-Host "`nCreating public holidays (France 2026)..."
+# ── 2. Create holidays (French public holidays for current year) ─────────────
+Write-Host "`nCreating public holidays (France $CurYear)..."
+# Fixed holidays (month-day never changes)
 $holidays = @(
-    @{ date="2026-01-01"; name="New Year's Day";         allow_imputed=$false },
-    @{ date="2026-04-06"; name="Easter Monday";          allow_imputed=$false },
-    @{ date="2026-05-01"; name="Labour Day";             allow_imputed=$false },
-    @{ date="2026-05-08"; name="Victory in Europe Day";  allow_imputed=$false },
-    @{ date="2026-05-14"; name="Ascension Day";          allow_imputed=$false },
-    @{ date="2026-05-25"; name="Whit Monday";            allow_imputed=$false },
-    @{ date="2026-07-14"; name="Bastille Day";           allow_imputed=$false },
-    @{ date="2026-08-15"; name="Assumption Day";         allow_imputed=$false },
-    @{ date="2026-11-01"; name="All Saints' Day";        allow_imputed=$false },
-    @{ date="2026-11-11"; name="Armistice Day";          allow_imputed=$false },
-    @{ date="2026-12-25"; name="Christmas Day";          allow_imputed=$false }
+    @{ date="$CurYear-01-01"; name="New Year's Day";        allow_imputed=$false },
+    @{ date="$CurYear-05-01"; name="Labour Day";            allow_imputed=$false },
+    @{ date="$CurYear-05-08"; name="Victory in Europe Day"; allow_imputed=$false },
+    @{ date="$CurYear-07-14"; name="Bastille Day";          allow_imputed=$false },
+    @{ date="$CurYear-08-15"; name="Assumption Day";        allow_imputed=$false },
+    @{ date="$CurYear-11-01"; name="All Saints' Day";       allow_imputed=$false },
+    @{ date="$CurYear-11-11"; name="Armistice Day";         allow_imputed=$false },
+    @{ date="$CurYear-12-25"; name="Christmas Day";         allow_imputed=$false }
 )
 foreach ($h in $holidays) {
     $r = PostJSON "$Base/admin/holidays" $h
@@ -290,79 +299,66 @@ foreach ($m in $memberships) {
     Write-Host "  $($m.team) (id=$tid): $($m.keys -join ',')"
 }
 
-# ── 6. Presences: March and May (all users — on-site except Wed=remote) ───────
-Write-Host "`nSeeding March and May presences..."
+# ── 6. Presences: M-3 and M-1 (all users — on-site except Wed=remote) ─────────
+Write-Host "`nSeeding $($m3.ToString('MMMM yyyy')) and $($m1.ToString('MMMM yyyy')) presences..."
 $allUIDs = @($U.admin, $U.alice, $U.bob, $U.claire, $U.david, $U.emma, $U.felix, $U.grace, $U.hugo, $U.iris, $U.julien)
-$marchDays = Get-WorkingDays 2026 3
-$mayDays   = Get-WorkingDays 2026 5
 
 foreach ($uid in $allUIDs) {
-    SetPresences $uid @($marchDays | Where-Object { ([DateTime]::Parse($_)).DayOfWeek -ne 'Wednesday' }) $SITE
-    SetPresences $uid @($marchDays | Where-Object { ([DateTime]::Parse($_)).DayOfWeek -eq 'Wednesday' }) $REMOTE
-    SetPresences $uid @($mayDays   | Where-Object { ([DateTime]::Parse($_)).DayOfWeek -ne 'Wednesday' }) $SITE
-    SetPresences $uid @($mayDays   | Where-Object { ([DateTime]::Parse($_)).DayOfWeek -eq 'Wednesday' }) $REMOTE
+    $days3 = Get-WorkingDays $m3.Year $m3.Month
+    SetPresences $uid @($days3 | Where-Object { ([DateTime]::Parse($_)).DayOfWeek -ne 'Wednesday' }) $SITE
+    SetPresences $uid @($days3 | Where-Object { ([DateTime]::Parse($_)).DayOfWeek -eq 'Wednesday' }) $REMOTE
+    $days1 = Get-WorkingDays $m1.Year $m1.Month
+    SetPresences $uid @($days1 | Where-Object { ([DateTime]::Parse($_)).DayOfWeek -ne 'Wednesday' }) $SITE
+    SetPresences $uid @($days1 | Where-Object { ([DateTime]::Parse($_)).DayOfWeek -eq 'Wednesday' }) $REMOTE
 }
-Write-Host "  March + May done for $($allUIDs.Count) users"
+Write-Host "  $($m3.ToString('MMM yyyy')) + $($m1.ToString('MMM yyyy')) done for $($allUIDs.Count) users"
 
-# ── 7. Presences: April 2026 (unique per-user patterns) ──────────────────────
-# April weekdays: 1-3, 7-10, 13-17, 20-24, 27-30  (Apr 6 = Easter Monday, skip)
-Write-Host "`nSeeding April 2026 presences..."
+# ── 7. Presences: M-2 (unique per-user patterns) ──────────────────────────────
+# Pattern: Wed always remote; an extra "remote day" per user for variety;
+# 1-2 special-status days per user (LEAVE/SICK/TRIP/TRAINING).
+Write-Host "`nSeeding $($m2.ToString('MMMM yyyy')) presences (per-user patterns)..."
 
-SetPresences $U.admin  @("2026-04-01","2026-04-02","2026-04-03","2026-04-08","2026-04-09","2026-04-13","2026-04-14","2026-04-17","2026-04-20","2026-04-22","2026-04-23","2026-04-24","2026-04-27","2026-04-28","2026-04-30") $SITE
-SetPresences $U.admin  @("2026-04-07","2026-04-10","2026-04-15","2026-04-16","2026-04-21","2026-04-29") $REMOTE
-Write-Host "  admin"
+# $remoteExtra: additional day-of-week that is remote (empty string = none)
+# $specials: list of @{idx=N; st=statusId}  (negative idx = offset from end of working-day list)
+function Seed-DetailedMonth ([int]$uid, [string]$remoteExtra, [array]$specials) {
+    $days = Get-WorkingDays $m2.Year $m2.Month
+    $n    = $days.Count
+    $spec = @{}
+    foreach ($s in $specials) {
+        $i = if ($s.idx -lt 0) { $n + $s.idx } else { $s.idx }
+        if ($i -ge 0 -and $i -lt $n) { $spec[$days[$i]] = $s.st }
+    }
+    $siteDays = @(); $remoteDays = @()
+    foreach ($d in $days) {
+        if ($spec.ContainsKey($d)) { continue }
+        $dow = ([DateTime]::Parse($d)).DayOfWeek
+        if ($dow -eq 'Wednesday' -or ($remoteExtra -and $dow -eq $remoteExtra)) { $remoteDays += $d }
+        else { $siteDays += $d }
+    }
+    SetPresences $uid $siteDays   $SITE
+    SetPresences $uid $remoteDays $REMOTE
+    foreach ($kv in $spec.GetEnumerator()) { SetPresences $uid @($kv.Key) $kv.Value }
+}
 
-SetPresences $U.alice  @("2026-04-01","2026-04-02","2026-04-08","2026-04-09","2026-04-10","2026-04-14","2026-04-15","2026-04-16","2026-04-20","2026-04-21","2026-04-22","2026-04-27","2026-04-28","2026-04-29") $SITE
-SetPresences $U.alice  @("2026-04-03","2026-04-07","2026-04-13","2026-04-17","2026-04-23","2026-04-24") $REMOTE
-SetPresences $U.alice  @("2026-04-30") $LEAVE
-Write-Host "  Alice"
+Seed-DetailedMonth $U.admin  ""        @(); Write-Host "  admin"
+Seed-DetailedMonth $U.alice  "Friday"  @( @{idx=-1; st=$LEAVE} ); Write-Host "  Alice"
+Seed-DetailedMonth $U.bob    "Monday"  @(); Write-Host "  Bob"
+Seed-DetailedMonth $U.claire "Friday"  @(); Write-Host "  Claire"
+Seed-DetailedMonth $U.david  "Monday"  @(); Write-Host "  David"
+Seed-DetailedMonth $U.emma   "Friday"  @( @{idx=3;  st=$TRIP} );  Write-Host "  Emma"
+Seed-DetailedMonth $U.felix  "Monday"  @( @{idx=0;  st=$SICK} );  Write-Host "  Felix"
+Seed-DetailedMonth $U.grace  ""        @(); Write-Host "  Grace"
+Seed-DetailedMonth $U.hugo   "Friday"  @( @{idx=-2; st=$LEAVE} ); Write-Host "  Hugo"
+Seed-DetailedMonth $U.iris   "Monday"  @(); Write-Host "  Iris"
+Seed-DetailedMonth $U.julien "Monday"  @( @{idx=1;  st=$SICK}, @{idx=0; st=$TRAINING} ); Write-Host "  Julien"
+Write-Host "  $($m2.ToString('MMMM yyyy')) done"
 
-SetPresences $U.bob    @("2026-04-01","2026-04-03","2026-04-07","2026-04-08","2026-04-10","2026-04-13","2026-04-15","2026-04-16","2026-04-20","2026-04-22","2026-04-23","2026-04-27","2026-04-29") $SITE
-SetPresences $U.bob    @("2026-04-02","2026-04-09","2026-04-14","2026-04-17","2026-04-21","2026-04-24","2026-04-28","2026-04-30") $REMOTE
-Write-Host "  Bob"
-
-SetPresences $U.claire @("2026-04-01","2026-04-02","2026-04-03","2026-04-07","2026-04-08","2026-04-13","2026-04-14","2026-04-16","2026-04-20","2026-04-21","2026-04-22","2026-04-27","2026-04-28") $SITE
-SetPresences $U.claire @("2026-04-09","2026-04-10","2026-04-15","2026-04-17","2026-04-23","2026-04-24","2026-04-29","2026-04-30") $REMOTE
-Write-Host "  Claire"
-
-SetPresences $U.david  @("2026-04-02","2026-04-03","2026-04-08","2026-04-09","2026-04-14","2026-04-15","2026-04-16","2026-04-21","2026-04-22","2026-04-23","2026-04-28","2026-04-29","2026-04-30") $SITE
-SetPresences $U.david  @("2026-04-01","2026-04-07","2026-04-10","2026-04-13","2026-04-17","2026-04-20","2026-04-24","2026-04-27") $REMOTE
-Write-Host "  David"
-
-SetPresences $U.emma   @("2026-04-01","2026-04-02","2026-04-07","2026-04-08","2026-04-09","2026-04-13","2026-04-14","2026-04-15","2026-04-20","2026-04-21","2026-04-27","2026-04-28","2026-04-29") $SITE
-SetPresences $U.emma   @("2026-04-03","2026-04-10","2026-04-16","2026-04-22","2026-04-23","2026-04-24","2026-04-30") $REMOTE
-SetPresences $U.emma   @("2026-04-17") $TRIP
-Write-Host "  Emma"
-
-SetPresences $U.felix  @("2026-04-01","2026-04-03","2026-04-08","2026-04-10","2026-04-14","2026-04-16","2026-04-20","2026-04-22","2026-04-24","2026-04-27","2026-04-29") $SITE
-SetPresences $U.felix  @("2026-04-02","2026-04-09","2026-04-13","2026-04-15","2026-04-17","2026-04-21","2026-04-23","2026-04-28","2026-04-30") $REMOTE
-SetPresences $U.felix  @("2026-04-07") $SICK
-Write-Host "  Felix"
-
-SetPresences $U.grace  @("2026-04-07","2026-04-08","2026-04-09","2026-04-10","2026-04-13","2026-04-15","2026-04-16","2026-04-17","2026-04-20","2026-04-22","2026-04-23","2026-04-27","2026-04-28","2026-04-29","2026-04-30") $SITE
-SetPresences $U.grace  @("2026-04-01","2026-04-02","2026-04-03","2026-04-14","2026-04-21","2026-04-24") $REMOTE
-Write-Host "  Grace"
-
-SetPresences $U.hugo   @("2026-04-01","2026-04-02","2026-04-09","2026-04-10","2026-04-13","2026-04-14","2026-04-17","2026-04-20","2026-04-21","2026-04-22","2026-04-27","2026-04-28") $SITE
-SetPresences $U.hugo   @("2026-04-03","2026-04-07","2026-04-08","2026-04-15","2026-04-16","2026-04-23","2026-04-29","2026-04-30") $REMOTE
-SetPresences $U.hugo   @("2026-04-24") $LEAVE
-Write-Host "  Hugo"
-
-SetPresences $U.iris   @("2026-04-02","2026-04-03","2026-04-07","2026-04-09","2026-04-14","2026-04-15","2026-04-21","2026-04-22","2026-04-23","2026-04-28","2026-04-29","2026-04-30") $SITE
-SetPresences $U.iris   @("2026-04-01","2026-04-08","2026-04-10","2026-04-13","2026-04-16","2026-04-17","2026-04-20","2026-04-24","2026-04-27") $REMOTE
-Write-Host "  Iris"
-
-SetPresences $U.julien @("2026-04-01","2026-04-03","2026-04-08","2026-04-13","2026-04-16","2026-04-17","2026-04-20","2026-04-21","2026-04-27","2026-04-28","2026-04-29") $SITE
-SetPresences $U.julien @("2026-04-02","2026-04-10","2026-04-14","2026-04-15","2026-04-22","2026-04-23","2026-04-24","2026-04-30") $REMOTE
-SetPresences $U.julien @("2026-04-09") $SICK
-SetPresences $U.julien @("2026-04-07") $TRAINING
-Write-Host "  Julien"
-Write-Host "  April 2026 done"
-
-# ── 8. Seat reservations (admin on seat A1) ───────────────────────────────────
+# ── 8. Seat reservations (admin on seat A1, first 10 site days of M-2) ─────────
 $seatA1 = if ($seatIDs -and $seatIDs["A1"]) { $seatIDs["A1"] } else { 1 }
 Write-Host "`nBooking seat reservations for admin (seat A1, id=$seatA1)..."
-$adminSiteDays = @("2026-04-01","2026-04-02","2026-04-03","2026-04-08","2026-04-09","2026-04-13","2026-04-14","2026-04-17","2026-04-20","2026-04-22")
+$adminSiteDays = @(Get-WorkingDays $m2.Year $m2.Month | Where-Object {
+    ([DateTime]::Parse($_)).DayOfWeek -notin 'Wednesday'
+} | Select-Object -First 10)
 $r = PostJSON "$Base/api/reservations/bulk" @{seat_id=$seatA1; dates=$adminSiteDays; half="full"}
 if ($r) { Write-Host "  Seat A1 reserved: $($r.booked) days" }
 
@@ -373,24 +369,42 @@ PutJSON "$Base/api/users/$($U.alice)/roles" @{ roles=@("team_manager","projects_
 Write-Host "  alice: roles set to team_manager + projects_admin"
 
 $projIDs = @{}
+# Pre-load any projects that already exist so we never create duplicates
+try {
+    $existing = Invoke-RestMethod "$Base/api/admin/projects?active=" -Headers $jh -ErrorAction Stop
+    if ($existing -and $existing.projects) {
+        foreach ($p in $existing.projects) { $projIDs[$p.code] = [int]$p.id }
+        Write-Host "  $($projIDs.Count) existing project(s) resolved"
+    }
+} catch { Write-Warning "  Could not pre-load existing projects" }
+
+# Project dates are relative to the current year / month
+$yearStart  = First-Day $CurYear 1
+$yearEnd    = Last-Day  $CurYear 12
+$campStart  = First-Day $m3.Year $m3.Month          # starts 3 months ago
+$campEnd    = Last-Day  $Now.AddMonths(2).Year $Now.AddMonths(2).Month   # ends 2 months from now
+$hrxpStart  = First-Day $Now.AddMonths(-5).Year $Now.AddMonths(-5).Month # starts 5 months ago
+$hrxpEnd    = Last-Day  $m1.Year $m1.Month          # ends last month
+
 $projectDefs = @(
-    @{ name="Alpha Platform";    code="ALPHA"; team="Engineering"; active=$true; start_date="2026-01-01"; end_date="2026-12-31" },
-    @{ name="Beta App";          code="BETA";  team="Engineering"; active=$true; start_date="2026-01-01"; end_date="2026-12-31" },
-    @{ name="Campaign Spring";   code="CAMP";  team="Marketing";   active=$true; start_date="2026-03-01"; end_date="2026-06-30" },
-    @{ name="Sales CRM";         code="SCRM";  team="Sales";       active=$true; start_date="2026-01-01"; end_date="2026-12-31" },
-    @{ name="HR Transformation"; code="HRXP";  team="HR";          active=$true; start_date="2026-02-01"; end_date="2026-07-31" }
+    @{ name="Alpha Platform";    code="ALPHA"; team="Engineering"; active=$true; start_date=$yearStart; end_date=$yearEnd  },
+    @{ name="Beta App";          code="BETA";  team="Engineering"; active=$true; start_date=$yearStart; end_date=$yearEnd  },
+    @{ name="Campaign Spring";   code="CAMP";  team="Marketing";   active=$true; start_date=$campStart; end_date=$campEnd  },
+    @{ name="Sales CRM";         code="SCRM";  team="Sales";       active=$true; start_date=$yearStart; end_date=$yearEnd  },
+    @{ name="HR Transformation"; code="HRXP";  team="HR";          active=$true; start_date=$hrxpStart; end_date=$hrxpEnd  }
 )
 foreach ($p in $projectDefs) {
+    if ($projIDs[$p.code]) { Write-Host "  '$($p.code)' already exists (id=$($projIDs[$p.code]))"; continue }
     $tid = $teamIDs[$p.team]
     $r = PostJSON "$Base/api/admin/projects" @{ name=$p.name; code=$p.code; team_id=[int]$tid; active=$p.active; start_date=$p.start_date; end_date=$p.end_date }
     if ($r -and $r.id) {
         $projIDs[$p.code] = [int]$r.id
         Write-Host "  '$($p.code)' '$($p.name)' id=$($r.id)"
     } else {
-        Write-Warning "  Failed to create project '$($p.code)' (may already exist)"
+        Write-Warning "  Failed to create project '$($p.code)'"
     }
 }
-# Resolve IDs for projects that already existed
+# Resolve IDs for any projects that still failed
 if ($projIDs.Count -lt $projectDefs.Count) {
     try {
         $existing = Invoke-RestMethod "$Base/api/admin/projects?active=" -Headers $jh
@@ -398,14 +412,38 @@ if ($projIDs.Count -lt $projectDefs.Count) {
             foreach ($p in $existing.projects) {
                 if (-not $projIDs[$p.code] -and (@("ALPHA","BETA","CAMP","SCRM","HRXP") -contains $p.code)) {
                     $projIDs[$p.code] = [int]$p.id
-                    Write-Host "  '$($p.code)' id=$($p.id) (existing)"
+                    Write-Host "  '$($p.code)' id=$($p.id) (resolved)"
                 }
             }
         }
-    } catch { Write-Warning "  Could not resolve existing project IDs" }
+    } catch { Write-Warning "  Could not resolve remaining project IDs" }
 }
 
-# ── 10. Project time declarations ─────────────────────────────────────────────
+# ── 10. Project members ───────────────────────────────────────────────────────
+Write-Host "`nAssigning project members..."
+function SetMembers ($projCode, [int[]]$userKeys) {
+    $projId = $projIDs[$projCode]
+    if (-not $projId) { Write-Warning "  Project '$projCode' not found"; return }
+    $uids = @($userKeys | ForEach-Object { [int]$_ })
+    $body = @{ user_ids = $uids } | ConvertTo-Json -Compress
+    try {
+        Invoke-RestMethod "$Base/api/admin/projects/$projId/members" -Method PUT -Headers $jh -Body $body | Out-Null
+        Write-Host "  $projCode (id=$projId): $($uids.Count) member(s)"
+    } catch { Write-Warning "  SetMembers $projCode -> $($_.Exception.Message)" }
+}
+
+# ALPHA: engineering team (admin, alice, bob, claire, david, felix)
+SetMembers "ALPHA" @($U.admin, $U.alice, $U.bob, $U.claire, $U.david, $U.felix)
+# BETA:  engineering team (admin, alice, bob, claire, david, felix)
+SetMembers "BETA"  @($U.admin, $U.alice, $U.bob, $U.claire, $U.david, $U.felix)
+# CAMP:  marketing team (emma, grace, hugo)
+SetMembers "CAMP"  @($U.emma, $U.grace, $U.hugo)
+# SCRM:  sales team (bob, iris, julien)
+SetMembers "SCRM"  @($U.bob, $U.iris, $U.julien)
+# HRXP:  HR (admin, alice, emma)
+SetMembers "HRXP"  @($U.admin, $U.alice, $U.emma)
+
+# ── 11. Project time declarations ─────────────────────────────────────────────
 Write-Host "`nDeclaring project time for users..."
 
 function LoginAs ($email, $password) {
@@ -457,13 +495,20 @@ $userCreds = @{
     "iris"   = @{ email="iris.blanc@corp.local";     password="demo1234" }
     "julien" = @{ email="julien.roux@corp.local";    password="demo1234" }
 }
+# Seed the three most recently completed months
+$seedMonths = @(
+    @{ year=$m3.Year; month=$m3.Month },
+    @{ year=$m2.Year; month=$m2.Month },
+    @{ year=$m1.Year; month=$m1.Month }
+)
+
 foreach ($key in $projectAlloc.Keys) {
-    $creds    = $userCreds[$key]
-    $headers  = LoginAs $creds.email $creds.password
+    $creds         = $userCreds[$key]
+    $headers       = LoginAs $creds.email $creds.password
     $userAllocList = $projectAlloc[$key]
     Write-Host "  $key"
-    foreach ($month in @(3, 4, 5)) {
-        $billable  = GetBillable $headers 2026 $month
+    foreach ($ym in $seedMonths) {
+        $billable = GetBillable $headers $ym.year $ym.month
         if ($billable -le 0) { continue }
         $remaining = $billable
         foreach ($a in $userAllocList) {
@@ -472,9 +517,9 @@ foreach ($key in $projectAlloc.Keys) {
             $days = RoundHalf ($billable * $a.f)
             if ($days -gt $remaining) { $days = RoundHalf $remaining }
             if ($days -le 0) { continue }
-            if (DeclareTime $headers $projID 2026 $month $days) {
+            if (DeclareTime $headers $projID $ym.year $ym.month $days) {
                 $remaining -= $days
-                Write-Host "    2026-$('{0:D2}' -f $month) $($a.c): $days j (billable=$billable)"
+                Write-Host "    $($ym.year)-$('{0:D2}' -f $ym.month) $($a.c): $days j (billable=$billable)"
             }
         }
     }
@@ -482,51 +527,59 @@ foreach ($key in $projectAlloc.Keys) {
 
 Write-Host "`nSeed complete!"
 
-# ── 11. News banners ──────────────────────────────────────────────────────────
+# ── 12. News banners ──────────────────────────────────────────────────────────
 Write-Host "`nCreating news banners..."
+# Pre-load existing titles so we never create duplicates
+$existingNewsTitles = @{}
+try {
+    $existingNews = Invoke-RestMethod "$Base/api/admin/news" -Headers $jh -ErrorAction Stop
+    if ($existingNews) { foreach ($n in $existingNews) { $existingNewsTitles[$n.title] = $true } }
+    Write-Host "  $($existingNewsTitles.Count) existing banner(s) found"
+} catch { Write-Warning "  Could not pre-load existing news banners" }
+
+# Dates relative to today
+$curMonthStart  = First-Day $Now.Year $Now.Month
+$curMonthEnd    = Last-Day  $Now.Year $Now.Month
+$maintenanceDay = $Now.AddDays(14).ToString("yyyy-MM-dd")
+$recurStart     = $Now.ToString("yyyy-MM") + "-20"
+$recurEnd       = $Now.ToString("yyyy-MM") + "-25"
+
 $newsItems = @(
     @{
         title      = "🎉 Bienvenue sur myPresence !"
         content    = "Cette démo illustre toutes les fonctionnalités de myPresence. Consultez la [documentation](https://github.com/matoy/mypresence) pour en savoir plus."
-        start_date = "2026-01-01"
-        end_date   = "2026-12-31"
+        start_date = "$CurYear-01-01"
+        end_date   = "$CurYear-12-31"
         bg_color   = "#16a34a"
         recurring  = $false
     },
     @{
-        title      = "📅 Rappel : saisie des présences de mai"
-        content    = "Pensez à renseigner vos présences pour le mois de mai avant le 31/05. Contact : [RH](mailto:rh@corp.local)"
-        start_date = "2026-05-01"
-        end_date   = "2026-05-31"
+        title      = "📅 Rappel : saisie des présences du mois"
+        content    = "Pensez à renseigner vos présences pour le mois en cours avant le dernier jour. Contact : [RH](mailto:rh@corp.local)"
+        start_date = $curMonthStart
+        end_date   = $curMonthEnd
         bg_color   = "#2563eb"
         recurring  = $false
     },
     @{
-        title      = "🏖️ Fermeture estivale"
-        content    = "Les bureaux seront fermés du 11 au 22 août 2026. Bonnes vacances à tous !"
-        start_date = "2026-08-01"
-        end_date   = "2026-08-10"
-        bg_color   = "#d97706"
-        recurring  = $false
-    },
-    @{
         title      = "⚠️ Maintenance planifiée"
-        content    = "Une maintenance du système est prévue le samedi 14 juin de 8h à 12h. myPresence sera indisponible pendant cette période."
-        start_date = "2026-06-08"
-        end_date   = "2026-06-13"
+        content    = "Une maintenance du système est prévue prochainement. myPresence sera indisponible pendant une courte période."
+        start_date = $maintenanceDay
+        end_date   = $maintenanceDay
         bg_color   = "#dc2626"
         recurring  = $false
     },
     @{
         title      = "📋 Rappel mensuel : saisie des présences"
         content    = "Rappel : pensez à saisir vos présences avant le 25 de chaque mois. Questions ? Contactez [les RH](mailto:rh@corp.local)."
-        start_date = "2026-01-20"
-        end_date   = "2026-01-25"
+        start_date = $recurStart
+        end_date   = $recurEnd
         bg_color   = "#7c3aed"
         recurring  = $true
     }
 )
 foreach ($n in $newsItems) {
+    if ($existingNewsTitles[$n.title]) { Write-Host "  '$($n.title)' already exists, skipping"; continue }
     $r = PostJSON "$Base/api/admin/news" $n
     if ($r -and $r.id) { Write-Host "  '$($n.title)' id=$($r.id)" }
     else                { Write-Warning "  Failed to create news '$($n.title)'" }

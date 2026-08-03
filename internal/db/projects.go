@@ -36,6 +36,15 @@ func (d *DB) migrateProjects() error {
   UNIQUE(project_id, user_id, year, month),
   FOREIGN KEY (project_id) REFERENCES projects(id)
 `, ai, real_)),
+
+		// project_members stores the explicit assignment of users to projects.
+		// A project with no rows in this table is "open" (accessible to everyone).
+		dl.createTableIfNotExists("project_members", `
+  project_id BIGINT NOT NULL,
+  user_id    BIGINT NOT NULL,
+  UNIQUE(project_id, user_id),
+  FOREIGN KEY (project_id) REFERENCES projects(id)
+`),
 	}
 
 	for _, stmt := range stmts {
@@ -141,6 +150,108 @@ func (d *DB) UpdateProject(id int64, name, code string, teamID int64, active boo
 UPDATE projects SET name=?, code=?, team_id=?, active=?, start_date=?, end_date=?
 WHERE id=?`, name, code, teamID, active, startDate, endDate, id)
 	return err
+}
+
+// ─── Project members ──────────────────────────────────────────────────────────
+
+// GetProjectMembers returns the user IDs explicitly assigned to a project.
+// An empty slice means the project is "open" (no restriction).
+func (d *DB) GetProjectMembers(projectID int64) ([]int64, error) {
+	rows, err := d.projects.Query(`
+SELECT user_id FROM project_members WHERE project_id = ? ORDER BY user_id`, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() //nolint:errcheck
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// SetProjectMembers atomically replaces the full member list of a project.
+// Passing an empty slice removes all restrictions (open project).
+func (d *DB) SetProjectMembers(projectID int64, userIDs []int64) error {
+	tx, err := d.projects.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Tx.Rollback() //nolint:errcheck
+	if _, err := tx.Exec(`DELETE FROM project_members WHERE project_id = ?`, projectID); err != nil {
+		return err
+	}
+	for _, uid := range userIDs {
+		if _, err := tx.Exec(
+			`INSERT INTO project_members (project_id, user_id) VALUES (?, ?)`,
+			projectID, uid,
+		); err != nil {
+			return err
+		}
+	}
+	return tx.Tx.Commit()
+}
+
+// IsUserAssignedToProject returns true when the user may declare time on the
+// project: either the project has no members (open access) or the user is
+// explicitly listed.
+func (d *DB) IsUserAssignedToProject(userID, projectID int64) (bool, error) {
+	var total int
+	if err := d.projects.QueryRow(
+		`SELECT COUNT(*) FROM project_members WHERE project_id = ?`, projectID,
+	).Scan(&total); err != nil {
+		return false, err
+	}
+	if total == 0 {
+		return true, nil // open project
+	}
+	var count int
+	err := d.projects.QueryRow(
+		`SELECT COUNT(*) FROM project_members WHERE project_id = ? AND user_id = ?`,
+		projectID, userID,
+	).Scan(&count)
+	return count > 0, err
+}
+
+// ListActiveProjectsForMonthAndUser returns active projects accessible to
+// the given user: either the project has no members (open) or the user is
+// explicitly assigned.
+func (d *DB) ListActiveProjectsForMonthAndUser(year, month int, userID int64) ([]models.Project, error) {
+	firstDay := fmt.Sprintf("%04d-%02d-01", year, month)
+	rows, err := d.projects.Query(`
+SELECT p.id, p.name, p.code, p.team_id, p.active, p.start_date, p.end_date, p.created_at
+FROM projects p
+WHERE p.active = ? AND p.end_date >= ?
+  AND (
+    NOT EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = p.id)
+    OR  EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = p.id AND pm.user_id = ?)
+  )
+ORDER BY p.name`, true, firstDay, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() //nolint:errcheck
+	var projects []models.Project
+	for rows.Next() {
+		var p models.Project
+		var createdAt string
+		if err := rows.Scan(&p.ID, &p.Name, &p.Code, &p.TeamID, &p.Active, &p.StartDate, &p.EndDate, &createdAt); err != nil {
+			return nil, err
+		}
+		p.CreatedAt, _ = time.Parse("2006-01-02T15:04:05Z", createdAt)
+		projects = append(projects, p)
+	}
+	teamMap, _ := d.teamNameMap()
+	for i := range projects {
+		if n, ok := teamMap[projects[i].TeamID]; ok {
+			projects[i].TeamName = n
+		}
+	}
+	return projects, rows.Err()
 }
 
 // ─── Time entries ─────────────────────────────────────────────────────────────
