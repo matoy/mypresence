@@ -127,7 +127,7 @@ func TestProjectsAPI_FavoritesReflectsUserState(t *testing.T) {
 	pid, _ := d.CreateProject("APIFav", "APIF", 0, true, "2026-01-01", "2026-12-31")
 	uid, _ := d.CreateLocalUser("apifav@test.com", "ApiFav", "password1")
 	tok, _ := d.CreateSession(uid)
-	d.ToggleProjectFavorite(uid, pid) //nolint:errcheck
+	_, _ = d.ToggleProjectFavorite(uid, pid)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/projects?year=2026&month=8", nil)
 	req.AddCookie(&http.Cookie{Name: "session", Value: tok})

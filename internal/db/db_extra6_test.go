@@ -42,7 +42,7 @@ func TestToggleProjectFavorite_RemovesFavorite(t *testing.T) {
 	pid := seedProject(t, d, "FavProj2", "FVP2")
 	uid, _ := d.CreateLocalUser("fav3@test.com", "Fav3", "pass")
 
-	d.ToggleProjectFavorite(uid, pid) //nolint:errcheck — add
+	_, _ = d.ToggleProjectFavorite(uid, pid) // add
 	isFav, err := d.ToggleProjectFavorite(uid, pid)
 	if err != nil {
 		t.Fatalf("ToggleProjectFavorite: %v", err)
@@ -63,8 +63,8 @@ func TestGetUserFavoriteProjectIDs_MultipleProjects(t *testing.T) {
 	p3 := seedProject(t, d, "ProjC", "PC")
 	uid, _ := d.CreateLocalUser("fav4@test.com", "Fav4", "pass")
 
-	d.ToggleProjectFavorite(uid, p1) //nolint:errcheck
-	d.ToggleProjectFavorite(uid, p3) //nolint:errcheck
+	_, _ = d.ToggleProjectFavorite(uid, p1)
+	_, _ = d.ToggleProjectFavorite(uid, p3)
 
 	ids, err := d.GetUserFavoriteProjectIDs(uid)
 	if err != nil {
@@ -85,7 +85,7 @@ func TestGetUserFavoriteProjectIDs_IsolatedPerUser(t *testing.T) {
 	uid1, _ := d.CreateLocalUser("fav5a@test.com", "Fav5a", "pass")
 	uid2, _ := d.CreateLocalUser("fav5b@test.com", "Fav5b", "pass")
 
-	d.ToggleProjectFavorite(uid1, pid) //nolint:errcheck
+	_, _ = d.ToggleProjectFavorite(uid1, pid)
 
 	ids1, _ := d.GetUserFavoriteProjectIDs(uid1)
 	ids2, _ := d.GetUserFavoriteProjectIDs(uid2)
