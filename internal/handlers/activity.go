@@ -93,6 +93,14 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 	prevTime := time.Date(year, time.Month(month)-1, 1, 0, 0, 0, 0, time.UTC)
 	nextTime := time.Date(year, time.Month(month)+1, 1, 0, 0, 0, 0, time.UTC)
 
+	// Certification status per user for the displayed month, for the "signed
+	// contract" badge next to each name in the Team Summary table.
+	statUserIDs := make([]int64, len(stats))
+	for i, s := range stats {
+		statUserIDs[i] = s.User.ID
+	}
+	certifiedUsers, _ := h.DB.GetCertifiedUserIDs(statUserIDs, year, month)
+
 	h.Render(w, r, "admin_activity", map[string]interface{}{
 		"Teams":                  teams,
 		"Statuses":               statuses,
@@ -131,6 +139,8 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 		"ExecUserCount":          execUserCount,
 		"YTDBillableByUser":      ytdBillableByUser,
 		"TotalYTDBillable":       totalYTDBillable,
+		"Certified":              certifiedUsers,
+		"IsGlobalAdmin":          currentUser != nil && currentUser.HasRole(models.RoleGlobal),
 	})
 }
 

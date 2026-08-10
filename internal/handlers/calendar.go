@@ -26,11 +26,12 @@ type CalendarHandler struct {
 
 // teamCalendarView holds display data for one team's presence sub-table.
 type teamCalendarView struct {
-	Team         models.Team
-	Members      []models.User
-	Presences    map[int64]map[string]map[string]int64 // userID → date → half → statusID
-	Reservations map[int64]map[string]bool             // userID → date → bool
-	CanEdit      bool
+	Team           models.Team
+	Members        []models.User
+	Presences      map[int64]map[string]map[string]int64 // userID → date → half → statusID
+	Reservations   map[int64]map[string]bool             // userID → date → bool
+	CanEdit        bool
+	Certifications map[int64]bool // userID → declaration certified for the displayed month
 }
 
 // CalendarPage renders the monthly calendar view for the logged-in user.
@@ -75,6 +76,9 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 	// A month is complete when every declarable day has at least one status set.
 	declarableDays, declaredDays, calendarComplete := computeMonthCompletion(days, userPresences)
 
+	// Whether the current user has already certified this month's declaration.
+	certified, _ := h.DB.IsMonthCertified(user.ID, year, month)
+
 	// Get seat reservations and floorplans (skipped when floor plans are disabled)
 	var reservationDates map[string]bool
 	var floorplans []models.Floorplan
@@ -116,12 +120,14 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 				teamReservations[m.ID] = r
 			}
 		}
+		teamCertifications, _ := h.DB.GetCertifiedUserIDs(userIDs, year, month)
 		teamViews = append(teamViews, teamCalendarView{
-			Team:         team,
-			Members:      members,
-			Presences:    tp,
-			Reservations: teamReservations,
-			CanEdit:      canEditTeam,
+			Team:           team,
+			Members:        members,
+			Presences:      tp,
+			Reservations:   teamReservations,
+			CanEdit:        canEditTeam,
+			Certifications: teamCertifications,
 		})
 	}
 
@@ -142,6 +148,7 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 		"DeclarableDays":   declarableDays,
 		"DeclaredDays":     declaredDays,
 		"TeamViews":        teamViews,
+		"Certified":        certified,
 	})
 }
 
@@ -204,6 +211,17 @@ func (h *CalendarHandler) SetPresences(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Reject edits for months already certified — only a global admin can decertify.
+	locked, lerr := certifiedMonthFromDates(h.DB, req.UserID, req.Dates)
+	if lerr != nil {
+		jsonError(w, "Erreur", http.StatusInternalServerError)
+		return
+	}
+	if locked {
+		jsonError(w, "Déclaration certifiée : modification impossible pour ce mois", http.StatusLocked)
+		return
+	}
+
 	if err := h.DB.SetPresences(req.UserID, req.Dates, req.StatusID, req.Half); err != nil {
 		jsonError(w, "Erreur sauvegarde", http.StatusInternalServerError)
 		return
@@ -250,6 +268,17 @@ func (h *CalendarHandler) ClearPresences(w http.ResponseWriter, r *http.Request)
 			jsonError(w, "Non autorisé", http.StatusForbidden)
 			return
 		}
+	}
+
+	// Reject edits for months already certified — only a global admin can decertify.
+	locked, lerr := certifiedMonthFromDates(h.DB, req.UserID, req.Dates)
+	if lerr != nil {
+		jsonError(w, "Erreur", http.StatusInternalServerError)
+		return
+	}
+	if locked {
+		jsonError(w, "Déclaration certifiée : modification impossible pour ce mois", http.StatusLocked)
+		return
 	}
 
 	if err := h.DB.ClearPresences(req.UserID, req.Dates, req.Half); err != nil {
@@ -324,6 +353,118 @@ func (h *CalendarHandler) GetPresencesAPI(w http.ResponseWriter, r *http.Request
 	}
 
 	jsonOK(w, presences)
+}
+
+// certifiedMonthFromDates reports whether any of the given dates falls within
+// a month that is already certified for targetID, in which case presence
+// edits must be rejected until a global admin decertifies that month.
+func certifiedMonthFromDates(database *db.DB, targetID int64, dates []string) (bool, error) {
+	checked := make(map[string]bool)
+	for _, dstr := range dates {
+		t, err := time.Parse("2006-01-02", dstr)
+		if err != nil {
+			continue
+		}
+		key := fmt.Sprintf("%04d-%02d", t.Year(), int(t.Month()))
+		if checked[key] {
+			continue
+		}
+		checked[key] = true
+		certified, err := database.IsMonthCertified(targetID, t.Year(), int(t.Month()))
+		if err != nil {
+			return false, err
+		}
+		if certified {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// CertifyMonth allows a user to certify their own presence declaration for a
+// given month, once every declarable day has a status set. Certification is
+// self-service and irreversible from the user's side: once certified, the
+// month's declarations can no longer be edited (see certifiedMonthFromDates)
+// until a global admin decertifies it via DecertifyMonth.
+func (h *CalendarHandler) CertifyMonth(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r)
+
+	var req struct {
+		Year  int `json:"year"`
+		Month int `json:"month"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Year < 2020 || req.Year > 2100 || req.Month < 1 || req.Month > 12 {
+		jsonError(w, "Requête invalide", http.StatusBadRequest)
+		return
+	}
+
+	startDate := fmt.Sprintf("%04d-%02d-01", req.Year, req.Month)
+	lastDay := time.Date(req.Year, time.Month(req.Month)+1, 0, 0, 0, 0, 0, time.UTC)
+	endDate := lastDay.Format("2006-01-02")
+
+	days := getDaysInMonth(req.Year, req.Month)
+	holidayMap, _ := h.DB.GetHolidayMap(startDate, endDate)
+	for i, d := range days {
+		if hol, ok := holidayMap[d.Date]; ok {
+			days[i].IsHoliday = true
+			days[i].HolidayAllowImputed = hol.AllowImputed
+		}
+	}
+
+	presenceMap, err := h.DB.GetPresences([]int64{user.ID}, startDate, endDate)
+	if err != nil {
+		jsonError(w, "Erreur", http.StatusInternalServerError)
+		return
+	}
+	_, _, complete := computeMonthCompletion(days, presenceMap[user.ID])
+	if !complete {
+		jsonError(w, "Toutes les journées doivent être déclarées avant de certifier", http.StatusUnprocessableEntity)
+		return
+	}
+
+	if err := h.DB.CertifyMonth(user.ID, req.Year, req.Month, user.ID); err != nil {
+		jsonError(w, "Erreur lors de la certification", http.StatusInternalServerError)
+		return
+	}
+
+	h.DB.LogAdminAction(user.ID, "user", user.ID, "certify_declaration", fmt.Sprintf("%04d-%02d", req.Year, req.Month))
+	slog.Info("presence.certify", "actor", user.Email, "year", req.Year, "month", req.Month)
+	metrics.AdminOpsTotal.WithLabelValues("certification", "certify", "success").Inc()
+
+	jsonOK(w, map[string]string{"status": "ok"})
+}
+
+// DecertifyMonth cancels a user's certification for a given month, allowing
+// declarations to be edited again. Restricted to global admins at the route
+// level (see main.go); the role is re-checked here for defense in depth.
+func (h *CalendarHandler) DecertifyMonth(w http.ResponseWriter, r *http.Request) {
+	currentUser := middleware.GetUser(r)
+	if currentUser == nil || !currentUser.HasRole(models.RoleGlobal) {
+		metrics.AdminOpsTotal.WithLabelValues("certification", "decertify", "failure").Inc()
+		jsonError(w, "Non autorisé", http.StatusForbidden)
+		return
+	}
+
+	var req struct {
+		UserID int64 `json:"user_id"`
+		Year   int   `json:"year"`
+		Month  int   `json:"month"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.UserID <= 0 || req.Year < 2020 || req.Year > 2100 || req.Month < 1 || req.Month > 12 {
+		jsonError(w, "Requête invalide", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.DB.DecertifyMonth(req.UserID, req.Year, req.Month); err != nil {
+		jsonError(w, "Erreur lors de la décertification", http.StatusInternalServerError)
+		return
+	}
+
+	h.DB.LogAdminAction(currentUser.ID, "user", req.UserID, "decertify_declaration", fmt.Sprintf("%04d-%02d", req.Year, req.Month))
+	slog.Info("presence.decertify", "actor", currentUser.Email, "target_id", req.UserID, "year", req.Year, "month", req.Month)
+	metrics.AdminOpsTotal.WithLabelValues("certification", "decertify", "success").Inc()
+
+	jsonOK(w, map[string]string{"status": "ok"})
 }
 
 // isTeamLeaderOf returns true if leaderID and targetID share at least one common team.

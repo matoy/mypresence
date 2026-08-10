@@ -374,11 +374,11 @@ func (h *AuthHandler) syncSAMLGroupRoles(user *models.User, assertion *saml.Asse
 	groups, groupClaimPresent := getAttributeValuesWithPresence(assertion, cfg.SAMLGroupsClaim)
 	if !groupClaimPresent {
 		slog.Warn("auth.saml.groups_claim_missing",
-				"email", email,
-				"claim", cfg.SAMLGroupsClaim,
-				"present_claims", listSAMLAttributeNames(assertion),
-				"possible_entra_group_overage", hasPossibleEntraGroupOverage(assertion),
-			)
+			"email", email,
+			"claim", cfg.SAMLGroupsClaim,
+			"present_claims", listSAMLAttributeNames(assertion),
+			"possible_entra_group_overage", hasPossibleEntraGroupOverage(assertion),
+		)
 	}
 	groupSet := make(map[string]bool, len(groups))
 	for _, g := range groups {
