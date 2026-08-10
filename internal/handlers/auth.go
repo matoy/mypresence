@@ -368,13 +368,18 @@ func extractSAMLDisplayName(assertion *saml.Assertion, email string) string {
 // application roles and persists the result via UpdateUserRoles.
 func (h *AuthHandler) syncSAMLGroupRoles(user *models.User, assertion *saml.Assertion, email string) {
 	cfg := h.Config
-	if cfg.SAMLGroupGlobal == "" && cfg.SAMLGroupTeamManager == "" &&
-		cfg.SAMLGroupTeamLeader == "" && cfg.SAMLGroupStatusManager == "" &&
-		cfg.SAMLGroupActivityViewer == "" && cfg.SAMLGroupFloorplanManager == "" &&
-		cfg.SAMLGroupProjectsManager == "" && cfg.SAMLGroupProjectsViewer == "" {
+	if !hasConfiguredSAMLGroupMappings(cfg) {
 		return
 	}
-	groups := getAttributeValues(assertion, cfg.SAMLGroupsClaim)
+	groups, groupClaimPresent := getAttributeValuesWithPresence(assertion, cfg.SAMLGroupsClaim)
+	if !groupClaimPresent {
+		slog.Warn("auth.saml.groups_claim_missing",
+				"email", email,
+				"claim", cfg.SAMLGroupsClaim,
+				"present_claims", listSAMLAttributeNames(assertion),
+				"possible_entra_group_overage", hasPossibleEntraGroupOverage(assertion),
+			)
+	}
 	groupSet := make(map[string]bool, len(groups))
 	for _, g := range groups {
 		groupSet[g] = true
@@ -416,6 +421,11 @@ func getAttributeValue(assertion *saml.Assertion, name string) string {
 
 // getAttributeValues returns all values for the named attribute in a SAML assertion.
 func getAttributeValues(assertion *saml.Assertion, name string) []string {
+	vals, _ := getAttributeValuesWithPresence(assertion, name)
+	return vals
+}
+
+func getAttributeValuesWithPresence(assertion *saml.Assertion, name string) ([]string, bool) {
 	for _, stmt := range assertion.AttributeStatements {
 		for _, attr := range stmt.Attributes {
 			if attr.Name == name {
@@ -423,11 +433,41 @@ func getAttributeValues(assertion *saml.Assertion, name string) []string {
 				for _, v := range attr.Values {
 					vals = append(vals, v.Value)
 				}
-				return vals
+				return vals, true
 			}
 		}
 	}
-	return nil
+	return nil, false
+}
+
+func hasConfiguredSAMLGroupMappings(cfg *config.Config) bool {
+	return cfg.SAMLGroupGlobal != "" || cfg.SAMLGroupTeamManager != "" ||
+		cfg.SAMLGroupTeamLeader != "" || cfg.SAMLGroupStatusManager != "" ||
+		cfg.SAMLGroupActivityViewer != "" || cfg.SAMLGroupFloorplanManager != "" ||
+		cfg.SAMLGroupProjectsManager != "" || cfg.SAMLGroupProjectsViewer != ""
+}
+
+func listSAMLAttributeNames(assertion *saml.Assertion) []string {
+	names := make([]string, 0)
+	for _, stmt := range assertion.AttributeStatements {
+		for _, attr := range stmt.Attributes {
+			names = append(names, attr.Name)
+		}
+	}
+	return names
+}
+
+func hasPossibleEntraGroupOverage(assertion *saml.Assertion) bool {
+	for _, name := range listSAMLAttributeNames(assertion) {
+		lowerName := strings.ToLower(name)
+		if lowerName == "hasgroups" || strings.HasSuffix(lowerName, "/hasgroups") ||
+			lowerName == "_claim_names" || strings.HasSuffix(lowerName, "/_claim_names") ||
+			lowerName == "_claim_sources" || strings.HasSuffix(lowerName, "/_claim_sources") ||
+			lowerName == "groups.link" || strings.HasSuffix(lowerName, "/groups.link") {
+			return true
+		}
+	}
+	return false
 }
 
 // generateSelfSignedCert creates a self-signed TLS certificate for SAML SP.
