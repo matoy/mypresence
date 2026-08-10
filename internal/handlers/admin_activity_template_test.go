@@ -33,9 +33,9 @@ func renderAdminActivityContent(t *testing.T, pageData map[string]interface{}) s
 		t.Fatalf("parse admin_activity template: %v", err)
 	}
 
-	root := map[string]interface{}{
-		"Data": pageData,
-		"T":    map[string]string{},
+	root := models.PageData{
+		Data: pageData,
+		T:    map[string]string{},
 	}
 
 	var out bytes.Buffer
@@ -127,6 +127,44 @@ func TestAdminActivityTemplate_RocketRule(t *testing.T) {
 	html = renderAdminActivityContent(t, data)
 	if c := strings.Count(html, `title="Goal achieved"`); c != 0 {
 		t.Fatalf("expected no row rocket marker when rule is not met, got %d", c)
+	}
+}
+
+// TestAdminActivityTemplate_CertifiedBadgeForNonAdmin covers the read-only
+// seal badge shown for a certified user when the viewer is not a global admin.
+func TestAdminActivityTemplate_CertifiedBadgeForNonAdmin(t *testing.T) {
+	data := baseActivityPageData()
+	data["Certified"] = map[int64]bool{1: true}
+	data["IsGlobalAdmin"] = false
+
+	html := renderAdminActivityContent(t, data)
+	if !strings.Contains(html, "🔏") {
+		t.Fatal("expected certified seal badge to render")
+	}
+	if strings.Contains(html, `onclick="openDecertifyModal(`) {
+		t.Fatal("non-admin viewer must not get a clickable decertify button")
+	}
+}
+
+// TestAdminActivityTemplate_DecertifyButtonForGlobalAdmin reproduces the
+// real production data shape (root PageData with a nested Data map) to catch
+// regressions like referencing $.Month/$.Year instead of .Month/.Year inside
+// the {{with .Data}} block, which previously crashed template execution as
+// soon as a certified user's row was rendered for a global admin viewer.
+func TestAdminActivityTemplate_DecertifyButtonForGlobalAdmin(t *testing.T) {
+	data := baseActivityPageData()
+	data["Certified"] = map[int64]bool{1: true}
+	data["IsGlobalAdmin"] = true
+
+	html := renderAdminActivityContent(t, data)
+	if !strings.Contains(html, "🔏") {
+		t.Fatal("expected certified seal button to render")
+	}
+	// Whitespace inside the onclick attribute comes from template indentation
+	// and is insignificant in JS, so normalize it before comparing.
+	normalized := strings.Join(strings.Fields(html), " ")
+	if !strings.Contains(normalized, "openDecertifyModal( 1 , 'Alice', 5 , 2026 )") {
+		t.Fatalf("expected decertify button wired with correct user/month/year, got: %s", html)
 	}
 }
 

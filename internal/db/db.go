@@ -253,6 +253,9 @@ func (d *DB) migrate() error {
 	if err := d.migrateNews(); err != nil {
 		return fmt.Errorf("migrateNews: %w", err)
 	}
+	if err := d.migrateCertifications(); err != nil {
+		return fmt.Errorf("migrateCertifications: %w", err)
+	}
 	return nil
 }
 

@@ -152,6 +152,9 @@ func main() {
 	authMux.HandleFunc("POST /api/presences/clear", calHandler.ClearPresences)
 	authMux.HandleFunc("GET /api/presences", calHandler.GetPresencesAPI)
 
+	// Monthly declaration certification (self-service certify; decertify is global-admin only)
+	authMux.HandleFunc("POST /api/certify", calHandler.CertifyMonth)
+
 	// Personal settings
 	authMux.HandleFunc("GET /settings/my-logs", settingsHandler.MyLogsPage)
 	authMux.HandleFunc("GET /settings/change-password", settingsHandler.ChangePasswordPage)
@@ -203,6 +206,9 @@ func main() {
 	holidaysMux.HandleFunc("PUT /admin/holidays/{id}", holidaysHandler.UpdateHoliday)
 	holidaysMux.HandleFunc("DELETE /admin/holidays/{id}", holidaysHandler.DeleteHoliday)
 
+	certificationMux := http.NewServeMux()
+	certificationMux.HandleFunc("POST /api/decertify", calHandler.DecertifyMonth)
+
 	usersMux := http.NewServeMux()
 	usersMux.HandleFunc("GET /admin/users", usersAdminHandler.UsersPage)
 	usersMux.HandleFunc("POST /admin/users", usersAdminHandler.CreateUser)
@@ -228,6 +234,7 @@ func main() {
 	mux.Handle("/api/activity", middleware.Auth(database, middleware.RequireRole(models.RoleActivityViewer, models.RoleTeamLeader)(activityMux)))
 	mux.Handle("/admin/holidays", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(holidaysMux)))
 	mux.Handle("/admin/holidays/", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(holidaysMux)))
+	mux.Handle("/api/decertify", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(certificationMux)))
 	mux.Handle("/admin/roles", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(usersMux)))
 	mux.Handle("/api/users", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(usersMux)))
 	mux.Handle("/api/users/", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(usersMux)))

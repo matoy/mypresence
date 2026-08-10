@@ -153,6 +153,18 @@ var en = map[string]string{
 	"cal.half_am":          "· Morning",
 	"cal.half_pm":          "· Afternoon",
 
+	// Monthly declaration certification
+	"cert.certify_button_title":     "Certify monthly declaration",
+	"cert.certify_modal_title":      "Certify monthly declaration",
+	"cert.certify_modal_message":    "You are about to certify your presence declaration for this month. This action is irreversible: once certified, you will no longer be able to modify your declarations for this period.",
+	"cert.certify_confirm_button":   "Certify",
+	"cert.certified_badge_title":    "Declaration certified",
+	"cert.certify_error":            "Error while certifying the declaration",
+	"cert.decertify_button_title":   "Click to cancel this certification",
+	"cert.decertify_modal_title":    "Cancel certification",
+	"cert.decertify_modal_message":  "This will cancel the certification for this employee and this month, allowing declarations to be modified again.",
+	"cert.decertify_confirm_button": "Decertify",
+
 	// Admin common
 	"admin.search":   "Search",
 	"admin.all":      "All",
@@ -603,6 +615,18 @@ var fr = map[string]string{
 	"cal.half_am":          "· Matin",
 	"cal.half_pm":          "· Après-midi",
 
+	// Certification de la déclaration mensuelle
+	"cert.certify_button_title":     "Certifier la déclaration mensuelle",
+	"cert.certify_modal_title":      "Certifier la déclaration mensuelle",
+	"cert.certify_modal_message":    "Vous êtes sur le point de certifier votre déclaration de présence pour ce mois. Cette action est irréversible : une fois certifiée, vous ne pourrez plus modifier vos déclarations pour cette période.",
+	"cert.certify_confirm_button":   "Certifier",
+	"cert.certified_badge_title":    "Déclaration certifiée",
+	"cert.certify_error":            "Erreur lors de la certification de la déclaration",
+	"cert.decertify_button_title":   "Cliquer pour annuler cette certification",
+	"cert.decertify_modal_title":    "Annuler la certification",
+	"cert.decertify_modal_message":  "Cela annulera la certification de cet employé pour ce mois, permettant à nouveau la modification des déclarations.",
+	"cert.decertify_confirm_button": "Décertifier",
+
 	"admin.search":   "Rechercher",
 	"admin.all":      "Tous",
 	"admin.active":   "Actif",
@@ -1044,6 +1068,18 @@ var de = map[string]string{
 	"cal.modal_title":      "🖥️ Schreibtisch reservieren",
 	"cal.half_am":          "· Vormittag",
 	"cal.half_pm":          "· Nachmittag",
+
+	// Zertifizierung der monatlichen Erklärung
+	"cert.certify_button_title":     "Monatliche Erklärung zertifizieren",
+	"cert.certify_modal_title":      "Monatliche Erklärung zertifizieren",
+	"cert.certify_modal_message":    "Sie sind dabei, Ihre Anwesenheitserklärung für diesen Monat zu zertifizieren. Diese Aktion ist unwiderruflich: Nach der Zertifizierung können Sie Ihre Erklärungen für diesen Zeitraum nicht mehr ändern.",
+	"cert.certify_confirm_button":   "Zertifizieren",
+	"cert.certified_badge_title":    "Erklärung zertifiziert",
+	"cert.certify_error":            "Fehler bei der Zertifizierung der Erklärung",
+	"cert.decertify_button_title":   "Klicken, um diese Zertifizierung aufzuheben",
+	"cert.decertify_modal_title":    "Zertifizierung aufheben",
+	"cert.decertify_modal_message":  "Dadurch wird die Zertifizierung für diesen Mitarbeiter und diesen Monat aufgehoben, sodass die Erklärungen wieder geändert werden können.",
+	"cert.decertify_confirm_button": "Zertifizierung aufheben",
 
 	"admin.search":   "Suchen",
 	"admin.all":      "Alle",
@@ -1487,6 +1523,18 @@ var es = map[string]string{
 	"cal.half_am":          "· Mañana",
 	"cal.half_pm":          "· Tarde",
 
+	// Certificación de la declaración mensual
+	"cert.certify_button_title":     "Certificar la declaración mensual",
+	"cert.certify_modal_title":      "Certificar la declaración mensual",
+	"cert.certify_modal_message":    "Está a punto de certificar su declaración de presencia de este mes. Esta acción es irreversible: una vez certificada, ya no podrá modificar sus declaraciones de este período.",
+	"cert.certify_confirm_button":   "Certificar",
+	"cert.certified_badge_title":    "Declaración certificada",
+	"cert.certify_error":            "Error al certificar la declaración",
+	"cert.decertify_button_title":   "Haga clic para anular esta certificación",
+	"cert.decertify_modal_title":    "Anular certificación",
+	"cert.decertify_modal_message":  "Esto anulará la certificación de este empleado para este mes, permitiendo modificar de nuevo las declaraciones.",
+	"cert.decertify_confirm_button": "Anular certificación",
+
 	"admin.search":   "Buscar",
 	"admin.all":      "Todos",
 	"admin.active":   "Activo",
@@ -1925,6 +1973,18 @@ var it = map[string]string{
 	"cal.modal_title":      "🖥️ Prenota scrivania",
 	"cal.half_am":          "· Mattina",
 	"cal.half_pm":          "· Pomeriggio",
+
+	// Certificazione della dichiarazione mensile
+	"cert.certify_button_title":     "Certificare la dichiarazione mensile",
+	"cert.certify_modal_title":      "Certificare la dichiarazione mensile",
+	"cert.certify_modal_message":    "Stai per certificare la tua dichiarazione di presenza per questo mese. Questa azione è irreversibile: una volta certificata, non potrai più modificare le tue dichiarazioni per questo periodo.",
+	"cert.certify_confirm_button":   "Certifica",
+	"cert.certified_badge_title":    "Dichiarazione certificata",
+	"cert.certify_error":            "Errore durante la certificazione della dichiarazione",
+	"cert.decertify_button_title":   "Clicca per annullare questa certificazione",
+	"cert.decertify_modal_title":    "Annulla certificazione",
+	"cert.decertify_modal_message":  "Questo annullerà la certificazione per questo dipendente e questo mese, consentendo nuovamente la modifica delle dichiarazioni.",
+	"cert.decertify_confirm_button": "Annulla certificazione",
 
 	// Admin common
 	"admin.search":   "Cerca",
