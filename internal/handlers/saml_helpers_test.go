@@ -1,6 +1,9 @@
 package handlers
 
 import (
+	"bytes"
+	"log/slog"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -227,6 +230,46 @@ func TestSyncSAMLGroupRoles_NotInAnyGroup_GetsBasic(t *testing.T) {
 	u2, _ := d.GetUserByID(uid)
 	if u2.HasRole(models.RoleGlobal) {
 		t.Error("expected role demoted to basic after not matching any group")
+	}
+}
+
+func TestSyncSAMLGroupRoles_MissingGroupsClaimLogsWarning(t *testing.T) {
+	d := newExtraTestDB(t)
+	uid := seedUserInHandlers(t, d, "samlsync_missingclaim@test.com")
+	user, _ := d.GetUserByID(uid)
+
+	cfg := newSAMLConfig()
+	cfg.SAMLGroupGlobal = "admins"
+	cfg.SAMLGroupsClaim = "groups"
+
+	var logOut bytes.Buffer
+	prevLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logOut, nil)))
+	t.Cleanup(func() {
+		slog.SetDefault(prevLogger)
+	})
+
+	h := &AuthHandler{DB: d, Config: cfg}
+	a := &saml.Assertion{
+		AttributeStatements: []saml.AttributeStatement{{
+			Attributes: []saml.Attribute{
+				samlAttr("_claim_names", `{"groups":"src1"}`),
+				samlAttr("_claim_sources", `{"src1":{"endpoint":"https://graph.microsoft.com/..."}}`),
+			},
+		}},
+	}
+
+	h.syncSAMLGroupRoles(user, a, user.Email)
+
+	logged := logOut.String()
+	if !strings.Contains(logged, "auth.saml.groups_claim_missing") {
+		t.Fatalf("expected missing groups claim warning, got %q", logged)
+	}
+	if !strings.Contains(logged, "claim=groups") {
+		t.Fatalf("expected groups claim name in warning, got %q", logged)
+	}
+	if !strings.Contains(logged, "possible_entra_group_overage=true") {
+		t.Fatalf("expected overage hint in warning, got %q", logged)
 	}
 }
 
