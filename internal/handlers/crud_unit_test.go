@@ -91,6 +91,79 @@ func TestAdminCreateTeamAndListAPI(t *testing.T) {
 	}
 }
 
+func TestAdminCreateProjectAndUpdateProject_WithMiniProjectDetails(t *testing.T) {
+	d := newCRUDTestDB(t)
+	h := &ProjectsHandler{DB: d}
+
+	createReq := createAuthedReq(t, d, http.MethodPost, "/api/admin/projects", "padmin@example.com", "PAdmin", "password1", models.RoleProjectsAdmin,
+		[]byte(`{"name":"Mini Proj","code":"MINIP","active":true,"mini_project":true,"start_date":"2026-01-01","end_date":"2026-12-31","initial_end_date":"2026-06-30"}`))
+	wCreate := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.CreateProject)).ServeHTTP(wCreate, createReq)
+	if wCreate.Code != http.StatusOK {
+		t.Fatalf("expected 200 create project, got %d: %s", wCreate.Code, wCreate.Body.String())
+	}
+	var created map[string]interface{}
+	if err := json.Unmarshal(wCreate.Body.Bytes(), &created); err != nil {
+		t.Fatalf("invalid json: %v", err)
+	}
+	projID := int64(created["id"].(float64))
+
+	p, err := d.GetProject(projID)
+	if err != nil {
+		t.Fatalf("GetProject: %v", err)
+	}
+	if !p.MiniProject {
+		t.Error("expected MiniProject to be true after create")
+	}
+	if p.InitialEndDate != "2026-06-30" {
+		t.Errorf("InitialEndDate: want 2026-06-30, got %q", p.InitialEndDate)
+	}
+
+	updateReq := createAuthedReq(t, d, http.MethodPut, "/api/admin/projects/"+strconvI64(projID), "padmin2@example.com", "PAdmin2", "password1", models.RoleProjectsAdmin,
+		[]byte(`{"name":"Mini Proj Updated","code":"MINIP2","active":true,"mini_project":false,"start_date":"2026-01-01","end_date":"2026-12-31","initial_end_date":"2026-09-15"}`))
+	updateReq.SetPathValue("id", strconvI64(projID))
+	wUpdate := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.UpdateProject)).ServeHTTP(wUpdate, updateReq)
+	if wUpdate.Code != http.StatusOK {
+		t.Fatalf("expected 200 update project, got %d: %s", wUpdate.Code, wUpdate.Body.String())
+	}
+
+	p, err = d.GetProject(projID)
+	if err != nil {
+		t.Fatalf("GetProject after update: %v", err)
+	}
+	if p.MiniProject {
+		t.Error("expected MiniProject to be false after update")
+	}
+	if p.InitialEndDate != "2026-09-15" {
+		t.Errorf("InitialEndDate after update: want 2026-09-15, got %q", p.InitialEndDate)
+	}
+}
+
+func TestAdminCreateProject_EmptyInitialEndDateDefaultsToEndDate(t *testing.T) {
+	d := newCRUDTestDB(t)
+	h := &ProjectsHandler{DB: d}
+
+	createReq := createAuthedReq(t, d, http.MethodPost, "/api/admin/projects", "padmin3@example.com", "PAdmin3", "password1", models.RoleProjectsAdmin,
+		[]byte(`{"name":"NoInitialEnd","code":"NIE","active":true,"start_date":"2026-01-01","end_date":"2026-12-31"}`))
+	wCreate := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.CreateProject)).ServeHTTP(wCreate, createReq)
+	if wCreate.Code != http.StatusOK {
+		t.Fatalf("expected 200 create project, got %d: %s", wCreate.Code, wCreate.Body.String())
+	}
+	var created map[string]interface{}
+	json.Unmarshal(wCreate.Body.Bytes(), &created) //nolint:errcheck
+	projID := int64(created["id"].(float64))
+
+	p, err := d.GetProject(projID)
+	if err != nil {
+		t.Fatalf("GetProject: %v", err)
+	}
+	if p.InitialEndDate != "2026-12-31" {
+		t.Errorf("InitialEndDate: want default 2026-12-31, got %q", p.InitialEndDate)
+	}
+}
+
 func TestAdminCreateStatusValidationAndSuccess(t *testing.T) {
 	d := newCRUDTestDB(t)
 	h := &AdminHandler{DB: d}

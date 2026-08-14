@@ -16,15 +16,17 @@ func (d *DB) migrateProjects() error {
 
 	stmts := []string{
 		dl.createTableIfNotExists("projects", fmt.Sprintf(`
-  id         %s,
-  name       %s NOT NULL,
-  code       %s NOT NULL,
-  team_id    BIGINT NOT NULL DEFAULT 0,
-  active     %s NOT NULL DEFAULT %s,
-  start_date %s NOT NULL,
-  end_date   %s NOT NULL,
-  created_at %s DEFAULT CURRENT_TIMESTAMP
-`, ai, dl.varcharType(128), dl.varcharType(32), dl.boolType(), dl.boolDefault(true), dl.varcharType(10), dl.varcharType(10), dt)),
+  id               %s,
+  name             %s NOT NULL,
+  code             %s NOT NULL,
+  team_id          BIGINT NOT NULL DEFAULT 0,
+  active           %s NOT NULL DEFAULT %s,
+  mini_project     %s NOT NULL DEFAULT %s,
+  start_date       %s NOT NULL,
+  end_date         %s NOT NULL,
+  initial_end_date %s NOT NULL DEFAULT '',
+  created_at       %s DEFAULT CURRENT_TIMESTAMP
+`, ai, dl.varcharType(128), dl.varcharType(32), dl.boolType(), dl.boolDefault(true), dl.boolType(), dl.boolDefault(false), dl.varcharType(10), dl.varcharType(10), dl.varcharType(10), dt)),
 
 		dl.createTableIfNotExists("project_time_entries", fmt.Sprintf(`
   id         %s,
@@ -59,6 +61,11 @@ func (d *DB) migrateProjects() error {
 			return err
 		}
 	}
+
+	// Additive migrations (safe to run multiple times — errors ignored)
+	d.projects.Exec(dl.rebind(dl.addColumnIfNotExists("projects", "mini_project", fmt.Sprintf("%s NOT NULL DEFAULT %s", dl.boolType(), dl.boolDefault(false))))) //nolint:errcheck
+	d.projects.Exec(dl.rebind(dl.addColumnIfNotExists("projects", "initial_end_date", dl.varcharType(10)+" NOT NULL DEFAULT ''")))                               //nolint:errcheck
+	d.projects.Exec(`UPDATE projects SET initial_end_date = end_date WHERE initial_end_date = ''`)                                                               //nolint:errcheck
 	return nil
 }
 
@@ -67,7 +74,7 @@ func (d *DB) migrateProjects() error {
 // ListProjects returns all projects, enriched with team names from core.db.
 func (d *DB) ListProjects() ([]models.Project, error) {
 	rows, err := d.projects.Query(`
-SELECT id, name, code, team_id, active, start_date, end_date, created_at
+SELECT id, name, code, team_id, active, mini_project, start_date, end_date, initial_end_date, created_at
 FROM projects ORDER BY name`)
 	if err != nil {
 		return nil, err
@@ -77,7 +84,7 @@ FROM projects ORDER BY name`)
 	for rows.Next() {
 		var p models.Project
 		var createdAt string
-		if err := rows.Scan(&p.ID, &p.Name, &p.Code, &p.TeamID, &p.Active, &p.StartDate, &p.EndDate, &createdAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.Code, &p.TeamID, &p.Active, &p.MiniProject, &p.StartDate, &p.EndDate, &p.InitialEndDate, &createdAt); err != nil {
 			return nil, err
 		}
 		p.CreatedAt, _ = time.Parse("2006-01-02T15:04:05Z", createdAt)
@@ -98,7 +105,7 @@ FROM projects ORDER BY name`)
 func (d *DB) ListActiveProjectsForMonth(year, month int) ([]models.Project, error) {
 	firstDay := fmt.Sprintf("%04d-%02d-01", year, month)
 	rows, err := d.projects.Query(`
-SELECT id, name, code, team_id, active, start_date, end_date, created_at
+SELECT id, name, code, team_id, active, mini_project, start_date, end_date, initial_end_date, created_at
 FROM projects
 WHERE active = ? AND end_date >= ?
 ORDER BY name`, true, firstDay)
@@ -110,7 +117,7 @@ ORDER BY name`, true, firstDay)
 	for rows.Next() {
 		var p models.Project
 		var createdAt string
-		if err := rows.Scan(&p.ID, &p.Name, &p.Code, &p.TeamID, &p.Active, &p.StartDate, &p.EndDate, &createdAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.Code, &p.TeamID, &p.Active, &p.MiniProject, &p.StartDate, &p.EndDate, &p.InitialEndDate, &createdAt); err != nil {
 			return nil, err
 		}
 		p.CreatedAt, _ = time.Parse("2006-01-02T15:04:05Z", createdAt)
@@ -130,9 +137,9 @@ func (d *DB) GetProject(id int64) (models.Project, error) {
 	var p models.Project
 	var createdAt string
 	err := d.projects.QueryRow(`
-SELECT id, name, code, team_id, active, start_date, end_date, created_at
+SELECT id, name, code, team_id, active, mini_project, start_date, end_date, initial_end_date, created_at
 FROM projects WHERE id = ?`, id).Scan(
-		&p.ID, &p.Name, &p.Code, &p.TeamID, &p.Active, &p.StartDate, &p.EndDate, &createdAt)
+		&p.ID, &p.Name, &p.Code, &p.TeamID, &p.Active, &p.MiniProject, &p.StartDate, &p.EndDate, &p.InitialEndDate, &createdAt)
 	if err != nil {
 		return p, err
 	}
@@ -144,18 +151,43 @@ FROM projects WHERE id = ?`, id).Scan(
 	return p, nil
 }
 
-// CreateProject inserts a new project and returns its ID.
+// CreateProject inserts a new project and returns its ID. The initial end date
+// defaults to endDate and mini_project defaults to false.
 func (d *DB) CreateProject(name, code string, teamID int64, active bool, startDate, endDate string) (int64, error) {
 	return d.projects.InsertGetID(`
-INSERT INTO projects (name, code, team_id, active, start_date, end_date)
-VALUES (?, ?, ?, ?, ?, ?)`, name, code, teamID, active, startDate, endDate)
+INSERT INTO projects (name, code, team_id, active, start_date, end_date, initial_end_date)
+VALUES (?, ?, ?, ?, ?, ?, ?)`, name, code, teamID, active, startDate, endDate, endDate)
 }
 
-// UpdateProject updates an existing project.
+// CreateProjectWithDetails inserts a new project including the mini-project flag
+// and initial end date. If initialEndDate is empty it defaults to endDate.
+func (d *DB) CreateProjectWithDetails(name, code string, teamID int64, active bool, startDate, endDate string, miniProject bool, initialEndDate string) (int64, error) {
+	if initialEndDate == "" {
+		initialEndDate = endDate
+	}
+	return d.projects.InsertGetID(`
+INSERT INTO projects (name, code, team_id, active, mini_project, start_date, end_date, initial_end_date)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, name, code, teamID, active, miniProject, startDate, endDate, initialEndDate)
+}
+
+// UpdateProject updates an existing project's core fields, leaving mini_project
+// and initial_end_date unchanged.
 func (d *DB) UpdateProject(id int64, name, code string, teamID int64, active bool, startDate, endDate string) error {
 	_, err := d.projects.Exec(`
 UPDATE projects SET name=?, code=?, team_id=?, active=?, start_date=?, end_date=?
 WHERE id=?`, name, code, teamID, active, startDate, endDate, id)
+	return err
+}
+
+// UpdateProjectWithDetails updates an existing project including the mini-project
+// flag and initial end date.
+func (d *DB) UpdateProjectWithDetails(id int64, name, code string, teamID int64, active bool, startDate, endDate string, miniProject bool, initialEndDate string) error {
+	if initialEndDate == "" {
+		initialEndDate = endDate
+	}
+	_, err := d.projects.Exec(`
+UPDATE projects SET name=?, code=?, team_id=?, active=?, mini_project=?, start_date=?, end_date=?, initial_end_date=?
+WHERE id=?`, name, code, teamID, active, miniProject, startDate, endDate, initialEndDate, id)
 	return err
 }
 
@@ -265,7 +297,7 @@ func (d *DB) ToggleProjectFavorite(userID, projectID int64) (bool, error) {
 func (d *DB) ListActiveProjectsForMonthAndUser(year, month int, userID int64) ([]models.Project, error) {
 	firstDay := fmt.Sprintf("%04d-%02d-01", year, month)
 	rows, err := d.projects.Query(`
-SELECT p.id, p.name, p.code, p.team_id, p.active, p.start_date, p.end_date, p.created_at
+SELECT p.id, p.name, p.code, p.team_id, p.active, p.mini_project, p.start_date, p.end_date, p.initial_end_date, p.created_at
 FROM projects p
 WHERE p.active = ? AND p.end_date >= ?
   AND (
@@ -281,7 +313,7 @@ ORDER BY p.name`, true, firstDay, userID)
 	for rows.Next() {
 		var p models.Project
 		var createdAt string
-		if err := rows.Scan(&p.ID, &p.Name, &p.Code, &p.TeamID, &p.Active, &p.StartDate, &p.EndDate, &createdAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.Code, &p.TeamID, &p.Active, &p.MiniProject, &p.StartDate, &p.EndDate, &p.InitialEndDate, &createdAt); err != nil {
 			return nil, err
 		}
 		p.CreatedAt, _ = time.Parse("2006-01-02T15:04:05Z", createdAt)
@@ -487,7 +519,7 @@ func (d *DB) ListProjectsByTeams(teamIDs []int64) ([]models.Project, error) {
 		args[i] = id
 	}
 	rows, err := d.projects.Query(
-		`SELECT id, name, code, team_id, active, start_date, end_date, created_at
+		`SELECT id, name, code, team_id, active, mini_project, start_date, end_date, initial_end_date, created_at
          FROM projects WHERE team_id IN (`+joinStrings(placeholders, ",")+`) ORDER BY name`,
 		args...)
 	if err != nil {
@@ -499,7 +531,7 @@ func (d *DB) ListProjectsByTeams(teamIDs []int64) ([]models.Project, error) {
 	for rows.Next() {
 		var p models.Project
 		var createdAt string
-		if err := rows.Scan(&p.ID, &p.Name, &p.Code, &p.TeamID, &p.Active, &p.StartDate, &p.EndDate, &createdAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.Code, &p.TeamID, &p.Active, &p.MiniProject, &p.StartDate, &p.EndDate, &p.InitialEndDate, &createdAt); err != nil {
 			return nil, err
 		}
 		p.CreatedAt, _ = time.Parse("2006-01-02T15:04:05Z", createdAt)

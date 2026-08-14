@@ -318,12 +318,14 @@ func (h *ProjectsHandler) CreateProject(w http.ResponseWriter, r *http.Request) 
 	actor := middleware.GetUser(r)
 
 	var req struct {
-		Name      string `json:"name"`
-		Code      string `json:"code"`
-		TeamID    int64  `json:"team_id"`
-		Active    bool   `json:"active"`
-		StartDate string `json:"start_date"`
-		EndDate   string `json:"end_date"`
+		Name           string `json:"name"`
+		Code           string `json:"code"`
+		TeamID         int64  `json:"team_id"`
+		Active         bool   `json:"active"`
+		MiniProject    bool   `json:"mini_project"`
+		StartDate      string `json:"start_date"`
+		EndDate        string `json:"end_date"`
+		InitialEndDate string `json:"initial_end_date"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		metrics.ProjectOpsTotal.WithLabelValues("create", "failure").Inc()
@@ -345,8 +347,11 @@ func (h *ProjectsHandler) CreateProject(w http.ResponseWriter, r *http.Request) 
 		jsonError(w, "Start date must be before end date", http.StatusBadRequest)
 		return
 	}
+	if req.InitialEndDate == "" {
+		req.InitialEndDate = req.EndDate
+	}
 
-	id, err := h.DB.CreateProject(req.Name, req.Code, req.TeamID, req.Active, req.StartDate, req.EndDate)
+	id, err := h.DB.CreateProjectWithDetails(req.Name, req.Code, req.TeamID, req.Active, req.StartDate, req.EndDate, req.MiniProject, req.InitialEndDate)
 	if err != nil {
 		slog.Error("admin.project.create", "error", err)
 		metrics.ProjectOpsTotal.WithLabelValues("create", "failure").Inc()
@@ -371,12 +376,14 @@ func (h *ProjectsHandler) UpdateProject(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var req struct {
-		Name      string `json:"name"`
-		Code      string `json:"code"`
-		TeamID    int64  `json:"team_id"`
-		Active    bool   `json:"active"`
-		StartDate string `json:"start_date"`
-		EndDate   string `json:"end_date"`
+		Name           string `json:"name"`
+		Code           string `json:"code"`
+		TeamID         int64  `json:"team_id"`
+		Active         bool   `json:"active"`
+		MiniProject    bool   `json:"mini_project"`
+		StartDate      string `json:"start_date"`
+		EndDate        string `json:"end_date"`
+		InitialEndDate string `json:"initial_end_date"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		metrics.ProjectOpsTotal.WithLabelValues("update", "failure").Inc()
@@ -393,8 +400,11 @@ func (h *ProjectsHandler) UpdateProject(w http.ResponseWriter, r *http.Request) 
 		jsonError(w, "Start date must be before end date", http.StatusBadRequest)
 		return
 	}
+	if req.InitialEndDate == "" {
+		req.InitialEndDate = req.EndDate
+	}
 
-	if err := h.DB.UpdateProject(id, req.Name, req.Code, req.TeamID, req.Active, req.StartDate, req.EndDate); err != nil {
+	if err := h.DB.UpdateProjectWithDetails(id, req.Name, req.Code, req.TeamID, req.Active, req.StartDate, req.EndDate, req.MiniProject, req.InitialEndDate); err != nil {
 		slog.Error("admin.project.update", "error", err)
 		metrics.ProjectOpsTotal.WithLabelValues("update", "failure").Inc()
 		jsonError(w, "Server error", http.StatusInternalServerError)
@@ -471,8 +481,9 @@ func (h *ProjectsHandler) ProjectsReportPage(w http.ResponseWriter, r *http.Requ
 		filterActive = "1"
 	}
 	filterTeam, _ := strconv.ParseInt(query.Get("team"), 10, 64)
+	filterMini := query.Get("mini") // "1" (mini only), "0" (non-mini only), or "" (all)
 
-	filtered := filterReportRows(allProjects, filterText, filterActive, filterTeam)
+	filtered := filterReportRows(allProjects, filterText, filterActive, filterTeam, filterMini)
 
 	h.Render(w, r, "admin_projects_report", map[string]interface{}{
 		"Rows":           filtered,
@@ -482,6 +493,7 @@ func (h *ProjectsHandler) ProjectsReportPage(w http.ResponseWriter, r *http.Requ
 		"FilterText":     filterText,
 		"FilterActive":   filterActive,
 		"FilterTeam":     filterTeam,
+		"FilterMini":     filterMini,
 		"FilterDateFrom": filterDateFrom,
 		"FilterDateTo":   filterDateTo,
 	})
@@ -521,8 +533,9 @@ func (h *ProjectsHandler) ProjectsReportAPI(w http.ResponseWriter, r *http.Reque
 		filterActive = "1"
 	}
 	filterTeam, _ := strconv.ParseInt(query.Get("team"), 10, 64)
+	filterMini := query.Get("mini")
 
-	filtered := filterReportRows(reportRows, filterText, filterActive, filterTeam)
+	filtered := filterReportRows(reportRows, filterText, filterActive, filterTeam, filterMini)
 
 	jsonOK(w, map[string]interface{}{
 		"rows":             filtered,
@@ -531,6 +544,7 @@ func (h *ProjectsHandler) ProjectsReportAPI(w http.ResponseWriter, r *http.Reque
 		"filter_text":      filterText,
 		"filter_active":    filterActive,
 		"filter_team":      filterTeam,
+		"filter_mini":      filterMini,
 		"filter_date_from": filterDateFrom,
 		"filter_date_to":   filterDateTo,
 		"project_scope":    len(reportRows),
@@ -659,8 +673,8 @@ func (h *ProjectsHandler) buildProjectReportRows(currentUser *models.User, month
 	return reportRows, allTeams
 }
 
-// filterReportRows applies text/active/team filters to a slice of report rows.
-func filterReportRows(rows []models.ProjectReportRow, filterText, filterActive string, filterTeam int64) []models.ProjectReportRow {
+// filterReportRows applies text/active/team/mini-project filters to a slice of report rows.
+func filterReportRows(rows []models.ProjectReportRow, filterText, filterActive string, filterTeam int64, filterMini string) []models.ProjectReportRow {
 	filtered := make([]models.ProjectReportRow, 0, len(rows))
 	for _, row := range rows {
 		if filterText != "" && !containsCI(row.Project.Name, filterText) && !containsCI(row.Project.Code, filterText) {
@@ -673,6 +687,12 @@ func filterReportRows(rows []models.ProjectReportRow, filterText, filterActive s
 			continue
 		}
 		if filterTeam > 0 && row.Project.TeamID != filterTeam {
+			continue
+		}
+		if filterMini == "1" && !row.Project.MiniProject {
+			continue
+		}
+		if filterMini == "0" && row.Project.MiniProject {
 			continue
 		}
 		filtered = append(filtered, row)

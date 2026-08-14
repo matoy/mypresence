@@ -83,6 +83,24 @@ func TestCreateProject_ReturnsPositiveID(t *testing.T) {
 	}
 }
 
+func TestCreateProject_DefaultsMiniProjectFalseAndInitialEndDateFromEndDate(t *testing.T) {
+	d := newTestDB(t)
+	id, err := d.CreateProject("DeltaDefaults", "DELTAD", 0, true, "2026-01-01", "2026-12-31")
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	p, err := d.GetProject(id)
+	if err != nil {
+		t.Fatalf("GetProject: %v", err)
+	}
+	if p.MiniProject {
+		t.Error("expected MiniProject to default to false")
+	}
+	if p.InitialEndDate != "2026-12-31" {
+		t.Errorf("expected InitialEndDate to default to end_date, got %q", p.InitialEndDate)
+	}
+}
+
 func TestCreateProject_InactiveProject(t *testing.T) {
 	d := newTestDB(t)
 	id, err := d.CreateProject("Epsilon", "EPS", 0, false, "2025-01-01", "2025-12-31")
@@ -118,6 +136,82 @@ func TestUpdateProject_ChangesFields(t *testing.T) {
 	}
 	if p.Active {
 		t.Error("expected project to be inactive after update")
+	}
+}
+
+// ─── CreateProjectWithDetails / UpdateProjectWithDetails ──────────────────────
+
+func TestCreateProjectWithDetails_SetsMiniProjectAndInitialEndDate(t *testing.T) {
+	d := newTestDB(t)
+	id, err := d.CreateProjectWithDetails("MiniProj", "MINI", 0, true, "2026-01-01", "2026-12-31", true, "2026-06-30")
+	if err != nil {
+		t.Fatalf("CreateProjectWithDetails: %v", err)
+	}
+	p, err := d.GetProject(id)
+	if err != nil {
+		t.Fatalf("GetProject: %v", err)
+	}
+	if !p.MiniProject {
+		t.Error("expected MiniProject to be true")
+	}
+	if p.InitialEndDate != "2026-06-30" {
+		t.Errorf("InitialEndDate: want 2026-06-30, got %q", p.InitialEndDate)
+	}
+}
+
+func TestCreateProjectWithDetails_EmptyInitialEndDateDefaultsToEndDate(t *testing.T) {
+	d := newTestDB(t)
+	id, err := d.CreateProjectWithDetails("MiniProj2", "MINI2", 0, true, "2026-01-01", "2026-12-31", false, "")
+	if err != nil {
+		t.Fatalf("CreateProjectWithDetails: %v", err)
+	}
+	p, _ := d.GetProject(id)
+	if p.InitialEndDate != "2026-12-31" {
+		t.Errorf("InitialEndDate: want default to end_date 2026-12-31, got %q", p.InitialEndDate)
+	}
+}
+
+func TestUpdateProjectWithDetails_ChangesAllFields(t *testing.T) {
+	d := newTestDB(t)
+	id, err := d.CreateProjectWithDetails("Eta", "ETA", 0, true, "2026-01-01", "2026-12-31", false, "2026-12-31")
+	if err != nil {
+		t.Fatalf("CreateProjectWithDetails: %v", err)
+	}
+
+	err = d.UpdateProjectWithDetails(id, "Eta Updated", "ETA2", 0, false, "2026-06-01", "2026-11-30", true, "2026-09-15")
+	if err != nil {
+		t.Fatalf("UpdateProjectWithDetails: %v", err)
+	}
+
+	p, _ := d.GetProject(id)
+	if p.Name != "Eta Updated" {
+		t.Errorf("Name: want Eta Updated, got %q", p.Name)
+	}
+	if !p.MiniProject {
+		t.Error("expected MiniProject to be true after update")
+	}
+	if p.InitialEndDate != "2026-09-15" {
+		t.Errorf("InitialEndDate: want 2026-09-15, got %q", p.InitialEndDate)
+	}
+}
+
+func TestUpdateProject_DoesNotTouchMiniProjectOrInitialEndDate(t *testing.T) {
+	d := newTestDB(t)
+	id, err := d.CreateProjectWithDetails("Theta", "THETA", 0, true, "2026-01-01", "2026-12-31", true, "2026-06-30")
+	if err != nil {
+		t.Fatalf("CreateProjectWithDetails: %v", err)
+	}
+
+	if err := d.UpdateProject(id, "Theta Renamed", "THETA2", 0, true, "2026-01-01", "2026-12-31"); err != nil {
+		t.Fatalf("UpdateProject: %v", err)
+	}
+
+	p, _ := d.GetProject(id)
+	if !p.MiniProject {
+		t.Error("expected MiniProject to remain true after plain UpdateProject")
+	}
+	if p.InitialEndDate != "2026-06-30" {
+		t.Errorf("expected InitialEndDate to remain unchanged, got %q", p.InitialEndDate)
 	}
 }
 
