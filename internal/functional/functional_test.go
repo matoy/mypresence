@@ -926,7 +926,7 @@ func TestCreateTeam_AsAdmin_Creates(t *testing.T) {
 	e := newTestEnv(t)
 	e.loginAdmin(t)
 
-	payload := map[string]string{"name": "Gamma Team"}
+	payload := map[string]interface{}{"name": "Gamma Team", "jira_space_key": "GAM", "timesheets_managed_manually": true}
 	resp := e.postJSON("/admin/teams", payload)
 	defer drain(resp)
 
@@ -939,6 +939,12 @@ func TestCreateTeam_AsAdmin_Creates(t *testing.T) {
 	for _, tm := range teams {
 		if tm.Name == "Gamma Team" {
 			found = true
+			if tm.JiraSpaceKey != "GAM" {
+				t.Errorf("JiraSpaceKey: want GAM, got %q", tm.JiraSpaceKey)
+			}
+			if !tm.TimesheetsManagedManually {
+				t.Error("TimesheetsManagedManually: want true")
+			}
 		}
 	}
 	if !found {
@@ -1343,6 +1349,39 @@ func TestUpdateTeam_AsAdmin_Returns200(t *testing.T) {
 	defer drain(resp)
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestUpdateTeam_AsAdmin_UpdatesJiraDetails(t *testing.T) {
+	e := newTestEnv(t)
+	e.loginAdmin(t)
+	id, _ := e.db.CreateTeam("OldName")
+	resp := e.putJSON("/admin/teams/"+i64str(id), map[string]interface{}{
+		"name": "NewName", "jira_space_key": "NEW", "timesheets_managed_manually": true,
+	})
+	defer drain(resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	teams, _ := e.db.ListTeams()
+	var found bool
+	for _, tm := range teams {
+		if tm.ID == id {
+			found = true
+			if tm.Name != "NewName" {
+				t.Errorf("Name: want NewName, got %q", tm.Name)
+			}
+			if tm.JiraSpaceKey != "NEW" {
+				t.Errorf("JiraSpaceKey: want NEW, got %q", tm.JiraSpaceKey)
+			}
+			if !tm.TimesheetsManagedManually {
+				t.Error("TimesheetsManagedManually: want true")
+			}
+		}
+	}
+	if !found {
+		t.Error("updated team not found in DB")
 	}
 }
 

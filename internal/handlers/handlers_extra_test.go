@@ -52,16 +52,40 @@ func noRender(w http.ResponseWriter, r *http.Request, page string, data interfac
 
 func TestAdminTeamsPage_Renders(t *testing.T) {
 	d := newExtraTestDB(t)
+	var gotJiraEnabled interface{}
 	h := &AdminHandler{DB: d, Render: func(w http.ResponseWriter, r *http.Request, page string, data interface{}) {
 		if page != "admin_teams" {
 			t.Errorf("expected admin_teams, got %q", page)
 		}
+		m := data.(map[string]interface{})
+		gotJiraEnabled = m["JiraEnabled"]
 	}}
 
 	req := createAdminReq(t, d, http.MethodGet, "/admin/teams", nil)
 	w := httptest.NewRecorder()
 	middleware.Auth(d, http.HandlerFunc(h.TeamsPage)).ServeHTTP(w, req)
 	// page render is injected — just verify no panic
+	if gotJiraEnabled != false {
+		t.Errorf("expected JiraEnabled=false when Config is nil, got %v", gotJiraEnabled)
+	}
+}
+
+func TestAdminTeamsPage_JiraEnabledReflectsConfig(t *testing.T) {
+	d := newExtraTestDB(t)
+	var gotJiraEnabled interface{}
+	h := &AdminHandler{DB: d, Config: &config.Config{
+		JiraEnabled: true, JiraBaseURL: "https://acme.atlassian.net", JiraEmail: "bot@acme.com", JiraToken: "tok",
+	}, Render: func(w http.ResponseWriter, r *http.Request, page string, data interface{}) {
+		m := data.(map[string]interface{})
+		gotJiraEnabled = m["JiraEnabled"]
+	}}
+
+	req := createAdminReq(t, d, http.MethodGet, "/admin/teams", nil)
+	w := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.TeamsPage)).ServeHTTP(w, req)
+	if gotJiraEnabled != true {
+		t.Errorf("expected JiraEnabled=true, got %v", gotJiraEnabled)
+	}
 }
 
 // -----------------------------------------------------------------------
@@ -74,7 +98,7 @@ func TestAdminUpdateTeam_Success(t *testing.T) {
 
 	teamID, _ := d.CreateTeam("Original Team")
 
-	body := []byte(`{"name":"Updated Team"}`)
+	body := []byte(`{"name":"Updated Team","jira_space_key":"PROJ","timesheets_managed_manually":true}`)
 	req := createAdminReq(t, d, http.MethodPut, "/api/admin/teams/"+strconvI64(teamID), body)
 	req.SetPathValue("id", strconvI64(teamID))
 	req.Header.Set("Content-Type", "application/json")
@@ -82,6 +106,26 @@ func TestAdminUpdateTeam_Success(t *testing.T) {
 	middleware.Auth(d, http.HandlerFunc(h.UpdateTeam)).ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	teams, _ := d.ListTeams()
+	var found bool
+	for _, tm := range teams {
+		if tm.ID == teamID {
+			found = true
+			if tm.Name != "Updated Team" {
+				t.Errorf("Name: want Updated Team, got %q", tm.Name)
+			}
+			if tm.JiraSpaceKey != "PROJ" {
+				t.Errorf("JiraSpaceKey: want PROJ, got %q", tm.JiraSpaceKey)
+			}
+			if !tm.TimesheetsManagedManually {
+				t.Error("TimesheetsManagedManually: want true")
+			}
+		}
+	}
+	if !found {
+		t.Error("updated team not found in ListTeams")
 	}
 }
 

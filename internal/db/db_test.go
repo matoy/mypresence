@@ -1131,10 +1131,66 @@ func TestCreateTeam_And_UpdateTeam(t *testing.T) {
 	for _, tm := range teams {
 		if tm.ID == id && tm.Name == "Alpha Team Renamed" {
 			found = true
+			if tm.JiraSpaceKey != "" {
+				t.Errorf("expected empty JiraSpaceKey by default, got %q", tm.JiraSpaceKey)
+			}
+			if tm.TimesheetsManagedManually {
+				t.Error("expected TimesheetsManagedManually to default to false")
+			}
 		}
 	}
 	if !found {
 		t.Error("renamed team not found in ListTeams")
+	}
+}
+
+func TestCreateTeamWithDetails_And_UpdateTeamDetails(t *testing.T) {
+	d := newTestDB(t)
+	id, err := d.CreateTeamWithDetails("Jira Team", "PROJ", true)
+	if err != nil || id <= 0 {
+		t.Fatalf("CreateTeamWithDetails: id=%d err=%v", id, err)
+	}
+
+	teams, _ := d.ListTeams()
+	var tm models.Team
+	var found bool
+	for _, t2 := range teams {
+		if t2.ID == id {
+			tm = t2
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("created team not found in ListTeams")
+	}
+	if tm.JiraSpaceKey != "PROJ" {
+		t.Errorf("JiraSpaceKey: want PROJ, got %q", tm.JiraSpaceKey)
+	}
+	if !tm.TimesheetsManagedManually {
+		t.Error("TimesheetsManagedManually: want true")
+	}
+
+	if err := d.UpdateTeamDetails(id, "Jira Team Renamed", "OTHER", false); err != nil {
+		t.Fatalf("UpdateTeamDetails: %v", err)
+	}
+	teams, _ = d.ListTeams()
+	found = false
+	for _, t2 := range teams {
+		if t2.ID == id {
+			found = true
+			if t2.Name != "Jira Team Renamed" {
+				t.Errorf("Name: want Jira Team Renamed, got %q", t2.Name)
+			}
+			if t2.JiraSpaceKey != "OTHER" {
+				t.Errorf("JiraSpaceKey: want OTHER, got %q", t2.JiraSpaceKey)
+			}
+			if t2.TimesheetsManagedManually {
+				t.Error("TimesheetsManagedManually: want false after update")
+			}
+		}
+	}
+	if !found {
+		t.Error("updated team not found in ListTeams")
 	}
 }
 

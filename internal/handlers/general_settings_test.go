@@ -2,13 +2,16 @@ package handlers
 
 import (
 	"bytes"
+	"encoding/json"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/matoy/mypresence/internal/config"
 	"github.com/matoy/mypresence/internal/middleware"
 )
 
@@ -76,6 +79,140 @@ func TestGeneralSettingsPage_QueryParams(t *testing.T) {
 	}
 	if gotSuccess != "yay" {
 		t.Errorf("expected Success=yay, got %v", gotSuccess)
+	}
+}
+
+func TestGeneralSettingsPage_EnvVarsEditableFlag(t *testing.T) {
+	d := newExtraTestDB(t)
+	t.Setenv("APP_NAME", "TestApp")
+	t.Setenv("SOME_TOTALLY_UNKNOWN_TEST_VAR", "1")
+
+	var gotEnvVars []EnvEntry
+	h := &GeneralSettingsHandler{
+		DataDir: t.TempDir(),
+		Render: func(w http.ResponseWriter, r *http.Request, page string, data interface{}) {
+			m := data.(map[string]interface{})
+			gotEnvVars = m["EnvVars"].([]EnvEntry)
+		},
+	}
+	req := createAdminReq(t, d, http.MethodGet, "/admin/settings", nil)
+	w := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.GeneralSettingsPage)).ServeHTTP(w, req)
+
+	var foundAppName, foundUnknown bool
+	for _, e := range gotEnvVars {
+		if e.Key == "APP_NAME" {
+			foundAppName = true
+			if !e.Editable {
+				t.Error("APP_NAME should be marked Editable")
+			}
+		}
+		if e.Key == "SOME_TOTALLY_UNKNOWN_TEST_VAR" {
+			foundUnknown = true
+			if e.Editable {
+				t.Error("SOME_TOTALLY_UNKNOWN_TEST_VAR should not be marked Editable")
+			}
+		}
+	}
+	if !foundAppName {
+		t.Fatal("APP_NAME not found in EnvVars")
+	}
+	if !foundUnknown {
+		t.Fatal("SOME_TOTALLY_UNKNOWN_TEST_VAR not found in EnvVars")
+	}
+}
+
+// -----------------------------------------------------------------------
+// UpdateEnvVar
+// -----------------------------------------------------------------------
+
+func TestUpdateEnvVar_Success(t *testing.T) {
+	d := newExtraTestDB(t)
+	cfg := &config.Config{DBDriver: "sqlite"}
+	h := &GeneralSettingsHandler{DataDir: t.TempDir(), Config: cfg}
+
+	body := []byte(`{"key":"APP_NAME","value":"New Name"}`)
+	req := createAdminReq(t, d, http.MethodPost, "/admin/settings/env", body)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.UpdateEnvVar)).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if cfg.AppName != "New Name" {
+		t.Errorf("expected cfg.AppName to be updated, got %q", cfg.AppName)
+	}
+}
+
+func TestUpdateEnvVar_MissingKey_Returns400(t *testing.T) {
+	d := newExtraTestDB(t)
+	h := &GeneralSettingsHandler{DataDir: t.TempDir(), Config: &config.Config{}}
+
+	body := []byte(`{"value":"x"}`)
+	req := createAdminReq(t, d, http.MethodPost, "/admin/settings/env", body)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.UpdateEnvVar)).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestUpdateEnvVar_BadJSON_Returns400(t *testing.T) {
+	d := newExtraTestDB(t)
+	h := &GeneralSettingsHandler{DataDir: t.TempDir(), Config: &config.Config{}}
+
+	req := createAdminReq(t, d, http.MethodPost, "/admin/settings/env", []byte("{bad"))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.UpdateEnvVar)).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestUpdateEnvVar_NonEditableKey_Returns400(t *testing.T) {
+	d := newExtraTestDB(t)
+	cfg := &config.Config{SecretKey: "original-secret"}
+	h := &GeneralSettingsHandler{DataDir: t.TempDir(), Config: cfg}
+
+	body := []byte(`{"key":"SECRET_KEY","value":"hacked"}`)
+	req := createAdminReq(t, d, http.MethodPost, "/admin/settings/env", body)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.UpdateEnvVar)).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+	if cfg.SecretKey != "original-secret" {
+		t.Error("SECRET_KEY should not have been modified")
+	}
+
+	var resp map[string]string
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if !strings.Contains(resp["error"], "cannot be edited") {
+		t.Errorf("unexpected error message: %q", resp["error"])
+	}
+}
+
+func TestUpdateEnvVar_NilConfig_Returns400(t *testing.T) {
+	d := newExtraTestDB(t)
+	h := &GeneralSettingsHandler{DataDir: t.TempDir()}
+
+	body := []byte(`{"key":"APP_NAME","value":"x"}`)
+	req := createAdminReq(t, d, http.MethodPost, "/admin/settings/env", body)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.UpdateEnvVar)).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 when Config is nil, got %d: %s", w.Code, w.Body.String())
 	}
 }
 

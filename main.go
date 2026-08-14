@@ -74,13 +74,13 @@ func main() {
 		RateLimiter: middleware.NewLoginRateLimiter(),
 	}
 	calHandler := &handlers.CalendarHandler{DB: database, Render: renderPage, DisableFloorplans: cfg.DisableFloorplans}
-	adminHandler := &handlers.AdminHandler{DB: database, Render: renderPage}
+	adminHandler := &handlers.AdminHandler{DB: database, Config: cfg, Render: renderPage}
 	activityHandler := &handlers.ActivityHandler{DB: database, Render: renderPage, DisableProjects: cfg.DisableProjects}
 	holidaysHandler := &handlers.HolidaysHandler{DB: database, Render: renderPage}
 	usersAdminHandler := &handlers.UsersAdminHandler{DB: database, Render: renderPage}
 	floorplanHandler := &handlers.FloorplanHandler{DB: database, DataDir: cfg.DataDir, Render: renderPage}
 	settingsHandler := &handlers.SettingsHandler{DB: database, Render: renderPage}
-	generalSettingsHandler := &handlers.GeneralSettingsHandler{DataDir: cfg.DataDir, Render: renderPage}
+	generalSettingsHandler := &handlers.GeneralSettingsHandler{DataDir: cfg.DataDir, Config: cfg, Render: renderPage}
 	resetPasswordHandler := &handlers.ResetPasswordHandler{DB: database, Config: cfg, Render: renderPage, RateLimiter: middleware.NewLoginRateLimiter()}
 	patHandler, projectsHandler := initOptionalHandlers(cfg, database, renderPage)
 	newsHandler := &handlers.NewsHandler{DB: database, Render: renderPage}
@@ -245,6 +245,7 @@ func main() {
 	generalSettingsMux.HandleFunc("GET /admin/settings", generalSettingsHandler.GeneralSettingsPage)
 	generalSettingsMux.Handle("POST /admin/settings/logo", middleware.ValidateCSRF(cfg.SecretKey)(http.HandlerFunc(generalSettingsHandler.UploadLogo)))
 	generalSettingsMux.HandleFunc("DELETE /admin/settings/logo", generalSettingsHandler.DeleteLogo)
+	generalSettingsMux.HandleFunc("POST /admin/settings/env", generalSettingsHandler.UpdateEnvVar)
 	mux.Handle("/admin/settings", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(generalSettingsMux)))
 	mux.Handle("/admin/settings/", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(generalSettingsMux)))
 

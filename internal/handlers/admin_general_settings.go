@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -10,18 +11,21 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/matoy/mypresence/internal/config"
 	"github.com/matoy/mypresence/internal/middleware"
 )
 
 // EnvEntry holds a single environment variable key-value pair.
 type EnvEntry struct {
-	Key   string
-	Value string
+	Key      string
+	Value    string
+	Editable bool
 }
 
 // GeneralSettingsHandler handles the general admin settings page.
 type GeneralSettingsHandler struct {
 	DataDir string
+	Config  *config.Config
 	Render  func(w http.ResponseWriter, r *http.Request, page string, data interface{})
 }
 
@@ -35,7 +39,7 @@ func (h *GeneralSettingsHandler) GeneralSettingsPage(w http.ResponseWriter, r *h
 	envVars := make([]EnvEntry, 0, len(rawEnv))
 	for _, e := range rawEnv {
 		k, v, _ := strings.Cut(e, "=")
-		envVars = append(envVars, EnvEntry{Key: k, Value: v})
+		envVars = append(envVars, EnvEntry{Key: k, Value: v, Editable: config.IsLiveEditable(k)})
 	}
 
 	h.Render(w, r, "admin_general_settings", map[string]interface{}{
@@ -44,6 +48,27 @@ func (h *GeneralSettingsHandler) GeneralSettingsPage(w http.ResponseWriter, r *h
 		"Success":    r.URL.Query().Get("success"),
 		"EnvVars":    envVars,
 	})
+}
+
+// UpdateEnvVar handles POST /admin/settings/env — updates an environment variable's
+// value in memory only (process env + the running Config). Lost on the next restart.
+func (h *GeneralSettingsHandler) UpdateEnvVar(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Key   string `json:"key"`
+		Value string `json:"value"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Key == "" {
+		jsonError(w, "key required", http.StatusBadRequest)
+		return
+	}
+	if h.Config == nil || !h.Config.ApplyEnvOverride(req.Key, req.Value) {
+		jsonError(w, "this variable cannot be edited live", http.StatusBadRequest)
+		return
+	}
+	if actor := middleware.GetUser(r); actor != nil {
+		slog.Info("admin.settings.env_update", "actor", actor.Email, "key", req.Key)
+	}
+	jsonOK(w, map[string]string{"status": "ok"})
 }
 
 // UploadLogo handles POST /admin/settings/logo — saves the uploaded PNG as logo.png.

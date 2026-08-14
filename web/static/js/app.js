@@ -869,6 +869,8 @@ function teamsAdmin(initialTeams) {
     return {
         teams: initialTeams || [],
         newTeamName: '',
+        newTeamJiraKey: '',
+        newTeamManual: false,
         createError: '',
         showCreateModal: false,
         filterText: '',
@@ -907,7 +909,11 @@ function teamsAdmin(initialTeams) {
             const r = await fetch('/admin/teams', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: this.newTeamName.trim() })
+                body: JSON.stringify({
+                    name: this.newTeamName.trim(),
+                    jira_space_key: this.newTeamJiraKey.trim(),
+                    timesheets_managed_manually: this.newTeamManual
+                })
             });
             if (r.ok) {
                 this.showCreateModal = false;
@@ -922,14 +928,19 @@ function teamsAdmin(initialTeams) {
             }
         },
 
-        async renameTeam(id, name) {
+        async saveTeamDetails(id, name, jiraSpaceKey, timesheetsManagedManually) {
             await fetch(`/admin/teams/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name })
+                body: JSON.stringify({
+                    name,
+                    jira_space_key: (jiraSpaceKey || '').trim(),
+                    timesheets_managed_manually: !!timesheetsManagedManually
+                })
             });
             window.location.reload();
         },
+
 
         async deleteTeam(id) {
             await fetch(`/admin/teams/${id}`, { method: 'DELETE' });
@@ -967,6 +978,49 @@ function teamsAdmin(initialTeams) {
                 body: JSON.stringify({ left_at: null })
             });
             window.location.reload();
+        }
+    };
+}
+
+// ============================================================
+// Admin: General settings — live environment variable editing
+// ============================================================
+function envVarsAdmin(initialVars) {
+    return {
+        vars: initialVars || [],
+        editingKey: null,
+        editValue: '',
+        envError: '',
+
+        startEdit(v) {
+            this.editingKey = v.Key;
+            this.editValue = v.Value;
+            this.envError = '';
+        },
+
+        cancelEdit() {
+            this.editingKey = null;
+            this.envError = '';
+        },
+
+        async saveEdit(v) {
+            this.envError = '';
+            const r = await fetch('/admin/settings/env', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: v.Key, value: this.editValue })
+            });
+            if (r.ok) {
+                v.Value = this.editValue;
+                this.editingKey = null;
+                return;
+            }
+            try {
+                const d = await r.json();
+                this.envError = d.error || 'Error';
+            } catch (e) {
+                this.envError = 'Error';
+            }
         }
     };
 }

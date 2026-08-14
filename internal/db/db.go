@@ -434,12 +434,14 @@ FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	}
 
 	// Additive migrations (safe to run multiple times — errors ignored)
-	d.core.Exec(`UPDATE users SET role = 'global' WHERE role = 'admin'`)                                                                      //nolint:errcheck
-	d.core.Exec(dl.rebind(dl.addColumnIfNotExists("users", "disabled", fmt.Sprintf("%s NOT NULL DEFAULT %s", bool_, dl.boolDefault(false))))) //nolint:errcheck
-	d.core.Exec(`UPDATE users SET role = REPLACE(role, 'stats_viewer', 'activity_viewer') WHERE role LIKE '%stats_viewer%'`)                  //nolint:errcheck
-	d.core.Exec(`UPDATE users SET role = REPLACE(role, 'cra_viewer', 'activity_viewer') WHERE role LIKE '%cra_viewer%'`)                      //nolint:errcheck
-	d.core.Exec(dl.rebind(dl.modifyColumnType("users", "role", dl.varcharType(128), "VARCHAR(64)")))                                          //nolint:errcheck
-	d.core.Exec(dl.rebind(dl.addColumnIfNotExists("user_teams", "left_at", dl.varcharType(10)+" DEFAULT NULL")))                              //nolint:errcheck
+	d.core.Exec(`UPDATE users SET role = 'global' WHERE role = 'admin'`)                                                                                         //nolint:errcheck
+	d.core.Exec(dl.rebind(dl.addColumnIfNotExists("users", "disabled", fmt.Sprintf("%s NOT NULL DEFAULT %s", bool_, dl.boolDefault(false)))))                    //nolint:errcheck
+	d.core.Exec(`UPDATE users SET role = REPLACE(role, 'stats_viewer', 'activity_viewer') WHERE role LIKE '%stats_viewer%'`)                                     //nolint:errcheck
+	d.core.Exec(`UPDATE users SET role = REPLACE(role, 'cra_viewer', 'activity_viewer') WHERE role LIKE '%cra_viewer%'`)                                         //nolint:errcheck
+	d.core.Exec(dl.rebind(dl.modifyColumnType("users", "role", dl.varcharType(128), "VARCHAR(64)")))                                                             //nolint:errcheck
+	d.core.Exec(dl.rebind(dl.addColumnIfNotExists("user_teams", "left_at", dl.varcharType(10)+" DEFAULT NULL")))                                                 //nolint:errcheck
+	d.core.Exec(dl.rebind(dl.addColumnIfNotExists("teams", "jira_space_key", nameType+" DEFAULT ''")))                                                           //nolint:errcheck
+	d.core.Exec(dl.rebind(dl.addColumnIfNotExists("teams", "timesheets_managed_manually", fmt.Sprintf("%s NOT NULL DEFAULT %s", bool_, dl.boolDefault(false))))) //nolint:errcheck
 	return nil
 }
 
@@ -1182,7 +1184,7 @@ func (d *DB) DeleteLocalUser(id int64) error {
 // --- Team management ---
 
 func (d *DB) ListTeams() ([]models.Team, error) {
-	rows, err := d.core.Query("SELECT id, name, created_at FROM teams ORDER BY name")
+	rows, err := d.core.Query("SELECT id, name, COALESCE(jira_space_key,''), timesheets_managed_manually, created_at FROM teams ORDER BY name")
 	if err != nil {
 		return nil, err
 	}
@@ -1191,7 +1193,7 @@ func (d *DB) ListTeams() ([]models.Team, error) {
 	var teams []models.Team
 	for rows.Next() {
 		var t models.Team
-		if err := rows.Scan(&t.ID, &t.Name, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.Name, &t.JiraSpaceKey, &t.TimesheetsManagedManually, &t.CreatedAt); err != nil {
 			return nil, err
 		}
 		teams = append(teams, t)
@@ -1199,12 +1201,25 @@ func (d *DB) ListTeams() ([]models.Team, error) {
 	return teams, rows.Err()
 }
 
+// CreateTeam creates a new team with just a name (jira_space_key empty, manual timesheets off).
 func (d *DB) CreateTeam(name string) (int64, error) {
-	return d.core.InsertGetID("INSERT INTO teams (name) VALUES (?)", name)
+	return d.CreateTeamWithDetails(name, "", false)
 }
 
+// CreateTeamWithDetails creates a new team with all its properties.
+func (d *DB) CreateTeamWithDetails(name, jiraSpaceKey string, timesheetsManagedManually bool) (int64, error) {
+	return d.core.InsertGetID("INSERT INTO teams (name, jira_space_key, timesheets_managed_manually) VALUES (?, ?, ?)", name, jiraSpaceKey, timesheetsManagedManually)
+}
+
+// UpdateTeam renames a team, leaving its other properties unchanged.
 func (d *DB) UpdateTeam(id int64, name string) error {
 	_, err := d.core.Exec("UPDATE teams SET name = ? WHERE id = ?", name, id)
+	return err
+}
+
+// UpdateTeamDetails updates a team's name and extra properties.
+func (d *DB) UpdateTeamDetails(id int64, name, jiraSpaceKey string, timesheetsManagedManually bool) error {
+	_, err := d.core.Exec("UPDATE teams SET name = ?, jira_space_key = ?, timesheets_managed_manually = ? WHERE id = ?", name, jiraSpaceKey, timesheetsManagedManually, id)
 	return err
 }
 
