@@ -59,11 +59,29 @@ func TestAdminCreateTeamAndListAPI(t *testing.T) {
 		t.Fatalf("expected 400 on bad json, got %d", wBad.Code)
 	}
 
-	req := createAuthedReq(t, d, http.MethodPost, "/api/admin/teams", "tm@example.com", "TM", "password1", models.RoleTeamManager, []byte(`{"name":"Team X"}`))
+	req := createAuthedReq(t, d, http.MethodPost, "/api/admin/teams", "tm@example.com", "TM", "password1", models.RoleTeamManager,
+		[]byte(`{"name":"Team X","jira_space_key":"TX","timesheets_managed_manually":true}`))
 	w := httptest.NewRecorder()
 	middleware.Auth(d, http.HandlerFunc(h.CreateTeam)).ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200 create team, got %d", w.Code)
+	}
+
+	teams, _ := d.ListTeams()
+	var found bool
+	for _, tm := range teams {
+		if tm.Name == "Team X" {
+			found = true
+			if tm.JiraSpaceKey != "TX" {
+				t.Errorf("JiraSpaceKey: want TX, got %q", tm.JiraSpaceKey)
+			}
+			if !tm.TimesheetsManagedManually {
+				t.Error("TimesheetsManagedManually: want true")
+			}
+		}
+	}
+	if !found {
+		t.Error("created team 'Team X' not found in ListTeams")
 	}
 
 	wList := httptest.NewRecorder()

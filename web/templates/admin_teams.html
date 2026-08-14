@@ -2,13 +2,14 @@
 {{with .Data}}
 {{$allUsers := .Users}}
 {{$canManageTeams := .CanManageTeams}}
+{{$jiraEnabled := .JiraEnabled}}
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" x-data="teamsAdmin({{json .Teams}})">
     <div class="flex items-center justify-between mb-6">
         <h1 class="text-2xl font-bold text-gray-900">{{index $.T "teams.title"}}</h1>
         <div class="flex items-center gap-3">
             <span class="text-sm text-gray-400" x-text="filteredCount + ' / ' + totalCount"></span>
             {{if $canManageTeams}}
-            <button @click="showCreateModal = true; createError = ''; newTeamName = ''"
+            <button @click="showCreateModal = true; createError = ''; newTeamName = ''; newTeamJiraKey = ''; newTeamManual = false"
                     class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
                 + {{index $.T "teams.create"}}
             </button>
@@ -45,28 +46,61 @@
     {{$activeCount := 0}}
     {{range .Members}}{{if not .LeftAt}}{{$activeCount = add $activeCount 1}}{{end}}{{end}}
     <div class="bg-white rounded-xl shadow-md p-6 mb-4"
-         x-data="{ editName: false, showAddMember: false, memberSearch: '', memberIds: [{{range $i, $m := .Members}}{{if $i}},{{end}}{{$m.ID}}{{end}}] }"
+         x-data="{ editTeam: false, editNameValue: '', editJiraKey: '', editManual: false, showAddMember: false, memberSearch: '', memberIds: [{{range $i, $m := .Members}}{{if $i}},{{end}}{{$m.ID}}{{end}}] }"
          x-show="matchesTeam({{json .Team.Name}}, {{$activeCount}})"
          x-cloak>
         <div class="flex items-center justify-between mb-4">
-            <div class="flex items-center gap-3">
-                <div class="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+            <div class="flex items-center gap-3 flex-1 min-w-0">
+                <div class="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                     <span class="text-primary font-bold">{{slice .Team.Name 0 1}}</span>
                 </div>
-                <template x-if="!editName">
-                    <h3 class="text-lg font-semibold text-gray-800">{{.Team.Name}}</h3>
+                <template x-if="!editTeam">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-800">{{.Team.Name}}</h3>
+                        <div class="flex items-center gap-2 mt-1">
+                            {{if .Team.JiraSpaceKey}}
+                            <span class="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-mono">Jira: {{.Team.JiraSpaceKey}}</span>
+                            {{end}}
+                            {{if .Team.TimesheetsManagedManually}}
+                            <span class="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full">{{index $.T "teams.manual_timesheets"}}</span>
+                            {{end}}
+                        </div>
+                    </div>
                 </template>
-                <template x-if="editName">
-                    <input type="text" x-ref="editInput" value="{{.Team.Name}}"
-                           @keydown.enter="renameTeam({{.Team.ID}}, $el.value); editName = false"
-                           @keydown.escape="editName = false"
-                           class="px-3 py-1 border border-gray-300 rounded-lg text-lg font-semibold">
+                <template x-if="editTeam">
+                    <div class="flex flex-col gap-2 flex-1 max-w-md">
+                        <input type="text" x-ref="editNameInput" x-model="editNameValue"
+                               @keydown.escape="editTeam = false"
+                               placeholder="{{index $.T "teams.team_name"}}"
+                               class="px-3 py-1 border border-gray-300 rounded-lg text-base font-semibold focus:ring-2 focus:ring-primary/50">
+                        {{if $jiraEnabled}}
+                        <input type="text" x-model="editJiraKey"
+                               @keydown.escape="editTeam = false"
+                               placeholder="{{index $.T "teams.jira_space_key"}}"
+                               class="px-3 py-1 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-primary/50">
+                        {{end}}
+                        <label class="flex items-center gap-2 text-sm text-gray-600">
+                            <input type="checkbox" x-model="editManual"
+                                   class="rounded border-gray-300 text-primary focus:ring-primary/50">
+                            {{index $.T "teams.manual_timesheets"}}
+                        </label>
+                        <div class="flex gap-2">
+                            <button @click="saveTeamDetails({{.Team.ID}}, editNameValue, editJiraKey, editManual); editTeam = false"
+                                    class="text-xs px-2.5 py-1.5 bg-primary text-white rounded-lg font-medium hover:opacity-90 transition">
+                                {{index $.T "admin.save"}}
+                            </button>
+                            <button @click="editTeam = false"
+                                    class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition">
+                                {{index $.T "admin.cancel"}}
+                            </button>
+                        </div>
+                    </div>
                 </template>
             </div>
             <div class="flex items-center gap-2">
                 {{if $canManageTeams}}
-                <button @click="editName = !editName; $nextTick(() => $refs.editInput?.focus())"
-                        class="p-2 text-gray-400 hover:text-gray-600 transition" title="Rename">
+                <button @click="editTeam = !editTeam; editNameValue = {{json .Team.Name}}; editJiraKey = {{json .Team.JiraSpaceKey}}; editManual = {{.Team.TimesheetsManagedManually}}; $nextTick(() => $refs.editNameInput?.focus())"
+                        class="p-2 text-gray-400 hover:text-gray-600 transition" title="Edit">
                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
                     </svg>
@@ -195,6 +229,20 @@
                 <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "teams.team_name"}}</label>
                 <input type="text" x-model="newTeamName" @keydown.enter="createTeam()"
                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+            </div>
+            {{if $jiraEnabled}}
+            <div class="mt-3">
+                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "teams.jira_space_key"}}</label>
+                <input type="text" x-model="newTeamJiraKey" @keydown.enter="createTeam()"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm font-mono">
+            </div>
+            {{end}}
+            <div class="mt-3">
+                <label class="flex items-center gap-2 text-sm text-gray-600">
+                    <input type="checkbox" x-model="newTeamManual"
+                           class="rounded border-gray-300 text-primary focus:ring-primary/50">
+                    {{index $.T "teams.manual_timesheets"}}
+                </label>
             </div>
             <p x-show="createError" x-text="createError" class="mt-3 text-sm text-red-600"></p>
             <div class="flex justify-end gap-3 mt-6">

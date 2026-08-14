@@ -335,6 +335,25 @@ services:
       # - If no group matches, the user falls back to the "basic" role
       # - Roles are re-evaluated at every login
 
+      # =====================================================================
+      # JIRA INTEGRATION
+      # =====================================================================
+      #
+      # Used to link a team to its Jira space (e.g. for the team's
+      # "Jira space key" property). Leave unset if you don't use Jira.
+      #
+      # Base URL of your Jira / Atlassian instance (no trailing slash)
+      # Example: https://your-domain.atlassian.net
+      # - JIRA_BASE_URL=https://your-domain.atlassian.net
+
+      # Atlassian account email used to authenticate against the Jira REST API
+      # Example: jira-integration@your-domain.com
+      # - JIRA_EMAIL=jira-integration@your-domain.com
+
+      # Atlassian API token for the account above.
+      # Generate one at: https://id.atlassian.com/manage-profile/security/api-tokens
+      # - JIRA_TOKEN=your-atlassian-api-token
+
   # ===========================================================================
   # OPTIONAL DATABASE SERVICES
   # ===========================================================================

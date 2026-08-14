@@ -128,9 +128,11 @@ type TeamMember struct {
 
 // Team represents a team of users.
 type Team struct {
-	ID        int64     `json:"id"`
-	Name      string    `json:"name"`
-	CreatedAt time.Time `json:"created_at"`
+	ID                        int64     `json:"id"`
+	Name                      string    `json:"name"`
+	JiraSpaceKey              string    `json:"jira_space_key"`
+	TimesheetsManagedManually bool      `json:"timesheets_managed_manually"`
+	CreatedAt                 time.Time `json:"created_at"`
 }
 
 // Status represents a presence status (e.g. remote, on-site, leave).

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/matoy/mypresence/internal/config"
 	"github.com/matoy/mypresence/internal/db"
 	"github.com/matoy/mypresence/internal/metrics"
 	"github.com/matoy/mypresence/internal/middleware"
@@ -17,6 +18,7 @@ import (
 // AdminHandler handles all admin pages and API endpoints.
 type AdminHandler struct {
 	DB     *db.DB
+	Config *config.Config
 	Render func(w http.ResponseWriter, r *http.Request, page string, data interface{})
 }
 
@@ -59,6 +61,7 @@ func (h *AdminHandler) TeamsPage(w http.ResponseWriter, r *http.Request) {
 		"Teams":          teamsList,
 		"Users":          users,
 		"CanManageTeams": canManageTeams,
+		"JiraEnabled":    h.Config != nil && h.Config.JiraEnabled,
 	})
 }
 
@@ -81,14 +84,16 @@ func (h *AdminHandler) CreateTeam(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Name string `json:"name"`
+		Name                      string `json:"name"`
+		JiraSpaceKey              string `json:"jira_space_key"`
+		TimesheetsManagedManually bool   `json:"timesheets_managed_manually"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Name) == "" {
 		metrics.AdminOpsTotal.WithLabelValues("team", "create", "failure").Inc()
 		jsonError(w, "name required", http.StatusBadRequest)
 		return
 	}
-	id, err := h.DB.CreateTeam(strings.TrimSpace(req.Name))
+	id, err := h.DB.CreateTeamWithDetails(strings.TrimSpace(req.Name), strings.TrimSpace(req.JiraSpaceKey), req.TimesheetsManagedManually)
 	if err != nil {
 		metrics.AdminOpsTotal.WithLabelValues("team", "create", "failure").Inc()
 		jsonError(w, "Erreur création équipe", http.StatusInternalServerError)
@@ -131,10 +136,12 @@ func (h *AdminHandler) UpdateTeam(w http.ResponseWriter, r *http.Request) {
 	}
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	var req struct {
-		Name string `json:"name"`
+		Name                      string `json:"name"`
+		JiraSpaceKey              string `json:"jira_space_key"`
+		TimesheetsManagedManually bool   `json:"timesheets_managed_manually"`
 	}
-	json.NewDecoder(r.Body).Decode(&req) //nolint:errcheck
-	h.DB.UpdateTeam(id, req.Name)        //nolint:errcheck
+	json.NewDecoder(r.Body).Decode(&req)                                                                     //nolint:errcheck
+	h.DB.UpdateTeamDetails(id, req.Name, strings.TrimSpace(req.JiraSpaceKey), req.TimesheetsManagedManually) //nolint:errcheck
 	if currentUser != nil {
 		h.DB.LogAdminAction(currentUser.ID, "team", id, "update", req.Name)
 		slog.Info("admin.team.update", "actor", currentUser.Email, "team", req.Name, "team_id", id)
