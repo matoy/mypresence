@@ -57,6 +57,14 @@
                        onchange="scheduleDateRangeSubmit(this.form)"
                        class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
             </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "admin.projects.mini_project"}}</label>
+                <select name="mini" onchange="this.form.requestSubmit()" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+                    <option value="">{{index $.T "admin.all"}}</option>
+                    <option value="1" {{if eq .FilterMini "1"}}selected{{end}}>{{index $.T "admin.yes"}}</option>
+                    <option value="0" {{if eq .FilterMini "0"}}selected{{end}}>{{index $.T "admin.no"}}</option>
+                </select>
+            </div>
             <a href="/admin/projects-report"
                class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
                 {{index $.T "admin.reset"}}
@@ -90,6 +98,9 @@
                 <span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">{{index $.T "projects.report.active"}}</span>
                 {{else}}
                 <span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-medium">{{index $.T "projects.report.inactive"}}</span>
+                {{end}}
+                {{if $row.Project.MiniProject}}
+                <span class="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">{{index $.T "admin.projects.mini_project"}}</span>
                 {{end}}
             </div>
             <div class="text-sm text-gray-500">

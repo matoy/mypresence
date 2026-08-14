@@ -78,7 +78,12 @@
                 {{range .Projects}}
                 <tr class="border-t border-gray-100 hover:bg-gray-50 transition">
                     <td class="px-4 py-3 font-mono text-xs font-medium text-gray-600">{{.Code}}</td>
-                    <td class="px-4 py-3 font-medium text-gray-900">{{.Name}}</td>
+                    <td class="px-4 py-3 font-medium text-gray-900">
+                        {{.Name}}
+                        {{if .MiniProject}}
+                        <span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">{{index $.T "admin.projects.mini_project"}}</span>
+                        {{end}}
+                    </td>
                     <td class="px-4 py-3 text-gray-500 hidden md:table-cell">{{.TeamName}}</td>
                     <td class="px-4 py-3 text-gray-500 hidden sm:table-cell">{{.StartDate}}</td>
                     <td class="px-4 py-3 text-gray-500 hidden sm:table-cell">{{.EndDate}}</td>
@@ -151,13 +156,25 @@
                     <div>
                         <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "admin.projects.end"}} *</label>
                         <input type="date" x-model="form.end_date"
+                               @input="if (!editId) form.initial_end_date = form.end_date"
                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
                     </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "admin.projects.initial_end"}}</label>
+                    <input type="date" x-model="form.initial_end_date" :disabled="!editId"
+                           :class="!editId ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
                 </div>
                 <div class="flex items-center gap-2">
                     <input type="checkbox" x-model="form.active" id="proj_active"
                            class="h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary">
                     <label for="proj_active" class="text-sm text-gray-700">{{index $.T "admin.projects.active"}}</label>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" x-model="form.mini_project" id="proj_mini"
+                           class="h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary">
+                    <label for="proj_mini" class="text-sm text-gray-700">{{index $.T "admin.projects.mini_project"}}</label>
                 </div>
 
                 <!-- Member assignment -->
@@ -224,7 +241,7 @@ function adminProjectsApp(initialProjects, teams, allUsers) {
         toast: '',
         toastError: false,
         formError: '',
-        form: { name: '', code: '', team_id: 0, active: true, start_date: today, end_date: plus6m },
+        form: { name: '', code: '', team_id: 0, active: true, mini_project: false, start_date: today, end_date: plus6m, initial_end_date: plus6m },
 
         get filteredTeams() {
             if (!this.teamSearch) return this.teams;
@@ -257,7 +274,7 @@ function adminProjectsApp(initialProjects, teams, allUsers) {
             this.memberSearch = '';
             this.memberIDs = [];
             this.formError = '';
-            this.form = { name: '', code: '', team_id: 0, active: true, start_date: today, end_date: plus6m };
+            this.form = { name: '', code: '', team_id: 0, active: true, mini_project: false, start_date: today, end_date: plus6m, initial_end_date: plus6m };
             this.showModal = true;
         },
 
@@ -269,7 +286,7 @@ function adminProjectsApp(initialProjects, teams, allUsers) {
             this.memberSearch = '';
             this.memberIDs = [];
             this.formError = '';
-            this.form = { name: p.name, code: p.code, team_id: p.team_id, active: p.active, start_date: p.start_date, end_date: p.end_date };
+            this.form = { name: p.name, code: p.code, team_id: p.team_id, active: p.active, mini_project: p.mini_project, start_date: p.start_date, end_date: p.end_date, initial_end_date: p.initial_end_date };
             // Fetch current members
             try {
                 const resp = await fetch(`/api/admin/projects/${id}/members`);

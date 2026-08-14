@@ -304,15 +304,17 @@ type PageData struct {
 
 // Project represents a billable project that users can log time against.
 type Project struct {
-	ID        int64     `json:"id"`
-	Name      string    `json:"name"`
-	Code      string    `json:"code"`
-	TeamID    int64     `json:"team_id"`
-	TeamName  string    `json:"team_name"` // populated by JOIN
-	Active    bool      `json:"active"`
-	StartDate string    `json:"start_date"` // YYYY-MM-DD
-	EndDate   string    `json:"end_date"`   // YYYY-MM-DD
-	CreatedAt time.Time `json:"created_at"`
+	ID             int64     `json:"id"`
+	Name           string    `json:"name"`
+	Code           string    `json:"code"`
+	TeamID         int64     `json:"team_id"`
+	TeamName       string    `json:"team_name"` // populated by JOIN
+	Active         bool      `json:"active"`
+	MiniProject    bool      `json:"mini_project"`
+	StartDate      string    `json:"start_date"`       // YYYY-MM-DD
+	EndDate        string    `json:"end_date"`         // YYYY-MM-DD
+	InitialEndDate string    `json:"initial_end_date"` // YYYY-MM-DD, set at creation and freely editable afterwards
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 // ProjectTimeEntry holds a user's declared days for one project in one month.
