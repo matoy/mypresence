@@ -143,12 +143,15 @@ func (h *ProjectsHandler) ProjectsPage(w http.ResponseWriter, r *http.Request) {
 		entryMap[e.ProjectID] = e.Days
 	}
 
+	certified, _ := h.DB.IsProjectMonthCertified(user.ID, year, month)
+
 	h.Render(w, r, "projects", map[string]interface{}{
 		"Projects":      projects,
 		"EntryMap":      entryMap,
 		"BillableDays":  billableDays,
 		"TotalDeclared": totalDeclared,
 		"FavoriteIDs":   favIDs,
+		"Certified":     certified,
 		"Year":          year,
 		"Month":         month,
 		"PrevYear":      prevYM(year, month),
@@ -182,6 +185,10 @@ func (h *ProjectsHandler) SetProjectTime(w http.ResponseWriter, r *http.Request)
 	if req.Days < 0 {
 		metrics.ProjectOpsTotal.WithLabelValues("set_time", "failure").Inc()
 		jsonError(w, "Days must be >= 0", http.StatusBadRequest)
+		return
+	}
+	if rejectIfProjectMonthCertified(w, h, user.ID, req.Year, req.Month) {
+		metrics.ProjectOpsTotal.WithLabelValues("set_time", "failure").Inc()
 		return
 	}
 

@@ -138,7 +138,7 @@ func TestAdminActivityTemplate_CertifiedBadgeForNonAdmin(t *testing.T) {
 	data["CanDecertify"] = false
 
 	html := renderAdminActivityContent(t, data)
-	if !strings.Contains(html, "🔏") {
+	if !strings.Contains(html, "text-amber-500") {
 		t.Fatal("expected certified seal badge to render")
 	}
 	if strings.Contains(html, `onclick="openDecertifyModal(`) {
@@ -157,7 +157,7 @@ func TestAdminActivityTemplate_DecertifyButtonForGlobalAdmin(t *testing.T) {
 	data["CanDecertify"] = true
 
 	html := renderAdminActivityContent(t, data)
-	if !strings.Contains(html, "🔏") {
+	if !strings.Contains(html, "text-amber-500") {
 		t.Fatal("expected certified seal button to render")
 	}
 	// Whitespace inside the onclick attribute comes from template indentation

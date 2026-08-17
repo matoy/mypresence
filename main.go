@@ -402,6 +402,7 @@ func registerOptionalAdminRoutes(mux, authMux *http.ServeMux, cfg *config.Config
 		authMux.HandleFunc("PUT /api/project-activities/{id}", projectsHandler.UpdateProjectActivity)
 		authMux.HandleFunc("DELETE /api/project-activities/{id}", projectsHandler.DeleteProjectActivity)
 		authMux.HandleFunc("GET /api/project-activities/jira-tickets", projectsHandler.ListJiraTicketsAPI)
+		authMux.HandleFunc("POST /api/certify-project", projectsHandler.CertifyProjectMonth)
 		projAdminMux := http.NewServeMux()
 		projAdminMux.HandleFunc("GET /admin/projects", projectsHandler.AdminProjectsPage)
 		projAdminMux.HandleFunc("POST /admin/projects", projectsHandler.CreateProject)
@@ -420,6 +421,10 @@ func registerOptionalAdminRoutes(mux, authMux *http.ServeMux, cfg *config.Config
 		projReportMux.HandleFunc("GET /api/projects-report", projectsHandler.ProjectsReportAPI)
 		mux.Handle("/admin/projects-report", middleware.Auth(database, middleware.RequireRole(models.RoleProjectsAdmin, models.RoleProjectsViewer, models.RoleTeamLeader)(projReportMux)))
 		mux.Handle("/api/projects-report", middleware.Auth(database, middleware.RequireRole(models.RoleProjectsAdmin, models.RoleProjectsViewer, models.RoleTeamLeader)(projReportMux)))
+
+		projCertMux := http.NewServeMux()
+		projCertMux.HandleFunc("POST /api/decertify-project", projectsHandler.DecertifyProjectMonth)
+		mux.Handle("/api/decertify-project", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal, models.RoleActivityViewer, models.RoleTeamLeader)(projCertMux)))
 	}
 }
 

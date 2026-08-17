@@ -1,6 +1,6 @@
 {{define "content"}}
 {{with .Data}}
-{{$allStatuses := .Statuses}}{{$selectedTeamID := .SelectedTeamID}}{{$days := .Days}}{{$presenceMap := .PresenceMap}}{{$statusTotals := .StatusTotals}}{{$workingDays := .WorkingDays}}{{$workingDaysExcl := .WorkingDaysExcl}}{{$holidayCount := .HolidayCount}}{{$dayBillable := .DayBillable}}{{$dayOnSite := .DayOnSite}}{{$showProjectActivity := .ShowProjectActivity}}{{$projectActivityByUser := .ProjectActivityByUser}}{{$showExecSummary := .ShowExecSummary}}{{$execStatusTotals := .ExecStatusTotals}}{{$execTotalBillable := .ExecTotalBillable}}{{$execTotalOnSite := .ExecTotalOnSite}}{{$execTotalNotSet := .ExecTotalNotSet}}{{$execTotalWorkingDays := .ExecTotalWorkingDays}}{{$execProjectActivityPct := .ExecProjectActivityPct}}{{$execUserCount := .ExecUserCount}}{{$ytdBillableByUser := .YTDBillableByUser}}{{$totalYTDBillable := .TotalYTDBillable}}{{$certifiedUsers := .Certified}}{{$canDecertify := .CanDecertify}}{{$month := .Month}}{{$year := .Year}}
+{{$allStatuses := .Statuses}}{{$selectedTeamID := .SelectedTeamID}}{{$days := .Days}}{{$presenceMap := .PresenceMap}}{{$statusTotals := .StatusTotals}}{{$workingDays := .WorkingDays}}{{$workingDaysExcl := .WorkingDaysExcl}}{{$holidayCount := .HolidayCount}}{{$dayBillable := .DayBillable}}{{$dayOnSite := .DayOnSite}}{{$showProjectActivity := .ShowProjectActivity}}{{$projectActivityByUser := .ProjectActivityByUser}}{{$showExecSummary := .ShowExecSummary}}{{$execStatusTotals := .ExecStatusTotals}}{{$execTotalBillable := .ExecTotalBillable}}{{$execTotalOnSite := .ExecTotalOnSite}}{{$execTotalNotSet := .ExecTotalNotSet}}{{$execTotalWorkingDays := .ExecTotalWorkingDays}}{{$execProjectActivityPct := .ExecProjectActivityPct}}{{$execUserCount := .ExecUserCount}}{{$ytdBillableByUser := .YTDBillableByUser}}{{$totalYTDBillable := .TotalYTDBillable}}{{$certifiedUsers := .Certified}}{{$projectCertifiedUsers := .ProjectCertified}}{{$canDecertify := .CanDecertify}}{{$month := .Month}}{{$year := .Year}}
 <div class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
     <div class="flex items-center justify-between mb-6">
         <h1 class="text-2xl font-bold text-gray-900">{{index $.T "activity.title"}}</h1>
@@ -214,9 +214,27 @@
                                 <button type="button"
                                         onclick="openDecertifyModal({{.User.ID}}, '{{.User.Name}}', {{$month}}, {{$year}})"
                                         title="{{index $.T "cert.decertify_button_title"}}"
-                                        class="leading-none hover:opacity-70 transition">🔏</button>
+                                        class="leading-none hover:opacity-70 transition text-amber-500">
+                                    <svg class="h-4 w-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 10-8 0v4h8z"/></svg>
+                                </button>
                                 {{else}}
-                                <span title="{{index $.T "cert.certified_badge_title"}}">🔏</span>
+                                <span class="text-amber-500" title="{{index $.T "cert.certified_badge_title"}}">
+                                    <svg class="h-4 w-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 10-8 0v4h8z"/></svg>
+                                </span>
+                                {{end}}
+                            {{end}}
+                            {{if and $showProjectActivity $projectCertifiedUsers (index $projectCertifiedUsers .User.ID)}}
+                                {{if $canDecertify}}
+                                <button type="button"
+                                        onclick="openDecertifyProjectModal({{.User.ID}}, '{{.User.Name}}', {{$month}}, {{$year}})"
+                                        title="{{index $.T "cert.decertify_project_button_title"}}"
+                                        class="leading-none hover:opacity-70 transition text-blue-500">
+                                    <svg class="h-4 w-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 10-8 0v4h8z"/></svg>
+                                </button>
+                                {{else}}
+                                <span class="text-blue-500" title="{{index $.T "cert.certified_project_badge_title"}}">
+                                    <svg class="h-4 w-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 10-8 0v4h8z"/></svg>
+                                </span>
                                 {{end}}
                             {{end}}
                         </div>
@@ -469,7 +487,7 @@
 </div>
 <script src="/static/js/xlsx.full.min.js"></script>
 {{if .CanDecertify}}
-<!-- Decertify confirmation modal (global admin only) -->
+<!-- Decertify confirmation modal (presence declaration) -->
 <div id="decertify-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 p-4" onclick="if (event.target === this) closeDecertifyModal()">
     <div class="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4">
         <h3 class="text-lg font-bold text-gray-800 mb-2">{{index $.T "cert.decertify_modal_title"}}</h3>
@@ -477,6 +495,17 @@
         <div class="flex gap-3 justify-end">
             <button onclick="closeDecertifyModal()" class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">{{index $.T "admin.cancel"}}</button>
             <button onclick="confirmDecertify()" class="px-4 py-2 rounded-lg bg-orange-500 text-white text-sm font-medium hover:bg-orange-600 transition">{{index $.T "cert.decertify_confirm_button"}}</button>
+        </div>
+    </div>
+</div>
+<!-- Decertify confirmation modal (project declaration) -->
+<div id="decertify-project-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 p-4" onclick="if (event.target === this) closeDecertifyProjectModal()">
+    <div class="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4">
+        <h3 class="text-lg font-bold text-gray-800 mb-2">{{index $.T "cert.decertify_project_modal_title"}}</h3>
+        <p class="text-sm text-gray-500 mb-5">{{index $.T "cert.decertify_project_modal_message"}}</p>
+        <div class="flex gap-3 justify-end">
+            <button onclick="closeDecertifyProjectModal()" class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">{{index $.T "admin.cancel"}}</button>
+            <button onclick="confirmDecertifyProject()" class="px-4 py-2 rounded-lg bg-red-500 text-white text-sm font-medium hover:bg-red-600 transition">{{index $.T "cert.decertify_confirm_button"}}</button>
         </div>
     </div>
 </div>
@@ -513,6 +542,34 @@ async function confirmDecertify() {
         body: JSON.stringify({ user_id: userId, year, month })
     });
     closeDecertifyModal();
+    if (resp.ok) {
+        window.location.reload();
+    } else {
+        const d = await resp.json().catch(() => ({}));
+        alert(d.error || 'Erreur');
+    }
+}
+
+let decertifyProjectTarget = null;
+function openDecertifyProjectModal(userId, userName, month, year) {
+    decertifyProjectTarget = { userId, month, year };
+    const modal = document.getElementById('decertify-project-modal');
+    if (modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
+}
+function closeDecertifyProjectModal() {
+    decertifyProjectTarget = null;
+    const modal = document.getElementById('decertify-project-modal');
+    if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+}
+async function confirmDecertifyProject() {
+    if (!decertifyProjectTarget) return;
+    const { userId, month, year } = decertifyProjectTarget;
+    const resp = await fetch('/api/decertify-project', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId, year, month })
+    });
+    closeDecertifyProjectModal();
     if (resp.ok) {
         window.location.reload();
     } else {

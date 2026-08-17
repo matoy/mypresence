@@ -92,6 +92,8 @@ func (h *ProjectsHandler) renderManualProjectsPage(w http.ResponseWriter, r *htt
 
 	jiraEnabled := h.Config != nil && h.Config.JiraEnabled && team.JiraSpaceKey != ""
 
+	certified, _ := h.DB.IsProjectMonthCertified(user.ID, year, month)
+
 	h.Render(w, r, "projects", map[string]interface{}{
 		"ManualMode":       true,
 		"ManualDates":      dates,
@@ -100,6 +102,7 @@ func (h *ProjectsHandler) renderManualProjectsPage(w http.ResponseWriter, r *htt
 		"JiraEnabled":      jiraEnabled,
 		"BillableDays":     billable,
 		"TotalDeclared":    declared,
+		"Certified":        certified,
 		"Year":             year,
 		"Month":            month,
 		"PrevYear":         prevYM(year, month),
@@ -188,6 +191,10 @@ func (h *ProjectsHandler) CreateProjectActivity(w http.ResponseWriter, r *http.R
 		jsonError(w, err.Error(), http.StatusUnprocessableEntity)
 		return
 	}
+	if year, month, err := yearMonthFromDate(req.Date); err == nil && rejectIfProjectMonthCertified(w, h, user.ID, year, month) {
+		metrics.ProjectOpsTotal.WithLabelValues("activity_create", "failure").Inc()
+		return
+	}
 
 	id, err := h.DB.CreateProjectActivity(user.ID, req.Date, req.ActivityType, req.JiraKey, req.JiraTitle, req.Comment, req.Percentage)
 	if err != nil {
@@ -231,6 +238,10 @@ func (h *ProjectsHandler) UpdateProjectActivity(w http.ResponseWriter, r *http.R
 		jsonError(w, err.Error(), http.StatusUnprocessableEntity)
 		return
 	}
+	if year, month, err := yearMonthFromDate(existing.Date); err == nil && rejectIfProjectMonthCertified(w, h, user.ID, year, month) {
+		metrics.ProjectOpsTotal.WithLabelValues("activity_update", "failure").Inc()
+		return
+	}
 
 	if err := h.DB.UpdateProjectActivity(id, req.ActivityType, req.JiraKey, req.JiraTitle, req.Comment, req.Percentage); err != nil {
 		slog.Error("project.activity.update", "error", err)
@@ -259,6 +270,10 @@ func (h *ProjectsHandler) DeleteProjectActivity(w http.ResponseWriter, r *http.R
 	if existing.UserID != user.ID {
 		metrics.ProjectOpsTotal.WithLabelValues("activity_delete", "failure").Inc()
 		jsonError(w, "Access denied", http.StatusForbidden)
+		return
+	}
+	if year, month, err := yearMonthFromDate(existing.Date); err == nil && rejectIfProjectMonthCertified(w, h, user.ID, year, month) {
+		metrics.ProjectOpsTotal.WithLabelValues("activity_delete", "failure").Inc()
 		return
 	}
 	if err := h.DB.DeleteProjectActivity(id); err != nil {

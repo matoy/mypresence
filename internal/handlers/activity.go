@@ -104,6 +104,9 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 		statUserIDs[i] = s.User.ID
 	}
 	certifiedUsers, _ := h.DB.GetCertifiedUserIDs(statUserIDs, year, month)
+	// Same for the project time declaration certification (percentage-based
+	// or "Timesheets managed manually"), shown as a separate red seal.
+	projectCertifiedUsers, _ := h.DB.GetCertifiedProjectUserIDs(statUserIDs, year, month)
 
 	h.Render(w, r, "admin_activity", map[string]interface{}{
 		"Teams":                  teams,
@@ -144,6 +147,7 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 		"YTDBillableByUser":      ytdBillableByUser,
 		"TotalYTDBillable":       totalYTDBillable,
 		"Certified":              certifiedUsers,
+		"ProjectCertified":       projectCertifiedUsers,
 		"CanDecertify":           currentUser != nil && currentUser.HasAnyRole(models.RoleGlobal, models.RoleActivityViewer, models.RoleTeamLeader),
 	})
 }
