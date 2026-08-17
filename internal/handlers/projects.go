@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/matoy/mypresence/internal/config"
 	"github.com/matoy/mypresence/internal/db"
 	"github.com/matoy/mypresence/internal/metrics"
 	"github.com/matoy/mypresence/internal/middleware"
@@ -17,6 +18,7 @@ import (
 // ProjectsHandler handles all project-management pages.
 type ProjectsHandler struct {
 	DB     *db.DB
+	Config *config.Config
 	Render func(w http.ResponseWriter, r *http.Request, page string, data interface{})
 }
 
@@ -118,6 +120,11 @@ func (h *ProjectsHandler) ProjectsPage(w http.ResponseWriter, r *http.Request) {
 	}
 	if month == 0 {
 		month = int(now.Month())
+	}
+
+	if manualTeam := h.resolveManualTeam(user.ID); manualTeam != nil {
+		h.renderManualProjectsPage(w, r, user, manualTeam, year, month)
+		return
 	}
 
 	projects := h.listProjectsForUser(user, year, month)
@@ -450,6 +457,11 @@ func (h *ProjectsHandler) ProjectsReportPage(w http.ResponseWriter, r *http.Requ
 	currentUser := middleware.GetUser(r)
 	now := time.Now()
 
+	if r.URL.Query().Get("view") == "activities" {
+		h.renderTeamActivitiesReportPage(w, r, currentUser)
+		return
+	}
+
 	// Apply optional UI filters
 	query := r.URL.Query()
 	filterDateFrom := query.Get("date_from")
@@ -486,6 +498,7 @@ func (h *ProjectsHandler) ProjectsReportPage(w http.ResponseWriter, r *http.Requ
 	filtered := filterReportRows(allProjects, filterText, filterActive, filterTeam, filterMini)
 
 	h.Render(w, r, "admin_projects_report", map[string]interface{}{
+		"ViewMode":       "summary",
 		"Rows":           filtered,
 		"MonthKeys":      monthKeys,
 		"CurrentMonth":   monthKeys[len(monthKeys)-1],
@@ -506,6 +519,11 @@ func (h *ProjectsHandler) ProjectsReportPage(w http.ResponseWriter, r *http.Requ
 func (h *ProjectsHandler) ProjectsReportAPI(w http.ResponseWriter, r *http.Request) {
 	currentUser := middleware.GetUser(r)
 	now := time.Now()
+
+	if r.URL.Query().Get("view") == "activities" {
+		h.renderTeamActivitiesReportAPI(w, r, currentUser)
+		return
+	}
 
 	query := r.URL.Query()
 	filterDateFrom := query.Get("date_from")

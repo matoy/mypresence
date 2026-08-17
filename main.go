@@ -293,7 +293,7 @@ func initOptionalHandlers(cfg *config.Config, database *db.DB, renderPage func(h
 	}
 	var projectsHandler *handlers.ProjectsHandler
 	if !cfg.DisableProjects {
-		projectsHandler = &handlers.ProjectsHandler{DB: database, Render: renderPage}
+		projectsHandler = &handlers.ProjectsHandler{DB: database, Config: cfg, Render: renderPage}
 	}
 	return patHandler, projectsHandler
 }
@@ -397,6 +397,11 @@ func registerOptionalAdminRoutes(mux, authMux *http.ServeMux, cfg *config.Config
 		authMux.HandleFunc("GET /api/project-time", projectsHandler.ProjectTimeAPI)
 		authMux.HandleFunc("POST /api/project-time", projectsHandler.SetProjectTime)
 		authMux.HandleFunc("POST /api/project-favorite/{id}", projectsHandler.ToggleProjectFavoriteAPI)
+		authMux.HandleFunc("GET /api/project-activities", projectsHandler.ListProjectActivitiesAPI)
+		authMux.HandleFunc("POST /api/project-activities", projectsHandler.CreateProjectActivity)
+		authMux.HandleFunc("PUT /api/project-activities/{id}", projectsHandler.UpdateProjectActivity)
+		authMux.HandleFunc("DELETE /api/project-activities/{id}", projectsHandler.DeleteProjectActivity)
+		authMux.HandleFunc("GET /api/project-activities/jira-tickets", projectsHandler.ListJiraTicketsAPI)
 		projAdminMux := http.NewServeMux()
 		projAdminMux.HandleFunc("GET /admin/projects", projectsHandler.AdminProjectsPage)
 		projAdminMux.HandleFunc("POST /admin/projects", projectsHandler.CreateProject)

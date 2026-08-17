@@ -56,7 +56,11 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 	projectActivityByUser := make(map[int64]float64)
 	totalProjectDeclared := 0.0
 	if !h.DisableProjects {
-		projectActivityByUser, totalProjectDeclared = h.computeProjectActivity(stats, year, month)
+		if teamHasManualTimesheets(allTeams, teamID) {
+			projectActivityByUser, totalProjectDeclared = h.computeManualProjectActivity(stats, year, month)
+		} else {
+			projectActivityByUser, totalProjectDeclared = h.computeProjectActivity(stats, year, month)
+		}
 	}
 
 	totalWorkingDays := float64(workingDaysExcluded) * float64(len(stats))
@@ -323,6 +327,50 @@ func (h *ActivityHandler) computeProjectActivity(stats []models.UserStats, year,
 		declared, err := h.DB.GetUserTotalDeclaredForMonth(s.User.ID, year, month)
 		if err != nil {
 			continue
+		}
+		totalProjectDeclared += declared
+		if s.BillableDays > 0 {
+			projectActivityByUser[s.User.ID] = (declared / s.BillableDays) * 100.0
+		}
+	}
+	return
+}
+
+// teamHasManualTimesheets reports whether the given team ID has "Timesheets
+// managed manually" enabled.
+func teamHasManualTimesheets(teams []models.Team, teamID int64) bool {
+	for _, t := range teams {
+		if t.ID == teamID {
+			return t.TimesheetsManagedManually
+		}
+	}
+	return false
+}
+
+// computeManualProjectActivity returns the per-user project activity percentage
+// for a "Timesheets managed manually" team: the percentage of each user's
+// billable days whose activities are fully declared (100%, or 50% for half
+// days), instead of the sum of declared project-time-entry days.
+func (h *ActivityHandler) computeManualProjectActivity(stats []models.UserStats, year, month int) (projectActivityByUser map[int64]float64, totalProjectDeclared float64) {
+	projectActivityByUser = make(map[int64]float64)
+	for _, s := range stats {
+		weights, err := h.DB.GetUserBillableDatesForMonth(s.User.ID, year, month)
+		if err != nil {
+			continue
+		}
+		activities, err := h.DB.ListUserActivitiesForMonth(s.User.ID, year, month)
+		if err != nil {
+			continue
+		}
+		sumByDate := make(map[string]float64)
+		for _, a := range activities {
+			sumByDate[a.Date] += a.Percentage
+		}
+		var declared float64
+		for date, weight := range weights {
+			if isDateComplete(sumByDate[date], weight) {
+				declared += weight
+			}
 		}
 		totalProjectDeclared += declared
 		if s.BillableDays > 0 {

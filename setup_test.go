@@ -467,6 +467,90 @@ func TestNewRenderPage_UnknownPage(t *testing.T) {
 	}
 }
 
+// TestNewRenderPage_ProjectsManualMode ensures the "Timesheets managed manually"
+// branch of the /projects template parses and renders without error.
+func TestNewRenderPage_ProjectsManualMode(t *testing.T) {
+	cfg := &config.Config{DataDir: t.TempDir(), DefaultLang: "en", SecretKey: "test-secret-key"}
+	render := buildTestRender(t, cfg, nil)
+	req := httptest.NewRequest(http.MethodGet, "/projects", nil)
+	w := httptest.NewRecorder()
+	data := map[string]interface{}{
+		"ManualMode":  true,
+		"ManualDates": []string{"2026-05-04", "2026-05-05"},
+		"ManualWeights": map[string]float64{
+			"2026-05-04": 1.0,
+			"2026-05-05": 0.5,
+		},
+		"ManualActivities": map[string][]models.ProjectActivity{
+			"2026-05-04": {
+				{ID: 1, Date: "2026-05-04", ActivityType: models.ActivityTypeJira, JiraKey: "PROJ-1", JiraTitle: "Fix bug", Percentage: 100},
+			},
+		},
+		"JiraEnabled":   true,
+		"BillableDays":  1.5,
+		"TotalDeclared": 1.0,
+		"Year":          2026,
+		"Month":         5,
+		"PrevYear":      2026,
+		"PrevMonth":     4,
+		"NextYear":      2026,
+		"NextMonth":     6,
+	}
+	render(w, req, "projects", data)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "projectsManualApp") {
+		t.Error("expected manual mode Alpine component to be rendered")
+	}
+	if !strings.Contains(body, "PROJ-1") {
+		t.Error("expected existing jira activity to be reflected in the rendered page")
+	}
+}
+
+// TestNewRenderPage_ProjectsReportActivitiesView ensures the team-activities
+// view of /admin/projects-report parses and renders without error.
+func TestNewRenderPage_ProjectsReportActivitiesView(t *testing.T) {
+	cfg := &config.Config{DataDir: t.TempDir(), DefaultLang: "en", SecretKey: "test-secret-key"}
+	render := buildTestRender(t, cfg, nil)
+	req := httptest.NewRequest(http.MethodGet, "/admin/projects-report?view=activities", nil)
+	w := httptest.NewRecorder()
+	data := map[string]interface{}{
+		"ViewMode": "activities",
+		"ManualTeams": []models.Team{
+			{ID: 1, Name: "Ops Team", TimesheetsManagedManually: true},
+		},
+		"SelectedTeamID": int64(1),
+		"Activities": []models.ProjectActivity{
+			{ID: 1, UserID: 10, UserName: "Alice", Date: "2026-05-04", ActivityType: models.ActivityTypeOther, Comment: "Support", Percentage: 100},
+			{ID: 2, UserID: 11, UserName: "Bob", Date: "2026-05-05", ActivityType: models.ActivityTypeJira, JiraKey: "PROJ-42", JiraTitle: "Fix bug", Percentage: 50},
+		},
+		"ActivityYear":  2026,
+		"ActivityMonth": 5,
+		"PrevYear":      2026,
+		"PrevMonth":     4,
+		"NextYear":      2026,
+		"NextMonth":     6,
+		"JiraBaseURL":   "https://acme.atlassian.net",
+	}
+	render(w, req, "admin_projects_report", data)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "Alice") {
+		t.Error("expected activity row to be rendered")
+	}
+	if !strings.Contains(body, `openJiraTicketPopup('https:\/\/acme.atlassian.net/browse/PROJ-42')`) {
+		t.Error("expected jira reference to be a clickable popup link to the ticket")
+	}
+	if !strings.Contains(body, `id="filter-user"`) || !strings.Contains(body, `id="filter-type"`) ||
+		!strings.Contains(body, `id="filter-reference"`) || !strings.Contains(body, `id="filter-comment"`) {
+		t.Error("expected user/type/reference/comment filter inputs to be rendered")
+	}
+}
+
 // TestNewRenderPage_CustomLogoPathMissing covers cfg.LogoPath != "" (logoFile = custom name)
 // where the file does not exist, so logoExists stays false.
 func TestNewRenderPage_CustomLogoPathMissing(t *testing.T) {
