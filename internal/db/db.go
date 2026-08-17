@@ -1332,7 +1332,7 @@ func (d *DB) RemoveTeamMember(teamID, userID int64) error {
 
 func (d *DB) GetUserTeams(userID int64) ([]models.Team, error) {
 	rows, err := d.core.Query(`
-SELECT t.id, t.name, t.created_at
+SELECT t.id, t.name, COALESCE(t.jira_space_key,''), t.timesheets_managed_manually, t.created_at
 FROM teams t
 JOIN user_teams ut ON t.id = ut.team_id
 WHERE ut.user_id = ? AND ut.left_at IS NULL
@@ -1346,7 +1346,7 @@ ORDER BY t.name
 	var teams []models.Team
 	for rows.Next() {
 		var t models.Team
-		if err := rows.Scan(&t.ID, &t.Name, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.Name, &t.JiraSpaceKey, &t.TimesheetsManagedManually, &t.CreatedAt); err != nil {
 			return nil, err
 		}
 		teams = append(teams, t)

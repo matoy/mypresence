@@ -54,6 +54,22 @@ func (d *DB) migrateProjects() error {
   UNIQUE(project_id, user_id),
   FOREIGN KEY (project_id) REFERENCES projects(id)
 `),
+
+		// project_activities stores daily activity declarations for teams with
+		// "Timesheets managed manually" enabled. Several rows may exist for the
+		// same user/date; their percentages should sum to the day's billable weight.
+		dl.createTableIfNotExists("project_activities", fmt.Sprintf(`
+  id            %s,
+  user_id       BIGINT NOT NULL,
+  date          %s NOT NULL,
+  activity_type %s NOT NULL,
+  jira_key      %s NOT NULL DEFAULT '',
+  jira_title    %s NOT NULL DEFAULT '',
+  comment       %s NOT NULL DEFAULT '',
+  percentage    %s NOT NULL DEFAULT 0,
+  created_at    %s DEFAULT CURRENT_TIMESTAMP,
+  updated_at    %s DEFAULT CURRENT_TIMESTAMP
+`, ai, dl.varcharType(10), dl.varcharType(20), dl.varcharType(32), dl.varcharType(255), dl.textType(), real_, dt, dt)),
 	}
 
 	for _, stmt := range stmts {

@@ -281,6 +281,20 @@ if ($teamIDs.Count -lt 4) {
     }
 }
 
+# Enable "Timesheets managed manually" + Jira integration for Sales and HR:
+# their members declare daily activities (Jira ticket / ServiceNow / other)
+# instead of monthly per-project day allocations.
+$manualTeams = @(
+    @{ name="Sales"; jiraKey="SCRM" },
+    @{ name="HR";    jiraKey="HRXP" }
+)
+foreach ($mt in $manualTeams) {
+    $tid = $teamIDs[$mt.name]
+    if (-not $tid) { Write-Warning "  Team '$($mt.name)' not found, cannot enable manual timesheets"; continue }
+    PutJSON "$Base/admin/teams/$tid" @{ name=$mt.name; jira_space_key=$mt.jiraKey; timesheets_managed_manually=$true }
+    Write-Host "  '$($mt.name)' -> timesheets managed manually (Jira space: $($mt.jiraKey))"
+}
+
 # ── 5. Team members ───────────────────────────────────────────────────────────
 Write-Host "`nAdding team members..."
 $memberships = @(
@@ -525,9 +539,51 @@ foreach ($key in $projectAlloc.Keys) {
     }
 }
 
+# ── 12. Team activities (Timesheets managed manually) ────────────────────────
+# Members of the Sales and HR teams (manual mode, enabled above) declare daily
+# activities instead of monthly project days: Jira tickets, ServiceNow
+# requests, or other/administrative work.
+Write-Host "`nDeclaring team activities (Sales & HR — manual timesheets)..."
+function DeclareActivity ($headers, $date, $type, $jiraKey, $jiraTitle, $comment, $percentage) {
+    $body = @{ date=$date; activity_type=$type; jira_key=$jiraKey; jira_title=$jiraTitle; comment=$comment; percentage=[double]$percentage } | ConvertTo-Json -Compress
+    try { Invoke-RestMethod "$Base/api/project-activities" -Method POST -Headers $headers -Body $body | Out-Null; return $true }
+    catch { $m = $_.ErrorDetails.Message; if (-not $m) { $m = $_.Exception.Message }; Write-Warning "    activity $date -> $m"; return $false }
+}
+$manualUsers = @(
+    @{ key="bob";    jiraPrefix="SCRM" },
+    @{ key="iris";   jiraPrefix="SCRM" },
+    @{ key="julien"; jiraPrefix="SCRM" },
+    @{ key="admin";  jiraPrefix="HRXP" },
+    @{ key="alice";  jiraPrefix="HRXP" },
+    @{ key="emma";   jiraPrefix="HRXP" }
+)
+foreach ($mu in $manualUsers) {
+    $creds   = $userCreds[$mu.key]
+    $headers = LoginAs $creds.email $creds.password
+    $days    = Get-WorkingDays $m1.Year $m1.Month
+    $declared = 0
+    for ($i = 0; $i -lt $days.Count; $i++) {
+        $d = $days[$i]
+        switch ($i % 3) {
+            0 {
+                $num = 100 + $i
+                if (DeclareActivity $headers $d "jira" "$($mu.jiraPrefix)-$num" "Investigate reported issue #$num" "" 100) { $declared++ }
+            }
+            1 {
+                $num = 20000 + $i
+                if (DeclareActivity $headers $d "servicenow" "" "" "INC$num - service request follow-up" 100) { $declared++ }
+            }
+            2 {
+                if (DeclareActivity $headers $d "other" "" "" "Internal task / administrative work" 100) { $declared++ }
+            }
+        }
+    }
+    Write-Host "  $($mu.key): $declared activity/activities declared for $($m1.ToString('MMM yyyy'))"
+}
+
 Write-Host "`nSeed complete!"
 
-# ── 12. News banners ──────────────────────────────────────────────────────────
+# ── 13. News banners ──────────────────────────────────────────────────────────
 Write-Host "`nCreating news banners..."
 # Pre-load existing titles so we never create duplicates
 $existingNewsTitles = @{}

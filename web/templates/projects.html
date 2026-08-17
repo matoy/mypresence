@@ -1,5 +1,147 @@
 {{define "content"}}
 {{with .Data}}
+{{if .ManualMode}}
+<div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8"
+     x-data="projectsManualApp({{json .ManualDates}}, {{json .ManualWeights}}, {{json .ManualActivities}}, {{.JiraEnabled}}, {{.Year}}, {{.Month}})">
+
+    <!-- Header + month nav -->
+    <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+        <h1 class="text-2xl font-bold text-gray-900">{{index $.T "projects.title"}}</h1>
+        <div class="flex items-center gap-2">
+            <a href="/projects?year={{.PrevYear}}&month={{.PrevMonth}}"
+               class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                </svg>
+            </a>
+            <span class="font-semibold text-gray-800 min-w-[160px] text-center">
+                {{index $.T (printf "cal.month.%d" .Month)}} {{.Year}}
+            </span>
+            <a href="/projects?year={{.NextYear}}&month={{.NextMonth}}"
+               class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                </svg>
+            </a>
+        </div>
+    </div>
+
+    <!-- Cap indicator -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
+        <div class="flex flex-wrap gap-6 items-center">
+            <div>
+                <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide">{{index $.T "projects.billable_cap"}}</p>
+                <p class="text-2xl font-bold text-gray-900" x-text="billable"></p>
+            </div>
+            <div>
+                <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide">{{index $.T "projects.declared"}}</p>
+                <p class="text-2xl font-bold text-gray-900" x-text="fmtDays(totalDeclared)"></p>
+            </div>
+            <div class="flex-1">
+                <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">{{index $.T "projects.remaining"}}</p>
+                <div class="flex items-center gap-2">
+                    <div class="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden projects-progress-track border border-transparent">
+                        <div class="h-full rounded-full transition-all projects-progress-fill"
+                             :style="(() => { const pct = billable > 0 ? Math.min(100, totalDeclared/billable*100) : 0; const hue = Math.round(25 + Math.pow(pct/100, 2) * 95); return `width:${pct}%; background-color:hsl(${hue},80%,45%)`; })()">
+                        </div>
+                    </div>
+                    <span x-show="billable > 0 && (totalDeclared + 0.001) >= billable" x-cloak>🚀</span>
+                </div>
+                <p class="text-sm text-gray-500 mt-1"
+                   x-text="billable > 0 && (totalDeclared + 0.001) >= billable ? '✓ {{index $.T "projects.fully_declared"}}' : fmtDays(Math.max(0, billable - totalDeclared)) + ' {{index $.T "projects.days_left"}}'">
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error/success toast -->
+    <div x-show="toast" x-transition x-cloak
+         :class="toastError ? 'bg-red-50 border-red-200 text-red-700' : 'bg-green-50 border-green-200 text-green-700'"
+         class="border rounded-xl px-4 py-3 mb-4 text-sm" x-text="toast"></div>
+
+    <!-- Billable days list -->
+    <div x-show="days.length === 0" x-cloak
+         class="bg-white rounded-xl shadow-sm border border-gray-100 px-6 py-10 text-center text-gray-400">
+        {{index $.T "projects.manual.none"}}
+    </div>
+    <div class="space-y-4">
+        <template x-for="d in days" :key="d.date">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="font-semibold text-gray-800" x-text="d.date"></span>
+                        <span class="text-xs text-gray-400" x-show="d.weight < 1" x-text="'(' + (d.weight*100) + '%)'"></span>
+                        <span x-show="isComplete(d)" x-cloak class="text-green-500" title="{{index $.T "projects.manual.complete"}}">✓</span>
+                    </div>
+                    <span class="text-xs font-semibold px-2 py-0.5 rounded-full"
+                          :class="isComplete(d) ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'"
+                          x-text="dayTotal(d) + '% / ' + (d.weight*100) + '%'"></span>
+                </div>
+
+                <div class="space-y-2">
+                    <template x-for="act in d.activities" :key="act._key">
+                        <div class="border border-gray-100 rounded-lg p-2 bg-gray-50">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <select x-model="act.activity_type" @change="act.jira_key='';act.jira_title='';act._jiraSearch=''"
+                                        class="px-2 py-1.5 border border-gray-300 rounded-lg text-xs bg-white">
+                                    <option value="jira" x-show="jiraEnabled">{{index $.T "projects.manual.type_jira"}}</option>
+                                    <option value="servicenow">{{index $.T "projects.manual.type_servicenow"}}</option>
+                                    <option value="other">{{index $.T "projects.manual.type_other"}}</option>
+                                </select>
+
+                                <div x-show="act.activity_type === 'jira'" class="relative flex-1 min-w-[220px]">
+                                    <input type="text" x-model="act._jiraSearch"
+                                           @focus="act._showJiraList = true" @input="act._showJiraList = true"
+                                           @blur="setTimeout(() => act._showJiraList = false, 150)"
+                                           :placeholder="act.jira_key ? act.jira_key + ' - ' + act.jira_title : '{{index $.T "projects.manual.jira_placeholder"}}'"
+                                           class="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-xs">
+                                    <div x-show="act._showJiraList" x-cloak
+                                         class="absolute z-10 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto w-full">
+                                        <template x-for="tk in filteredJiraTickets(act._jiraSearch)" :key="tk.key">
+                                            <div @mousedown.prevent="selectJiraTicket(act, tk)"
+                                                 class="px-2 py-1.5 hover:bg-gray-100 cursor-pointer text-xs"
+                                                 x-text="tk.key + ' - ' + tk.title"></div>
+                                        </template>
+                                        <div x-show="filteredJiraTickets(act._jiraSearch).length === 0" class="px-2 py-2 text-xs text-gray-400 text-center">
+                                            {{index $.T "projects.manual.no_tickets"}}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <input type="text" x-model="act.comment" placeholder="{{index $.T "projects.manual.comments"}}"
+                                       class="flex-1 min-w-[160px] px-2 py-1.5 border border-gray-300 rounded-lg text-xs">
+
+                                <div class="flex items-center gap-1">
+                                    <input type="number" min="1" max="100" step="1" x-model.number="act.percentage"
+                                           class="w-16 text-right px-2 py-1.5 border border-gray-300 rounded-lg text-xs">
+                                    <span class="text-xs text-gray-400">%</span>
+                                </div>
+
+                                <button @click="saveActivity(d, act)" :disabled="act._saving"
+                                        class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium"
+                                        :class="{'opacity-50 cursor-wait': act._saving}">
+                                    {{index $.T "admin.save"}}
+                                </button>
+                                <button @click="deleteActivity(d, act)"
+                                        class="text-red-400 hover:text-red-600 transition p-1.5" title="{{index $.T "admin.reset"}}">
+                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            <p x-show="act._error" x-text="act._error" class="mt-1 text-xs text-red-600"></p>
+                        </div>
+                    </template>
+                </div>
+                <button @click="addActivity(d)"
+                        class="mt-3 text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
+                    + {{index $.T "projects.manual.add_activity"}}
+                </button>
+            </div>
+        </template>
+    </div>
+</div>
+{{else}}
 <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8" x-data="projectsApp({{.BillableDays}}, {{.TotalDeclared}}, {{json .EntryMap}}, {{json .FavoriteIDs}}, {{json .Projects}}, {{.Year}}, {{.Month}})">
 
     <!-- Header + month nav -->
@@ -116,6 +258,7 @@
         </table>
     </div>
 </div>
+{{end}}
 
 <script>
 function projectsApp(billable, totalDeclared, initialEntries, favoriteIDs, allProjects, year, month) {
@@ -187,6 +330,139 @@ function projectsApp(billable, totalDeclared, initialEntries, favoriteIDs, allPr
                 this.toast = 'Network error';
             }
             this.saving = null;
+        }
+    };
+}
+
+function projectsManualApp(dates, weights, activitiesByDate, jiraEnabled, year, month) {
+    let uid = 0;
+    function wrapActivity(a) {
+        a = a || {};
+        return {
+            id: a.id || null,
+            activity_type: a.activity_type || (jiraEnabled ? 'jira' : 'other'),
+            jira_key: a.jira_key || '',
+            jira_title: a.jira_title || '',
+            comment: a.comment || '',
+            percentage: a.percentage || 0,
+            _key: 'k' + (uid++),
+            _jiraSearch: '',
+            _showJiraList: false,
+            _saving: false,
+            _error: ''
+        };
+    }
+    const days = (dates || []).map(date => ({
+        date,
+        weight: (weights || {})[date] || 1,
+        activities: ((activitiesByDate || {})[date] || []).map(wrapActivity)
+    }));
+
+    return {
+        year: year,
+        month: month,
+        jiraEnabled: !!jiraEnabled,
+        jiraTickets: [],
+        days: days,
+        toast: '',
+        toastError: false,
+
+        init() {
+            if (this.jiraEnabled) this.loadJiraTickets();
+        },
+
+        async loadJiraTickets() {
+            try {
+                const resp = await fetch('/api/project-activities/jira-tickets');
+                if (resp.ok) {
+                    const data = await resp.json();
+                    this.jiraTickets = data.tickets || [];
+                }
+            } catch(e) { /* ignore */ }
+        },
+
+        filteredJiraTickets(q) {
+            if (!q) return this.jiraTickets;
+            const lq = q.toLowerCase();
+            return this.jiraTickets
+                .filter(t => t.key.toLowerCase().includes(lq) || t.title.toLowerCase().includes(lq));
+        },
+
+        selectJiraTicket(act, tk) {
+            act.jira_key = tk.key;
+            act.jira_title = tk.title;
+            act._jiraSearch = '';
+            act._showJiraList = false;
+        },
+
+        dayTotal(d) {
+            return d.activities.reduce((sum, a) => sum + (parseFloat(a.percentage) || 0), 0);
+        },
+
+        isComplete(d) {
+            return this.dayTotal(d) >= (d.weight * 100 - 0.01);
+        },
+
+        get billable() {
+            return this.days.reduce((sum, d) => sum + d.weight, 0);
+        },
+
+        get totalDeclared() {
+            return this.days.reduce((sum, d) => sum + (this.isComplete(d) ? d.weight : 0), 0);
+        },
+
+        fmtDays(n) {
+            if (n === Math.floor(n)) return n.toFixed(0);
+            return n.toFixed(1);
+        },
+
+        addActivity(d) {
+            d.activities.push(wrapActivity({}));
+        },
+
+        removeLocalActivity(d, act) {
+            const idx = d.activities.indexOf(act);
+            if (idx >= 0) d.activities.splice(idx, 1);
+        },
+
+        async saveActivity(d, act) {
+            act._error = '';
+            act._saving = true;
+            const body = {
+                date: d.date,
+                activity_type: act.activity_type,
+                jira_key: act.activity_type === 'jira' ? act.jira_key : '',
+                jira_title: act.activity_type === 'jira' ? act.jira_title : '',
+                comment: act.comment,
+                percentage: parseFloat(act.percentage) || 0
+            };
+            const url = act.id ? `/api/project-activities/${act.id}` : '/api/project-activities';
+            const method = act.id ? 'PUT' : 'POST';
+            try {
+                const resp = await fetch(url, { method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
+                const data = await resp.json();
+                if (!resp.ok) {
+                    act._error = data.error || 'Error';
+                    this.toastError = true;
+                    this.toast = act._error;
+                } else {
+                    if (!act.id) act.id = data.id;
+                    this.toastError = false;
+                    this.toast = '✓';
+                    setTimeout(() => { this.toast = ''; }, 1500);
+                }
+            } catch(e) {
+                act._error = 'Network error';
+            }
+            act._saving = false;
+        },
+
+        async deleteActivity(d, act) {
+            if (!act.id) { this.removeLocalActivity(d, act); return; }
+            try {
+                const resp = await fetch(`/api/project-activities/${act.id}`, { method: 'DELETE' });
+                if (resp.ok) this.removeLocalActivity(d, act);
+            } catch(e) { /* ignore */ }
         }
     };
 }

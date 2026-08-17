@@ -24,6 +24,8 @@ A web application for managing employee presence and absences, built with Go and
 - **Floor plans & desk reservations**: upload a floor map image, place clickable seats on it, and let users book desks directly from the calendar or the floor plan page
 - **Team management**: assign users to teams
 - **Activity Report**: summary of billable days per team
+- **Project time tracking**: per-user monthly declaration of days spent per project, with billable-days enforcement, plus a per-team **"Timesheets managed manually"** mode where users declare daily activities (Jira ticket, ServiceNow request, or other) instead of monthly project percentages
+- **Jira integration**: link a team to a Jira Cloud project; users pick from that project's recently updated tickets when declaring a Jira-type activity, and can open the ticket directly from the team activities report
 - **Customizable statuses**: color, label, billable flag (€)
 - **Public holidays**: displayed in grey on the calendar, with an optional imputation flag
 - **Role management**: granular per-user permissions
@@ -265,6 +267,16 @@ Roles can be automatically assigned at login based on IDP group membership (e.g.
 | `DISABLE_PROJECTS` | `false` | Set to `true` to disable the project management module (user time entry, admin, reporting) |
 | `DISABLE_API` | `false` | Set to `true` to disable the REST API entirely (PAT management, Bearer auth, `/api/docs`) |
 
+### Jira Integration
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `JIRA_BASE_URL` | Yes | Jira Cloud site URL (e.g. `https://your-domain.atlassian.net`) |
+| `JIRA_EMAIL` | Yes | Atlassian account email used for API authentication |
+| `JIRA_TOKEN` | Yes | Atlassian API token for that account |
+
+Jira integration is enabled once all three variables are set. It powers the ticket picker used when declaring a **Jira** activity in teams with **Timesheets managed manually** enabled — each such team is linked to a Jira project key (set in **👥 Teams**), and its members can search that project's recently updated tickets instead of typing a key by hand.
+
 ---
 
 ## Calendar
@@ -369,6 +381,22 @@ The project management feature allows organizations to track employee time alloc
 - Projects outside the declared time entry period are hidden.
 - Time entries are stored as decimal values (supporting half-days, quarter-days, etc.).
 - Team leaders can view reports but only for their teams.
+
+### "Timesheets managed manually" mode (daily activities)
+
+Some teams may need finer-grained tracking than a monthly percentage per project — e.g. support/ops teams whose work is driven by tickets. Enabling **Timesheets managed manually** on a team (in **👥 Teams**, `team_manager`/`global`) switches the **📂 Projects** page for *all members of that team* from the monthly project-percentage form to a daily activity list:
+
+- For each billable day of the month, one or more activities can be declared, each with:
+  - **Type**: Jira ticket, ServiceNow request, or other.
+  - **Reference**: for the Jira type, the ticket is picked from a searchable dropdown (see Jira integration below); other types just take a free-text comment.
+  - **Percentage**: the activities declared for a day must add up to that day's billable weight (100% for a full day, 50% for a half day) to be marked complete.
+- **📂 Projects (report) → Team activities** tab (`projects_admin`, `projects_viewer`, or `team_leader`) lists every declared activity for a team and month, with filters on person, type, reference, and comment; Jira references are clickable and open the ticket in a popup.
+- If a user belongs to several manual-timesheets teams, the first one (by name) is used.
+- `team_leader` users only see activities for their own team(s); `projects_admin`/`projects_viewer`/`global` see all manual teams.
+
+### Jira integration
+
+When `JIRA_BASE_URL`, `JIRA_EMAIL` and `JIRA_TOKEN` are configured (see [Configuration](#configuration)) and a team has a **Jira project key** set, users declaring a Jira-type activity for that team get a dropdown of that project's tickets updated in the last 30 days, fetched live from the Jira Cloud REST API (paginated to retrieve every matching ticket, not just the first page). Without Jira configured, users can still track work against ServiceNow or a free-text "other" reference.
 
 ---
 
@@ -514,7 +542,7 @@ Then set:
 | Table | Description |
 |-------|-------------|
 | `users` | Users (email, name, roles as comma-separated string, optional password hash) |
-| `teams` | Teams |
+| `teams` | Teams (name, Jira project key, "timesheets managed manually" flag) |
 | `user_teams` | User ↔ team many-to-many mapping |
 | `statuses` | Presence statuses (name, color, billable, on_site flag, sort order) |
 | `presences` | Recorded presences (user_id, date YYYY-MM-DD, half `full`/`AM`/`PM`, status_id) |
@@ -525,6 +553,7 @@ Then set:
 | `floorplans` | Floor map definitions (name, image path, sort order) |
 | `seats` | Seats placed on a floorplan (label, x/y position as percentage of image) |
 | `seat_reservations` | Seat bookings (seat_id, user_id, date, half — unique per seat+date+half) |
+| `project_activities` | Daily activity declarations for "timesheets managed manually" teams (user_id, date, type `jira`/`servicenow`/`other`, Jira key/title, comment, percentage) |
 | `personal_access_tokens` | API tokens (description, SHA-256 hash, prefix, expiry, last-used timestamp, user_id) |
 
 ---

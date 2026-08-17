@@ -327,6 +327,38 @@ type ProjectTimeEntry struct {
 	Days      float64 `json:"days"`
 }
 
+// Activity type values for ProjectActivity, used by teams with manually-managed timesheets.
+const (
+	ActivityTypeJira       = "jira"
+	ActivityTypeServiceNow = "servicenow"
+	ActivityTypeOther      = "other"
+)
+
+// ProjectActivity records one activity entry declared by a user on a given day,
+// for teams with "Timesheets managed manually" enabled. Several activities can
+// exist for the same user/date; their percentages should sum to the day's
+// billable weight (100% for a full billable day, 50% for a half billable day).
+type ProjectActivity struct {
+	ID           int64     `json:"id"`
+	UserID       int64     `json:"user_id"`
+	UserName     string    `json:"user_name"` // populated by JOIN for team reports
+	Date         string    `json:"date"`      // YYYY-MM-DD
+	ActivityType string    `json:"activity_type"`
+	JiraKey      string    `json:"jira_key"`
+	JiraTitle    string    `json:"jira_title"`
+	Comment      string    `json:"comment"`
+	Percentage   float64   `json:"percentage"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+// JiraTicket is a lightweight reference to a Jira issue, used to populate the
+// ticket picker when declaring a "jira" type activity.
+type JiraTicket struct {
+	Key   string `json:"key"`
+	Title string `json:"title"`
+}
+
 // ProjectUserMonth aggregates time per user for the report view.
 type ProjectUserMonth struct {
 	User            User
