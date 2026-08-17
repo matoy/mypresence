@@ -402,19 +402,19 @@ When `JIRA_BASE_URL`, `JIRA_EMAIL` and `JIRA_TOKEN` are configured (see [Configu
 
 ## Roles & Permissions
 
-Roles are cumulative (stored as a comma-separated string per user). The `global` role grants all permissions.
+Roles are cumulative (stored as a comma-separated string per user). The `global` role grants all permissions. The display label shown in **👤 Users & Roles** is given alongside each role ID below.
 
-| Role | Access |
-|------|--------|
-| `basic` | Personal calendar (own presences only) |
-| `team_leader` | View calendar and activity report for own team; view project reports for own teams |
-| `team_manager` | Team management + edit any user's presences |
-| `status_manager` | Create / edit / delete presence statuses |
-| `activity_viewer` | View Activity Report (billable days) by team |
-| `floorplan_manager` | Create / edit floor plans and seats |
-| `projects_manager` | Create / edit / delete projects; view full project reports |
-| `projects_viewer` | View project time entries and reports |
-| `global` | Full access — includes user/role management, public holidays, and project administration |
+| Role | Label | Access |
+|------|-------|--------|
+| `basic` | Basic | Personal calendar (own presences only) |
+| `team_leader` | Team leader | View calendar and activity report for own team; view project reports for own teams; decertify declarations for own team members |
+| `team_manager` | Team manager | Team management + edit any user's presences |
+| `status_manager` | Status manager | Create / edit / delete presence statuses |
+| `activity_viewer` | Activity manager | View Activity Report (billable days) by team, across all teams; decertify any user's declarations |
+| `floorplan_manager` | Floorplan manager | Create / edit floor plans and seats |
+| `projects_admin` | Projects manager | Create / edit / delete projects; view full project reports |
+| `projects_viewer` | Projects viewer | View project time entries and reports |
+| `global` | Global (admin) | Full access — includes user/role management, public holidays, project administration, and decertifying any declaration |
 
 Roles are assigned from **👤 Users & Roles** (`/admin/users`), accessible to the `global` role only.
 
@@ -432,8 +432,8 @@ Roles are assigned from **👤 Users & Roles** (`/admin/users`), accessible to t
 | `/admin/statuses` | `status_manager` | Manage presence statuses |
 | `/admin/activity` | `activity_viewer` or `team_leader` | Activity report by team and period |
 | `/admin/floorplans` | `floorplan_manager` | Manage floor plans and seats |
-| `/admin/projects` | `projects_manager` | Create and manage projects |
-| `/admin/projects-report` | `projects_manager`, `projects_viewer`, or `team_leader` | Project time tracking and reporting |
+| `/admin/projects` | `projects_admin` | Create and manage projects |
+| `/admin/projects-report` | `projects_admin`, `projects_viewer`, or `team_leader` | Project time tracking and reporting |
 | `/admin/holidays` | `global` | Manage public holidays |
 | `/admin/users` | `global` | Manage users, roles and passwords |
 | `/admin/users/{id}/logs` | `global` | Presence audit log for a user |

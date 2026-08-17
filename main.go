@@ -234,7 +234,7 @@ func main() {
 	mux.Handle("/api/activity", middleware.Auth(database, middleware.RequireRole(models.RoleActivityViewer, models.RoleTeamLeader)(activityMux)))
 	mux.Handle("/admin/holidays", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(holidaysMux)))
 	mux.Handle("/admin/holidays/", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(holidaysMux)))
-	mux.Handle("/api/decertify", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(certificationMux)))
+	mux.Handle("/api/decertify", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal, models.RoleActivityViewer, models.RoleTeamLeader)(certificationMux)))
 	mux.Handle("/admin/roles", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(usersMux)))
 	mux.Handle("/api/users", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(usersMux)))
 	mux.Handle("/api/users/", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(usersMux)))
