@@ -382,6 +382,13 @@ The project management feature allows organizations to track employee time alloc
 - Time entries are stored as decimal values (supporting half-days, quarter-days, etc.).
 - Team leaders can view reports but only for their teams.
 
+### Project declaration certification
+
+Once a user's project time declaration (percentage-based or "Timesheets managed manually") covers all of their billable days for the month, a **Certify** button appears on **📂 Projects**, mirroring the presence-declaration certification on the personal calendar. Confirming it locks that month's project declarations against further edits.
+
+- A certified user's name shows a blue 🔒 seal on **📋 Activity Report** (in addition to the amber 🔒 seal for a certified presence declaration — both can appear together).
+- `global`, `activity_viewer` (Activity manager), and `team_leader` (own team members only) can decertify a project declaration from the Activity Report, the same way as for presence declarations.
+
 ### "Timesheets managed manually" mode (daily activities)
 
 Some teams may need finer-grained tracking than a monthly percentage per project — e.g. support/ops teams whose work is driven by tickets. Enabling **Timesheets managed manually** on a team (in **👥 Teams**, `team_manager`/`global`) switches the **📂 Projects** page for *all members of that team* from the monthly project-percentage form to a daily activity list:
@@ -554,6 +561,8 @@ Then set:
 | `seats` | Seats placed on a floorplan (label, x/y position as percentage of image) |
 | `seat_reservations` | Seat bookings (seat_id, user_id, date, half — unique per seat+date+half) |
 | `project_activities` | Daily activity declarations for "timesheets managed manually" teams (user_id, date, type `jira`/`servicenow`/`other`, Jira key/title, comment, percentage) |
+| `declaration_certifications` | Monthly presence declaration certifications (user_id, year, month, certified_by, certified_at) |
+| `project_certifications` | Monthly project time declaration certifications (user_id, year, month, certified_by, certified_at) |
 | `personal_access_tokens` | API tokens (description, SHA-256 hash, prefix, expiry, last-used timestamp, user_id) |
 
 ---

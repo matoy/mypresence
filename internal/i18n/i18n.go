@@ -165,6 +165,14 @@ var en = map[string]string{
 	"cert.decertify_modal_message":  "This will cancel the certification for this employee and this month, allowing declarations to be modified again.",
 	"cert.decertify_confirm_button": "Decertify",
 
+	// Monthly project declaration certification
+	"cert.certify_project_modal_title":     "Certify project declaration",
+	"cert.certify_project_modal_message":   "You are about to certify your project time declaration for this month. This action is irreversible: once certified, you will no longer be able to modify it for this period.",
+	"cert.certified_project_badge_title":   "Project declaration certified",
+	"cert.decertify_project_button_title":  "Click to cancel this project certification",
+	"cert.decertify_project_modal_title":   "Cancel project certification",
+	"cert.decertify_project_modal_message": "This will cancel the project declaration certification for this employee and this month, allowing it to be modified again.",
+
 	// Admin common
 	"admin.search":   "Search",
 	"admin.all":      "All",
@@ -651,6 +659,14 @@ var fr = map[string]string{
 	"cert.decertify_modal_message":  "Cela annulera la certification de cet employé pour ce mois, permettant à nouveau la modification des déclarations.",
 	"cert.decertify_confirm_button": "Décertifier",
 
+	// Certification de la déclaration projet mensuelle
+	"cert.certify_project_modal_title":     "Certifier la déclaration projet",
+	"cert.certify_project_modal_message":   "Vous êtes sur le point de certifier votre déclaration de temps projet pour ce mois. Cette action est irréversible : une fois certifiée, vous ne pourrez plus la modifier pour cette période.",
+	"cert.certified_project_badge_title":   "Déclaration projet certifiée",
+	"cert.decertify_project_button_title":  "Cliquer pour annuler cette certification projet",
+	"cert.decertify_project_modal_title":   "Annuler la certification projet",
+	"cert.decertify_project_modal_message": "Cela annulera la certification de la déclaration projet de cet employé pour ce mois, permettant à nouveau sa modification.",
+
 	"admin.search":   "Rechercher",
 	"admin.all":      "Tous",
 	"admin.active":   "Actif",
@@ -1128,6 +1144,14 @@ var de = map[string]string{
 	"cert.decertify_modal_title":    "Zertifizierung aufheben",
 	"cert.decertify_modal_message":  "Dadurch wird die Zertifizierung für diesen Mitarbeiter und diesen Monat aufgehoben, sodass die Erklärungen wieder geändert werden können.",
 	"cert.decertify_confirm_button": "Zertifizierung aufheben",
+
+	// Zertifizierung der monatlichen Projekterklärung
+	"cert.certify_project_modal_title":     "Projekterklärung zertifizieren",
+	"cert.certify_project_modal_message":   "Sie sind dabei, Ihre Projektzeiterklärung für diesen Monat zu zertifizieren. Diese Aktion ist unwiderruflich: Nach der Zertifizierung können Sie sie für diesen Zeitraum nicht mehr ändern.",
+	"cert.certified_project_badge_title":   "Projekterklärung zertifiziert",
+	"cert.decertify_project_button_title":  "Klicken, um diese Projektzertifizierung aufzuheben",
+	"cert.decertify_project_modal_title":   "Projektzertifizierung aufheben",
+	"cert.decertify_project_modal_message": "Dadurch wird die Zertifizierung der Projekterklärung für diesen Mitarbeiter und diesen Monat aufgehoben, sodass sie wieder geändert werden kann.",
 
 	"admin.search":   "Suchen",
 	"admin.all":      "Alle",
@@ -1607,6 +1631,14 @@ var es = map[string]string{
 	"cert.decertify_modal_message":  "Esto anulará la certificación de este empleado para este mes, permitiendo modificar de nuevo las declaraciones.",
 	"cert.decertify_confirm_button": "Anular certificación",
 
+	// Certificación de la declaración de proyecto mensual
+	"cert.certify_project_modal_title":     "Certificar la declaración de proyecto",
+	"cert.certify_project_modal_message":   "Está a punto de certificar su declaración de tiempo de proyecto para este mes. Esta acción es irreversible: una vez certificada, ya no podrá modificarla para este período.",
+	"cert.certified_project_badge_title":   "Declaración de proyecto certificada",
+	"cert.decertify_project_button_title":  "Haga clic para anular esta certificación de proyecto",
+	"cert.decertify_project_modal_title":   "Anular certificación de proyecto",
+	"cert.decertify_project_modal_message": "Esto anulará la certificación de la declaración de proyecto de este empleado para este mes, permitiendo modificarla de nuevo.",
+
 	"admin.search":   "Buscar",
 	"admin.all":      "Todos",
 	"admin.active":   "Activo",
@@ -2081,6 +2113,14 @@ var it = map[string]string{
 	"cert.decertify_modal_title":    "Annulla certificazione",
 	"cert.decertify_modal_message":  "Questo annullerà la certificazione per questo dipendente e questo mese, consentendo nuovamente la modifica delle dichiarazioni.",
 	"cert.decertify_confirm_button": "Annulla certificazione",
+
+	// Certificazione della dichiarazione progetto mensile
+	"cert.certify_project_modal_title":     "Certificare la dichiarazione di progetto",
+	"cert.certify_project_modal_message":   "Stai per certificare la tua dichiarazione di tempo progetto per questo mese. Questa azione è irreversibile: una volta certificata, non potrai più modificarla per questo periodo.",
+	"cert.certified_project_badge_title":   "Dichiarazione di progetto certificata",
+	"cert.decertify_project_button_title":  "Clicca per annullare questa certificazione di progetto",
+	"cert.decertify_project_modal_title":   "Annulla certificazione di progetto",
+	"cert.decertify_project_modal_message": "Questo annullerà la certificazione della dichiarazione di progetto per questo dipendente e questo mese, consentendo nuovamente la sua modifica.",
 
 	// Admin common
 	"admin.search":   "Cerca",

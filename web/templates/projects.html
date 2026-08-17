@@ -2,7 +2,7 @@
 {{with .Data}}
 {{if .ManualMode}}
 <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8"
-     x-data="projectsManualApp({{json .ManualDates}}, {{json .ManualWeights}}, {{json .ManualActivities}}, {{.JiraEnabled}}, {{.Year}}, {{.Month}})">
+     x-data="projectsManualApp({{json .ManualDates}}, {{json .ManualWeights}}, {{json .ManualActivities}}, {{.JiraEnabled}}, {{.Year}}, {{.Month}}, {{if .Certified}}true{{else}}false{{end}})">
 
     <!-- Header + month nav -->
     <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
@@ -47,9 +47,31 @@
                     </div>
                     <span x-show="billable > 0 && (totalDeclared + 0.001) >= billable" x-cloak>🚀</span>
                 </div>
-                <p class="text-sm text-gray-500 mt-1"
-                   x-text="billable > 0 && (totalDeclared + 0.001) >= billable ? '✓ {{index $.T "projects.fully_declared"}}' : fmtDays(Math.max(0, billable - totalDeclared)) + ' {{index $.T "projects.days_left"}}'">
+                <p class="text-sm text-gray-500 mt-1 flex items-center gap-1.5">
+                    <span x-text="billable > 0 && (totalDeclared + 0.001) >= billable ? '✓ {{index $.T "projects.fully_declared"}}' : fmtDays(Math.max(0, billable - totalDeclared)) + ' {{index $.T "projects.days_left"}}'"></span>
+                    <svg x-show="certified" x-cloak class="h-3.5 w-3.5 text-blue-500 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 10-8 0v4h8z"/></svg>
                 </p>
+                <div class="mt-2" x-show="billable > 0 && (totalDeclared + 0.001) >= billable && !certified" x-cloak>
+                    <button type="button" @click="confirmShow = true"
+                            title="{{index $.T "cert.certify_button_title"}}"
+                            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20 transition">
+                        <svg class="h-4 w-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 10-8 0v4h8z"/></svg>
+                        <span>{{index $.T "cert.certify_confirm_button"}}</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Certify confirmation modal -->
+    <div x-show="confirmShow" x-transition.opacity
+         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" @click.self="confirmShow = false" x-cloak>
+        <div class="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4">
+            <h3 class="text-lg font-bold text-gray-800 mb-2">{{index $.T "cert.certify_project_modal_title"}}</h3>
+            <p class="text-sm text-gray-500 mb-5">{{index $.T "cert.certify_project_modal_message"}}</p>
+            <div class="flex gap-3 justify-end">
+                <button @click="confirmShow = false" class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">{{index $.T "admin.cancel"}}</button>
+                <button @click="certify()" class="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:opacity-90 transition">{{index $.T "cert.certify_confirm_button"}}</button>
             </div>
         </div>
     </div>
@@ -83,7 +105,9 @@
                         <div class="border border-gray-100 rounded-lg p-2 bg-gray-50">
                             <div class="flex flex-wrap items-center gap-2">
                                 <select x-model="act.activity_type" @change="act.jira_key='';act.jira_title='';act._jiraSearch=''"
-                                        class="px-2 py-1.5 border border-gray-300 rounded-lg text-xs bg-white">
+                                        :disabled="certified"
+                                        class="px-2 py-1.5 border border-gray-300 rounded-lg text-xs bg-white"
+                                        :class="{'opacity-50 cursor-not-allowed': certified}">
                                     <option value="jira" x-show="jiraEnabled">{{index $.T "projects.manual.type_jira"}}</option>
                                     <option value="servicenow">{{index $.T "projects.manual.type_servicenow"}}</option>
                                     <option value="other">{{index $.T "projects.manual.type_other"}}</option>
@@ -94,7 +118,9 @@
                                            @focus="act._showJiraList = true" @input="act._showJiraList = true"
                                            @blur="setTimeout(() => act._showJiraList = false, 150)"
                                            :placeholder="act.jira_key ? act.jira_key + ' - ' + act.jira_title : '{{index $.T "projects.manual.jira_placeholder"}}'"
-                                           class="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-xs">
+                                           :disabled="certified"
+                                           class="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-xs"
+                                           :class="{'opacity-50 cursor-not-allowed': certified}">
                                     <div x-show="act._showJiraList" x-cloak
                                          class="absolute z-10 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto w-full">
                                         <template x-for="tk in filteredJiraTickets(act._jiraSearch)" :key="tk.key">
@@ -109,21 +135,26 @@
                                 </div>
 
                                 <input type="text" x-model="act.comment" placeholder="{{index $.T "projects.manual.comments"}}"
-                                       class="flex-1 min-w-[160px] px-2 py-1.5 border border-gray-300 rounded-lg text-xs">
+                                       :disabled="certified"
+                                       class="flex-1 min-w-[160px] px-2 py-1.5 border border-gray-300 rounded-lg text-xs"
+                                       :class="{'opacity-50 cursor-not-allowed': certified}">
 
                                 <div class="flex items-center gap-1">
                                     <input type="number" min="1" max="100" step="1" x-model.number="act.percentage"
-                                           class="w-16 text-right px-2 py-1.5 border border-gray-300 rounded-lg text-xs">
+                                           :disabled="certified"
+                                           class="w-16 text-right px-2 py-1.5 border border-gray-300 rounded-lg text-xs"
+                                           :class="{'opacity-50 cursor-not-allowed': certified}">
                                     <span class="text-xs text-gray-400">%</span>
                                 </div>
 
-                                <button @click="saveActivity(d, act)" :disabled="act._saving"
+                                <button @click="saveActivity(d, act)" :disabled="act._saving || certified"
                                         class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium"
-                                        :class="{'opacity-50 cursor-wait': act._saving}">
+                                        :class="{'opacity-50 cursor-wait': act._saving, 'opacity-50 cursor-not-allowed': certified}">
                                     {{index $.T "admin.save"}}
                                 </button>
-                                <button @click="deleteActivity(d, act)"
-                                        class="text-red-400 hover:text-red-600 transition p-1.5" title="{{index $.T "admin.reset"}}">
+                                <button @click="deleteActivity(d, act)" :disabled="certified"
+                                        class="text-red-400 hover:text-red-600 transition p-1.5" title="{{index $.T "admin.reset"}}"
+                                        :class="{'opacity-50 cursor-not-allowed': certified}">
                                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                                     </svg>
@@ -133,8 +164,9 @@
                         </div>
                     </template>
                 </div>
-                <button @click="addActivity(d)"
-                        class="mt-3 text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
+                <button @click="addActivity(d)" :disabled="certified"
+                        class="mt-3 text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium"
+                        :class="{'opacity-50 cursor-not-allowed': certified}">
                     + {{index $.T "projects.manual.add_activity"}}
                 </button>
             </div>
@@ -142,7 +174,7 @@
     </div>
 </div>
 {{else}}
-<div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8" x-data="projectsApp({{.BillableDays}}, {{.TotalDeclared}}, {{json .EntryMap}}, {{json .FavoriteIDs}}, {{json .Projects}}, {{.Year}}, {{.Month}})">
+<div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8" x-data="projectsApp({{.BillableDays}}, {{.TotalDeclared}}, {{json .EntryMap}}, {{json .FavoriteIDs}}, {{json .Projects}}, {{.Year}}, {{.Month}}, {{if .Certified}}true{{else}}false{{end}})">
 
     <!-- Header + month nav -->
     <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
@@ -188,9 +220,31 @@
                     </div>
                     <span x-show="billable > 0 && (totalDeclared + 0.001) >= billable" x-cloak>🚀</span>
                 </div>
-                <p class="text-sm text-gray-500 mt-1"
-                   x-text="billable > 0 && (totalDeclared + 0.001) >= billable ? '✓ {{index $.T "projects.fully_declared"}}' : fmtDays(Math.max(0, billable - totalDeclared)) + ' {{index $.T "projects.days_left"}}'">
+                <p class="text-sm text-gray-500 mt-1 flex items-center gap-1.5">
+                    <span x-text="billable > 0 && (totalDeclared + 0.001) >= billable ? '✓ {{index $.T "projects.fully_declared"}}' : fmtDays(Math.max(0, billable - totalDeclared)) + ' {{index $.T "projects.days_left"}}'"></span>
+                    <svg x-show="certified" x-cloak class="h-3.5 w-3.5 text-blue-500 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 10-8 0v4h8z"/></svg>
                 </p>
+                <div class="mt-2" x-show="billable > 0 && (totalDeclared + 0.001) >= billable && !certified" x-cloak>
+                    <button type="button" @click="confirmShow = true"
+                            title="{{index $.T "cert.certify_button_title"}}"
+                            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20 transition">
+                        <svg class="h-4 w-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 10-8 0v4h8z"/></svg>
+                        <span>{{index $.T "cert.certify_confirm_button"}}</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Certify confirmation modal -->
+    <div x-show="confirmShow" x-transition.opacity
+         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" @click.self="confirmShow = false" x-cloak>
+        <div class="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4">
+            <h3 class="text-lg font-bold text-gray-800 mb-2">{{index $.T "cert.certify_project_modal_title"}}</h3>
+            <p class="text-sm text-gray-500 mb-5">{{index $.T "cert.certify_project_modal_message"}}</p>
+            <div class="flex gap-3 justify-end">
+                <button @click="confirmShow = false" class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">{{index $.T "admin.cancel"}}</button>
+                <button @click="certify()" class="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:opacity-90 transition">{{index $.T "cert.certify_confirm_button"}}</button>
             </div>
         </div>
     </div>
@@ -232,15 +286,16 @@
                             <input type="number" min="0" max="31" step="0.5"
                                    :value="entries[p.id] || 0"
                                    @change="entries[p.id] = parseFloat($event.target.value) || 0"
+                                   :disabled="certified"
                                    class="w-24 text-right px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm"
-                                   :class="{'border-red-400': entries[p.id] > 0 && totalDeclared > billable}">
+                                   :class="{'border-red-400': entries[p.id] > 0 && totalDeclared > billable, 'opacity-50 cursor-not-allowed': certified}">
                         </td>
                         <td class="px-4 py-3">
                             <div class="flex items-center gap-1.5">
                                 <button @click="save(p.id)"
                                         class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium"
-                                        :disabled="saving == p.id"
-                                        :class="{'opacity-50 cursor-wait': saving == p.id}">
+                                        :disabled="saving == p.id || certified"
+                                        :class="{'opacity-50 cursor-wait': saving == p.id, 'opacity-50 cursor-not-allowed': certified}">
                                     {{index $.T "admin.save"}}
                                 </button>
                                 <button @click="toggleFavorite(p.id)"
@@ -261,7 +316,7 @@
 {{end}}
 
 <script>
-function projectsApp(billable, totalDeclared, initialEntries, favoriteIDs, allProjects, year, month) {
+function projectsApp(billable, totalDeclared, initialEntries, favoriteIDs, allProjects, year, month, certified) {
     const fav = {};
     (favoriteIDs || []).forEach(id => { fav[id] = true; });
     return {
@@ -276,6 +331,23 @@ function projectsApp(billable, totalDeclared, initialEntries, favoriteIDs, allPr
         favorites: fav,
         year: year,
         month: month,
+        certified: certified,
+        confirmShow: false,
+
+        async certify() {
+            const resp = await fetch('/api/certify-project', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ year: this.year, month: this.month })
+            });
+            this.confirmShow = false;
+            if (resp.ok) {
+                window.location.reload();
+            } else {
+                const d = await resp.json().catch(() => ({}));
+                alert(d.error || 'Erreur');
+            }
+        },
 
         get sortedProjects() {
             const q = this.filter.toLowerCase();
@@ -334,7 +406,7 @@ function projectsApp(billable, totalDeclared, initialEntries, favoriteIDs, allPr
     };
 }
 
-function projectsManualApp(dates, weights, activitiesByDate, jiraEnabled, year, month) {
+function projectsManualApp(dates, weights, activitiesByDate, jiraEnabled, year, month, certified) {
     let uid = 0;
     function wrapActivity(a) {
         a = a || {};
@@ -366,6 +438,23 @@ function projectsManualApp(dates, weights, activitiesByDate, jiraEnabled, year, 
         days: days,
         toast: '',
         toastError: false,
+        certified: certified,
+        confirmShow: false,
+
+        async certify() {
+            const resp = await fetch('/api/certify-project', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ year: this.year, month: this.month })
+            });
+            this.confirmShow = false;
+            if (resp.ok) {
+                window.location.reload();
+            } else {
+                const d = await resp.json().catch(() => ({}));
+                alert(d.error || 'Erreur');
+            }
+        },
 
         init() {
             if (this.jiraEnabled) this.loadJiraTickets();
