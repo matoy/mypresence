@@ -18,6 +18,12 @@ Write-Host "Session obtained: $($Cookie.Substring(0,30))..."
 New-Item -ItemType Directory -Force $OutDir | Out-Null
 New-Item -ItemType Directory -Force $TmpDir | Out-Null
 
+# Screenshots need pages with real data — target the same "last month" the
+# seed script (scripts\seed-demo-data.ps1) fills in, not a fixed calendar month.
+$LastMonth = (Get-Date).AddMonths(-1)
+$ScreenshotYear  = $LastMonth.Year
+$ScreenshotMonth = $LastMonth.Month
+
 # ── CDP helpers ─────────────────────────────────────────────────────────────
 
 function Start-EdgeCDP {
@@ -85,6 +91,23 @@ function Wait-CDPEvent ($ws, [string]$method, [int]$timeoutMs = 15000) {
     return $null
 }
 
+# Poll until every <img> on the page has finished loading (or timeoutMs elapses).
+# Prevents flaky screenshots where a large image (e.g. the floorplan) hasn't
+# painted yet when the fixed post-load wait ends.
+function Wait-ImagesLoaded ($ws, [int]$cmdId, [int]$timeoutMs = 8000) {
+    $deadline = [DateTime]::Now.AddMilliseconds($timeoutMs)
+    while ([DateTime]::Now -lt $deadline) {
+        $res = Invoke-CDP $ws $cmdId "Runtime.evaluate" @{
+            expression    = "Array.from(document.images).every(img => img.complete && img.naturalWidth > 0)"
+            returnByValue = $true
+        }
+        $cmdId++
+        if ($res -and $res.result -and $res.result.result -and $res.result.result.value -eq $true) { break }
+        Start-Sleep -Milliseconds 250
+    }
+    return $cmdId
+}
+
 # ── Screenshot function ───────────────────────────────────────────────────────
 
 function Take-Screenshot ($ws, [int]$cmdId, [string]$url, [string]$filename, [int]$waitMs = 3500) {
@@ -101,6 +124,7 @@ function Take-Screenshot ($ws, [int]$cmdId, [string]$url, [string]$filename, [in
         if ($msg -and $msg.method -eq "Page.lifecycleEvent" -and $msg.params.name -eq "networkIdle") { break }
         if ($msg -and $msg.method -eq "Page.loadEventFired") { break }
     }
+    $cmdId = Wait-ImagesLoaded $ws $cmdId
     Start-Sleep -Milliseconds $waitMs   # extra wait for Alpine to finish rendering
 
     # Capture full-page screenshot
@@ -139,6 +163,7 @@ try {
     # Enable domains
     Invoke-CDP $ws $cmdId "Network.enable"      | Out-Null; $cmdId++
     Invoke-CDP $ws $cmdId "Page.enable"         | Out-Null; $cmdId++
+    Invoke-CDP $ws $cmdId "Runtime.enable"      | Out-Null; $cmdId++
     Invoke-CDP $ws $cmdId "Emulation.enable"   | Out-Null; $cmdId++
     Invoke-CDP $ws $cmdId "Page.setLifecycleEventsEnabled" @{ enabled = $true } | Out-Null; $cmdId++
 
@@ -191,8 +216,8 @@ try {
     # Restore cookies for all further pages
     & $restoreCookies
 
-    # 2. Calendar (current month: April 2026)
-    $cmdId = Take-Screenshot $ws $cmdId "$BaseUrl/?year=2026&month=4"  "02-calendar"  4000
+    # 2. Calendar (last month — filled in by the seed script)
+    $cmdId = Take-Screenshot $ws $cmdId "$BaseUrl/?year=$ScreenshotYear&month=$ScreenshotMonth"  "02-calendar"  4000
 
     # 3. Status admin
     $cmdId = Take-Screenshot $ws $cmdId "$BaseUrl/admin/statuses"       "03-statuses"  2500
@@ -206,14 +231,14 @@ try {
     # 6. Holidays
     $cmdId = Take-Screenshot $ws $cmdId "$BaseUrl/admin/holidays"       "06-holidays"  2500
 
-    # 7. Activity report
-    $cmdId = Take-Screenshot $ws $cmdId "$BaseUrl/admin/activity"       "07-activity"  2500
+    # 7. Activity report (last month — filled in by the seed script)
+    $cmdId = Take-Screenshot $ws $cmdId "$BaseUrl/admin/activity?year=$ScreenshotYear&month=$ScreenshotMonth"       "07-activity"  2500
 
     # 8. Floor plan
     $cmdId = Take-Screenshot $ws $cmdId "$BaseUrl/floorplan"            "08-floorplan" 4500
 
-    # 9. Project time imputation
-    $cmdId = Take-Screenshot $ws $cmdId "$BaseUrl/projects?year=2026&month=4" "09-projects-imputation" 2500
+    # 9. Project time imputation (last month — filled in by the seed script)
+    $cmdId = Take-Screenshot $ws $cmdId "$BaseUrl/projects?year=$ScreenshotYear&month=$ScreenshotMonth" "09-projects-imputation" 2500
 
     # 10. Projects report
     $cmdId = Take-Screenshot $ws $cmdId "$BaseUrl/admin/projects-report"       "10-projects-report"      2500
