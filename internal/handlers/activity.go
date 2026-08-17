@@ -144,7 +144,7 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 		"YTDBillableByUser":      ytdBillableByUser,
 		"TotalYTDBillable":       totalYTDBillable,
 		"Certified":              certifiedUsers,
-		"IsGlobalAdmin":          currentUser != nil && currentUser.HasRole(models.RoleGlobal),
+		"CanDecertify":           currentUser != nil && currentUser.HasAnyRole(models.RoleGlobal, models.RoleActivityViewer, models.RoleTeamLeader),
 	})
 }
 

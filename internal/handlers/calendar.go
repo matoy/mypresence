@@ -211,7 +211,8 @@ func (h *CalendarHandler) SetPresences(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Reject edits for months already certified — only a global admin can decertify.
+	// Reject edits for months already certified — only global admins, activity
+	// viewers, or team leaders (own team) can decertify.
 	locked, lerr := certifiedMonthFromDates(h.DB, req.UserID, req.Dates)
 	if lerr != nil {
 		jsonError(w, "Erreur", http.StatusInternalServerError)
@@ -270,7 +271,8 @@ func (h *CalendarHandler) ClearPresences(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	// Reject edits for months already certified — only a global admin can decertify.
+	// Reject edits for months already certified — only global admins, activity
+	// viewers, or team leaders (own team) can decertify.
 	locked, lerr := certifiedMonthFromDates(h.DB, req.UserID, req.Dates)
 	if lerr != nil {
 		jsonError(w, "Erreur", http.StatusInternalServerError)
@@ -435,11 +437,12 @@ func (h *CalendarHandler) CertifyMonth(w http.ResponseWriter, r *http.Request) {
 }
 
 // DecertifyMonth cancels a user's certification for a given month, allowing
-// declarations to be edited again. Restricted to global admins at the route
-// level (see main.go); the role is re-checked here for defense in depth.
+// declarations to be edited again. Allowed for global admins, activity viewers,
+// and team leaders (scoped to their own team's members); the route-level
+// middleware (see main.go) admits these roles, and the scope is re-checked here.
 func (h *CalendarHandler) DecertifyMonth(w http.ResponseWriter, r *http.Request) {
 	currentUser := middleware.GetUser(r)
-	if currentUser == nil || !currentUser.HasRole(models.RoleGlobal) {
+	if currentUser == nil || !currentUser.HasAnyRole(models.RoleGlobal, models.RoleActivityViewer, models.RoleTeamLeader) {
 		metrics.AdminOpsTotal.WithLabelValues("certification", "decertify", "failure").Inc()
 		jsonError(w, "Non autorisé", http.StatusForbidden)
 		return
@@ -452,6 +455,13 @@ func (h *CalendarHandler) DecertifyMonth(w http.ResponseWriter, r *http.Request)
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.UserID <= 0 || req.Year < 2020 || req.Year > 2100 || req.Month < 1 || req.Month > 12 {
 		jsonError(w, "Requête invalide", http.StatusBadRequest)
+		return
+	}
+
+	// A plain team leader (without activity_viewer/global) can only decertify members of their own team(s).
+	if !currentUser.HasAnyRole(models.RoleGlobal, models.RoleActivityViewer) && !isTeamLeaderOf(h.DB, currentUser.ID, req.UserID) {
+		metrics.AdminOpsTotal.WithLabelValues("certification", "decertify", "failure").Inc()
+		jsonError(w, "Non autorisé", http.StatusForbidden)
 		return
 	}
 

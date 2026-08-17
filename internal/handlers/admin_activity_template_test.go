@@ -135,7 +135,7 @@ func TestAdminActivityTemplate_RocketRule(t *testing.T) {
 func TestAdminActivityTemplate_CertifiedBadgeForNonAdmin(t *testing.T) {
 	data := baseActivityPageData()
 	data["Certified"] = map[int64]bool{1: true}
-	data["IsGlobalAdmin"] = false
+	data["CanDecertify"] = false
 
 	html := renderAdminActivityContent(t, data)
 	if !strings.Contains(html, "🔏") {
@@ -154,7 +154,7 @@ func TestAdminActivityTemplate_CertifiedBadgeForNonAdmin(t *testing.T) {
 func TestAdminActivityTemplate_DecertifyButtonForGlobalAdmin(t *testing.T) {
 	data := baseActivityPageData()
 	data["Certified"] = map[int64]bool{1: true}
-	data["IsGlobalAdmin"] = true
+	data["CanDecertify"] = true
 
 	html := renderAdminActivityContent(t, data)
 	if !strings.Contains(html, "🔏") {
