@@ -131,6 +131,10 @@ services:
       # on the activity summary page. Default: 60 (%)
       # - ONSITE_RATIO_THRESHOLD=60
 
+      # How often (in minutes) the team calendar(s) on the home page auto-refresh.
+      # Set to 0 to disable auto-refresh. Default: 3
+      # - TEAM_CALENDAR_REFRESH_MINUTES=3
+
       # Set to "true" to disable the REST API entirely:
       # PAT (Personal Access Token) management, Bearer token authentication,
       # all /api/* endpoints and the /api/docs documentation page

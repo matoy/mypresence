@@ -678,5 +678,12 @@
 </div>
 {{end}}
 
+{{if and (gt (len .TeamViews) 0) (gt $.TeamCalendarRefreshMinutes 0)}}
+<script>
+    // Auto-refresh the team calendar(s) so presence updates from teammates show up without a manual reload.
+    setTimeout(() => { window.location.reload(); }, {{$.TeamCalendarRefreshMinutes}} * 60 * 1000);
+</script>
+{{end}}
+
 {{end}}
 {{end}}

@@ -208,11 +208,12 @@ func newRenderPage(cfg *config.Config, database *db.DB, templates map[string]*te
 			DisableFloorplans: cfg.DisableFloorplans,
 			DisableAPI:        cfg.DisableAPI,
 			DisableProjects:   cfg.DisableProjects, PasskeysEnabled: cfg.EnablePasskeys, T: i18n.T(lang),
-			Lang:           lang,
-			SupportedLangs: i18n.Supported,
-			CSRFToken:      csrfToken,
-			RealAdmin:      realAdmin,
-			UserTasksMode:  userTasksMode,
+			Lang:                       lang,
+			SupportedLangs:             i18n.Supported,
+			CSRFToken:                  csrfToken,
+			RealAdmin:                  realAdmin,
+			UserTasksMode:              userTasksMode,
+			TeamCalendarRefreshMinutes: cfg.TeamCalendarRefreshMinutes,
 		}
 		// Fetch active news banners for authenticated users.
 		if user != nil {
