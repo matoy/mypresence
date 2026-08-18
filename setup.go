@@ -174,6 +174,20 @@ func newRenderPage(cfg *config.Config, database *db.DB, templates map[string]*te
 			}
 		}
 
+		// Determine whether the user's /projects page shows the daily-tasks
+		// form (member of a team with "Timesheets managed manually" enabled).
+		var userTasksMode bool
+		if user != nil {
+			if teams, err := database.GetUserTeams(user.ID); err == nil {
+				for _, t := range teams {
+					if t.TimesheetsManagedManually {
+						userTasksMode = true
+						break
+					}
+				}
+			}
+		}
+
 		pd := models.PageData{
 			Config: map[string]string{
 				"AppName":        cfg.AppName,
@@ -198,6 +212,7 @@ func newRenderPage(cfg *config.Config, database *db.DB, templates map[string]*te
 			SupportedLangs: i18n.Supported,
 			CSRFToken:      csrfToken,
 			RealAdmin:      realAdmin,
+			UserTasksMode:  userTasksMode,
 		}
 		// Fetch active news banners for authenticated users.
 		if user != nil {

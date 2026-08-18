@@ -76,7 +76,7 @@
                     {{if not .DisableProjects}}
                     <a href="/projects" class="inline-flex items-center gap-1.5 text-white/80 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition {{if eq .Page "projects"}}bg-white/20 text-white{{end}}">
                         <span aria-hidden="true">📂</span>
-                        {{index .T "nav.projects"}}
+                        {{if .UserTasksMode}}{{index .T "nav.tasks"}}{{else}}{{index .T "nav.projects"}}{{end}}
                     </a>
                     {{end}}
                     {{if or (.User.HasRole "activity_viewer") (.User.HasRole "team_leader")}}
@@ -266,7 +266,7 @@
                 <a href="/floorplan" class="block text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">{{index .T "nav.floorplans"}}</a>
                 {{end}}
                 {{if not .DisableProjects}}
-                <a href="/projects" class="block text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">{{index .T "nav.projects"}}</a>
+                <a href="/projects" class="block text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">{{if .UserTasksMode}}{{index .T "nav.tasks"}}{{else}}{{index .T "nav.projects"}}{{end}}</a>
                 {{end}}
                 {{if or (.User.HasRole "activity_viewer") (.User.HasRole "team_leader")}}
                 <a href="/admin/activity" class="block text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">{{index .T "nav.activity"}}</a>

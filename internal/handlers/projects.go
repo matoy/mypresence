@@ -459,13 +459,58 @@ func buildMonthKeysFromRange(dateFrom, dateTo string) []string {
 	return keys
 }
 
+// reportTabVisibility determines whether the "Projects view" and "Tasks view"
+// tabs should be shown on the projects report page for the given user.
+// projects_admin/projects_viewer always see both (global visibility); a plain
+// team_leader only sees the tab(s) matching the type(s) of team(s) they belong
+// to (manual-timesheet teams -> Tasks view, others -> Projects view).
+func (h *ProjectsHandler) reportTabVisibility(currentUser *models.User) (showProjects, showTasks bool) {
+	if currentUser.HasAnyRole(models.RoleProjectsAdmin, models.RoleProjectsViewer) {
+		return true, true
+	}
+	ids, _ := h.DB.GetTeamIDsForUser(currentUser.ID)
+	if len(ids) == 0 {
+		return true, true
+	}
+	myTeamIDs := make(map[int64]bool, len(ids))
+	for _, id := range ids {
+		myTeamIDs[id] = true
+	}
+	allTeams, _ := h.DB.ListTeams()
+	for _, t := range allTeams {
+		if !myTeamIDs[t.ID] {
+			continue
+		}
+		if t.TimesheetsManagedManually {
+			showTasks = true
+		} else {
+			showProjects = true
+		}
+	}
+	if !showProjects && !showTasks {
+		// Defensive fallback in case team resolution yields nothing.
+		return true, true
+	}
+	return showProjects, showTasks
+}
+
 // ProjectsReportPage renders the projects report page (GET /admin/projects-report).
 func (h *ProjectsHandler) ProjectsReportPage(w http.ResponseWriter, r *http.Request) {
 	currentUser := middleware.GetUser(r)
 	now := time.Now()
 
-	if r.URL.Query().Get("view") == "activities" {
-		h.renderTeamActivitiesReportPage(w, r, currentUser)
+	showProjectsTab, showTasksTab := h.reportTabVisibility(currentUser)
+
+	view := r.URL.Query().Get("view")
+	if view == "activities" && !showTasksTab {
+		view = ""
+	}
+	if view == "" && !showProjectsTab && showTasksTab {
+		view = "activities"
+	}
+
+	if view == "activities" {
+		h.renderTeamActivitiesReportPage(w, r, currentUser, showProjectsTab, showTasksTab)
 		return
 	}
 
@@ -505,17 +550,19 @@ func (h *ProjectsHandler) ProjectsReportPage(w http.ResponseWriter, r *http.Requ
 	filtered := filterReportRows(allProjects, filterText, filterActive, filterTeam, filterMini)
 
 	h.Render(w, r, "admin_projects_report", map[string]interface{}{
-		"ViewMode":       "summary",
-		"Rows":           filtered,
-		"MonthKeys":      monthKeys,
-		"CurrentMonth":   monthKeys[len(monthKeys)-1],
-		"Teams":          allTeams,
-		"FilterText":     filterText,
-		"FilterActive":   filterActive,
-		"FilterTeam":     filterTeam,
-		"FilterMini":     filterMini,
-		"FilterDateFrom": filterDateFrom,
-		"FilterDateTo":   filterDateTo,
+		"ViewMode":        "summary",
+		"Rows":            filtered,
+		"MonthKeys":       monthKeys,
+		"CurrentMonth":    monthKeys[len(monthKeys)-1],
+		"Teams":           allTeams,
+		"FilterText":      filterText,
+		"FilterActive":    filterActive,
+		"FilterTeam":      filterTeam,
+		"FilterMini":      filterMini,
+		"FilterDateFrom":  filterDateFrom,
+		"FilterDateTo":    filterDateTo,
+		"ShowProjectsTab": showProjectsTab,
+		"ShowTasksTab":    showTasksTab,
 	})
 	metrics.ProjectOpsTotal.WithLabelValues("report", "success").Inc()
 	slog.Info("project.report.view", "user", currentUser.Email, "rows", len(filtered), "filter_active", filterActive, "filter_team", filterTeam)

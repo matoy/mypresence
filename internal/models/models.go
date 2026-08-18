@@ -296,6 +296,10 @@ type PageData struct {
 	RealAdmin *User // non-nil when an admin is currently impersonating another user
 	// Features
 	DisableProjects bool
+	// UserTasksMode is true when the current user belongs to a team with
+	// "Timesheets managed manually" enabled, i.e. their /projects page shows
+	// the daily-tasks form instead of the monthly project-percentage form.
+	UserTasksMode bool
 	// Passkeys
 	PasskeysEnabled bool
 	// News banners active today
