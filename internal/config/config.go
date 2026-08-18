@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"reflect"
 	"strconv"
 )
 
@@ -9,6 +10,15 @@ import (
 const Version = "0.6.3"
 
 // Config holds all application configuration loaded from environment variables.
+//
+// Fields tagged `env:"..."` name the environment variable they are loaded
+// from. Fields additionally tagged `live:"true"` can be changed at runtime
+// via the general settings page (ApplyEnvOverride), with no other code to
+// update — adding those two tags to a new field is enough to make it
+// live-editable. Structural fields (server port, data directory, secret key,
+// database connection, SAML) are intentionally left untagged for `live`
+// since altering them without restarting the process would have no effect
+// or would break active sessions.
 type Config struct {
 	// Server
 	Port      string
@@ -25,23 +35,23 @@ type Config struct {
 	DBSSLMode  string // postgres: disable|require|verify-full; mysql: true|false|skip-verify
 
 	// Branding
-	AppName        string
-	PrimaryColor   string
-	SecondaryColor string
-	AccentColor    string
-	LogoPath       string
+	AppName        string `env:"APP_NAME" live:"true"`
+	PrimaryColor   string `env:"PRIMARY_COLOR" live:"true"`
+	SecondaryColor string `env:"SECONDARY_COLOR" live:"true"`
+	AccentColor    string `env:"ACCENT_COLOR" live:"true"`
+	LogoPath       string `env:"LOGO_PATH" live:"true"`
 
 	// Fonts
-	FontURL        string
-	FontFamily     string
-	FontFamilyMono string
+	FontURL        string `env:"FONT_URL" live:"true"`
+	FontFamily     string `env:"FONT_FAMILY" live:"true"`
+	FontFamilyMono string `env:"FONT_FAMILY_MONO" live:"true"`
 
 	// Footer
-	HideFooter bool
+	HideFooter bool `env:"HIDE_FOOTER" live:"true"`
 
 	// Local admin auth
-	AdminUser     string
-	AdminPassword string
+	AdminUser     string `env:"ADMIN_USER" live:"true"`
+	AdminPassword string `env:"ADMIN_PASSWORD" live:"true"`
 
 	// SAML
 	SAMLEnabled        bool
@@ -62,36 +72,36 @@ type Config struct {
 	SAMLGroupProjectsViewer   string // group ID → projects_viewer role
 
 	// Internationalisation
-	DefaultLang string
+	DefaultLang string `env:"DEFAULT_LANG" live:"true"`
 
 	// Observability
-	MetricsToken string
+	MetricsToken string `env:"METRICS_TOKEN" live:"true"`
 
 	// Features
-	DisableFloorplans    bool
-	DisableAPI           bool
-	DisableProjects      bool
-	OnsiteRatioThreshold float64 // minimum on-site % for the activity rocket (default 60)
+	DisableFloorplans    bool    `env:"DISABLE_FLOORPLANS" live:"true"`
+	DisableAPI           bool    `env:"DISABLE_API" live:"true"`
+	DisableProjects      bool    `env:"DISABLE_PROJECTS" live:"true"`
+	OnsiteRatioThreshold float64 `env:"ONSITE_RATIO_THRESHOLD" live:"true"` // minimum on-site % for the activity rocket (default 60)
 
 	// TeamCalendarRefreshMinutes is how often (in minutes) the team calendar(s)
 	// on the home page auto-refresh. 0 disables auto-refresh. Default: 3.
-	TeamCalendarRefreshMinutes int
+	TeamCalendarRefreshMinutes int `env:"TEAM_CALENDAR_REFRESH_MINUTES" live:"true"`
 
 	// SMTP (password reset)
-	SMTPURL  string
-	SMTPFrom string
-	AppURL   string
+	SMTPURL  string `env:"SMTP_URL" live:"true"`
+	SMTPFrom string `env:"SMTP_FROM" live:"true"`
+	AppURL   string `env:"APP_URL" live:"true"`
 
 	// Passkeys (WebAuthn)
 	EnablePasskeys  bool
-	PasskeyRPID     string // Relying Party ID (domain, e.g. "presence.example.com")
-	PasskeyRPOrigin string // Full origin (e.g. "https://presence.example.com")
+	PasskeyRPID     string `env:"PASSKEY_RP_ID" live:"true"`     // Relying Party ID (domain, e.g. "presence.example.com")
+	PasskeyRPOrigin string `env:"PASSKEY_RP_ORIGIN" live:"true"` // Full origin (e.g. "https://presence.example.com")
 
 	// Jira integration (used for team Jira space linkage)
 	JiraEnabled bool   // true when JiraBaseURL, JiraEmail and JiraToken are all set
-	JiraBaseURL string // e.g. "https://your-domain.atlassian.net"
-	JiraEmail   string // Atlassian account email used for API auth
-	JiraToken   string // Atlassian API token
+	JiraBaseURL string `env:"JIRA_BASE_URL" live:"true"` // e.g. "https://your-domain.atlassian.net"
+	JiraEmail   string `env:"JIRA_EMAIL" live:"true"`    // Atlassian account email used for API auth
+	JiraToken   string `env:"JIRA_TOKEN" live:"true"`    // Atlassian API token
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -168,90 +178,50 @@ func Load() *Config {
 	return c
 }
 
-// liveEditableEnvVars lists the environment variables that can be changed at
-// runtime via the general settings page. Changes are kept in memory only
-// (process env + the running Config) and are lost on the next restart.
-// Structural variables (server port, data directory, secret key, database
-// connection) are intentionally excluded since altering them without
-// restarting the process would have no effect or would break active sessions.
-var liveEditableEnvVars = map[string]bool{
-	"APP_NAME": true, "PRIMARY_COLOR": true, "SECONDARY_COLOR": true, "ACCENT_COLOR": true, "LOGO_PATH": true,
-	"FONT_URL": true, "FONT_FAMILY": true, "FONT_FAMILY_MONO": true,
-	"HIDE_FOOTER": true, "DEFAULT_LANG": true, "METRICS_TOKEN": true,
-	"DISABLE_FLOORPLANS": true, "DISABLE_API": true, "DISABLE_PROJECTS": true, "ONSITE_RATIO_THRESHOLD": true,
-	"SMTP_URL": true, "SMTP_FROM": true, "APP_URL": true,
-	"ADMIN_USER": true, "ADMIN_PASSWORD": true,
-	"PASSKEY_RP_ID": true, "PASSKEY_RP_ORIGIN": true,
-	"JIRA_BASE_URL": true, "JIRA_EMAIL": true, "JIRA_TOKEN": true,
+// liveField returns the Config struct field tagged `env:"key" live:"true"`, if any.
+// Adding those two tags to a Config field is all that's needed to make a new
+// environment variable editable at runtime — no other code has to change.
+func liveField(key string) (reflect.StructField, bool) {
+	t := reflect.TypeOf(Config{})
+	for i := 0; i < t.NumField(); i++ {
+		f := t.Field(i)
+		if f.Tag.Get("env") == key && f.Tag.Get("live") == "true" {
+			return f, true
+		}
+	}
+	return reflect.StructField{}, false
 }
 
 // IsLiveEditable returns true if key is allowed to be changed at runtime via ApplyEnvOverride.
 func IsLiveEditable(key string) bool {
-	return liveEditableEnvVars[key]
+	_, ok := liveField(key)
+	return ok
 }
 
 // ApplyEnvOverride updates the in-memory field matching the given environment
 // variable name (and calls os.Setenv so any code reading it later stays
-// consistent). It only accepts keys listed in liveEditableEnvVars. Returns
-// true if the key was recognized and applied.
+// consistent). It only accepts keys tagged `live:"true"` on the Config struct.
+// Returns true if the key was recognized and applied.
 func (c *Config) ApplyEnvOverride(key, value string) bool {
-	if !IsLiveEditable(key) {
+	field, ok := liveField(key)
+	if !ok {
 		return false
 	}
 	os.Setenv(key, value) //nolint:errcheck
-	switch key {
-	case "APP_NAME":
-		c.AppName = value
-	case "PRIMARY_COLOR":
-		c.PrimaryColor = value
-	case "SECONDARY_COLOR":
-		c.SecondaryColor = value
-	case "ACCENT_COLOR":
-		c.AccentColor = value
-	case "LOGO_PATH":
-		c.LogoPath = value
-	case "FONT_URL":
-		c.FontURL = value
-	case "FONT_FAMILY":
-		c.FontFamily = value
-	case "FONT_FAMILY_MONO":
-		c.FontFamilyMono = value
-	case "HIDE_FOOTER":
-		c.HideFooter = parseBool(value, c.HideFooter)
-	case "DEFAULT_LANG":
-		c.DefaultLang = value
-	case "METRICS_TOKEN":
-		c.MetricsToken = value
-	case "DISABLE_FLOORPLANS":
-		c.DisableFloorplans = parseBool(value, c.DisableFloorplans)
-	case "DISABLE_API":
-		c.DisableAPI = parseBool(value, c.DisableAPI)
-	case "DISABLE_PROJECTS":
-		c.DisableProjects = parseBool(value, c.DisableProjects)
-	case "ONSITE_RATIO_THRESHOLD":
+	fv := reflect.ValueOf(c).Elem().FieldByIndex(field.Index)
+	switch fv.Kind() {
+	case reflect.String:
+		fv.SetString(value)
+	case reflect.Bool:
+		fv.SetBool(parseBool(value, fv.Bool()))
+	case reflect.Float64:
 		if f, err := strconv.ParseFloat(value, 64); err == nil {
-			c.OnsiteRatioThreshold = f
+			fv.SetFloat(f)
 		}
-	case "SMTP_URL":
-		c.SMTPURL = value
-	case "SMTP_FROM":
-		c.SMTPFrom = value
-	case "APP_URL":
-		c.AppURL = value
-	case "ADMIN_USER":
-		c.AdminUser = value
-	case "ADMIN_PASSWORD":
-		c.AdminPassword = value
-	case "PASSKEY_RP_ID":
-		c.PasskeyRPID = value
-	case "PASSKEY_RP_ORIGIN":
-		c.PasskeyRPOrigin = value
-	case "JIRA_BASE_URL":
-		c.JiraBaseURL = value
-	case "JIRA_EMAIL":
-		c.JiraEmail = value
-	case "JIRA_TOKEN":
-		c.JiraToken = value
+	case reflect.Int:
+		if i, err := strconv.Atoi(value); err == nil {
+			fv.SetInt(int64(i))
+		}
 	}
 	if key == "JIRA_BASE_URL" || key == "JIRA_EMAIL" || key == "JIRA_TOKEN" {
 		c.JiraEnabled = c.JiraBaseURL != "" && c.JiraEmail != "" && c.JiraToken != ""
