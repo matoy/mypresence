@@ -420,7 +420,7 @@ func (h *ProjectsHandler) resolveActivitiesReportParams(r *http.Request, current
 
 // renderTeamActivitiesReportPage renders the team-activities view of the
 // projects report page (GET /admin/projects-report?view=activities).
-func (h *ProjectsHandler) renderTeamActivitiesReportPage(w http.ResponseWriter, r *http.Request, currentUser *models.User) {
+func (h *ProjectsHandler) renderTeamActivitiesReportPage(w http.ResponseWriter, r *http.Request, currentUser *models.User, showProjectsTab, showTasksTab bool) {
 	teams, teamID, year, month := h.resolveActivitiesReportParams(r, currentUser)
 
 	var activities []models.ProjectActivity
@@ -437,17 +437,19 @@ func (h *ProjectsHandler) renderTeamActivitiesReportPage(w http.ResponseWriter, 
 	}
 
 	h.Render(w, r, "admin_projects_report", map[string]interface{}{
-		"ViewMode":       "activities",
-		"ManualTeams":    teams,
-		"SelectedTeamID": teamID,
-		"Activities":     activities,
-		"ActivityYear":   year,
-		"ActivityMonth":  month,
-		"PrevYear":       prevYM(year, month),
-		"PrevMonth":      prevMonth(month),
-		"NextYear":       nextYM(year, month),
-		"NextMonth":      nextMonth(month),
-		"JiraBaseURL":    jiraBaseURL,
+		"ViewMode":        "activities",
+		"ManualTeams":     teams,
+		"SelectedTeamID":  teamID,
+		"Activities":      activities,
+		"ActivityYear":    year,
+		"ActivityMonth":   month,
+		"PrevYear":        prevYM(year, month),
+		"PrevMonth":       prevMonth(month),
+		"NextYear":        nextYM(year, month),
+		"NextMonth":       nextMonth(month),
+		"JiraBaseURL":     jiraBaseURL,
+		"ShowProjectsTab": showProjectsTab,
+		"ShowTasksTab":    showTasksTab,
 	})
 	metrics.ProjectOpsTotal.WithLabelValues("team_activities_report", "success").Inc()
 	slog.Info("project.team_activities_report.view", "user", currentUser.Email, "team_id", teamID, "rows", len(activities))

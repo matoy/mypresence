@@ -12,17 +12,21 @@
                 <circle cx="13" cy="14" r="1" fill="currentColor"/>
                 <circle cx="18" cy="8" r="1" fill="currentColor"/>
             </svg>
-            {{index $.T "projects.report.title"}}
+            {{if eq .ViewMode "activities"}}{{index $.T "projects.report.title_activities"}}{{else}}{{index $.T "projects.report.title"}}{{end}}
         </h1>
         <div class="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+            {{if .ShowProjectsTab}}
             <a href="/admin/projects-report"
                class="text-xs px-3 py-1.5 rounded-md font-medium transition {{if ne .ViewMode "activities"}}bg-white shadow-sm text-gray-800{{else}}text-gray-500 hover:text-gray-700{{end}}">
                 {{index $.T "projects.report.tab_summary"}}
             </a>
+            {{end}}
+            {{if .ShowTasksTab}}
             <a href="/admin/projects-report?view=activities"
                class="text-xs px-3 py-1.5 rounded-md font-medium transition {{if eq .ViewMode "activities"}}bg-white shadow-sm text-gray-800{{else}}text-gray-500 hover:text-gray-700{{end}}">
                 {{index $.T "projects.report.tab_activities"}}
             </a>
+            {{end}}
         </div>
     </div>
 
@@ -31,6 +35,8 @@
     <form method="GET" action="/admin/projects-report"
           class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
         <input type="hidden" name="view" value="activities">
+        <input type="hidden" name="year" value="{{.ActivityYear}}">
+        <input type="hidden" name="month" value="{{.ActivityMonth}}">
         <div class="flex flex-wrap gap-3 items-end">
             {{if .ManualTeams}}
             <div class="flex-1 min-w-[200px]">
