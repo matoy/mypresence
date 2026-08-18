@@ -73,6 +73,10 @@ type Config struct {
 	DisableProjects      bool
 	OnsiteRatioThreshold float64 // minimum on-site % for the activity rocket (default 60)
 
+	// TeamCalendarRefreshMinutes is how often (in minutes) the team calendar(s)
+	// on the home page auto-refresh. 0 disables auto-refresh. Default: 3.
+	TeamCalendarRefreshMinutes int
+
 	// SMTP (password reset)
 	SMTPURL  string
 	SMTPFrom string
@@ -144,6 +148,8 @@ func Load() *Config {
 		DisableAPI:           getEnvBool("DISABLE_API", false),
 		DisableProjects:      getEnvBool("DISABLE_PROJECTS", false),
 		OnsiteRatioThreshold: getEnvFloat("ONSITE_RATIO_THRESHOLD", 60.0),
+
+		TeamCalendarRefreshMinutes: getEnvInt("TEAM_CALENDAR_REFRESH_MINUTES", 3),
 
 		SMTPURL:  getEnv("SMTP_URL", ""),
 		SMTPFrom: getEnv("SMTP_FROM", "noreply@presence.local"),
@@ -276,6 +282,15 @@ func getEnvFloat(key string, fallback float64) float64 {
 	if v := os.Getenv(key); v != "" {
 		if f, err := strconv.ParseFloat(v, 64); err == nil {
 			return f
+		}
+	}
+	return fallback
+}
+
+func getEnvInt(key string, fallback int) int {
+	if v := os.Getenv(key); v != "" {
+		if i, err := strconv.Atoi(v); err == nil {
+			return i
 		}
 	}
 	return fallback

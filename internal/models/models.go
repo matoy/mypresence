@@ -300,6 +300,9 @@ type PageData struct {
 	// "Timesheets managed manually" enabled, i.e. their /projects page shows
 	// the daily-tasks form instead of the monthly project-percentage form.
 	UserTasksMode bool
+	// TeamCalendarRefreshMinutes is how often (in minutes) the team calendar(s)
+	// on the home page auto-refresh. 0 disables auto-refresh.
+	TeamCalendarRefreshMinutes int
 	// Passkeys
 	PasskeysEnabled bool
 	// News banners active today
