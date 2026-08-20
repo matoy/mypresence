@@ -73,6 +73,30 @@ func RequireRole(roles ...string) func(http.Handler) http.Handler {
 	}
 }
 
+// RequireRoleOrDomainManager restricts access to users with any of the specified
+// roles, or who manage at least one domain (see domains admin feature).
+func RequireRoleOrDomainManager(database *db.DB, roles ...string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			user := GetUser(r)
+			if user == nil {
+				http.Error(w, "Accès refusé", http.StatusForbidden)
+				return
+			}
+			if user.HasAnyRole(roles...) {
+				next.ServeHTTP(w, r)
+				return
+			}
+			isManager, _ := database.IsDomainManager(user.ID)
+			if !isManager {
+				http.Error(w, "Accès refusé", http.StatusForbidden)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // GetUser extracts the user from the request context.
 func GetUser(r *http.Request) *models.User {
 	u, _ := r.Context().Value(userContextKey).(*models.User)

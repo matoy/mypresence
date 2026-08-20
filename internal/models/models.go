@@ -132,7 +132,16 @@ type Team struct {
 	Name                      string    `json:"name"`
 	JiraSpaceKey              string    `json:"jira_space_key"`
 	TimesheetsManagedManually bool      `json:"timesheets_managed_manually"`
+	DomainID                  int64     `json:"domain_id"`
 	CreatedAt                 time.Time `json:"created_at"`
+}
+
+// Domain groups several teams under one or more managers for aggregated
+// activity reporting.
+type Domain struct {
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // Status represents a presence status (e.g. remote, on-site, leave).
@@ -300,6 +309,10 @@ type PageData struct {
 	// "Timesheets managed manually" enabled, i.e. their /projects page shows
 	// the daily-tasks form instead of the monthly project-percentage form.
 	UserTasksMode bool
+	// IsDomainManager is true when the current user manages at least one
+	// domain, granting them scoped access to the Activity Report and
+	// Projects Report nav links even without any other role.
+	IsDomainManager bool
 	// TeamCalendarRefreshMinutes is how often (in minutes) the team calendar(s)
 	// on the home page auto-refresh. 0 disables auto-refresh.
 	TeamCalendarRefreshMinutes int

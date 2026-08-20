@@ -407,6 +407,17 @@ When `JIRA_BASE_URL`, `JIRA_EMAIL` and `JIRA_TOKEN` are configured (see [Configu
 
 ---
 
+## Domains
+
+Domains group several teams under one or more **managers** so activity can be reviewed at a department level instead of one team at a time. A team belongs to at most one domain.
+
+- **🏢 Domains** (`/admin/domains`, `global` role only) lets global admins create/rename/delete domains, assign one or more managers among the users, and attach/detach teams.
+- The domain a team belongs to is also editable from **👥 Teams** (`/admin/teams`, `team_manager`/`global`).
+- There is no dedicated "domain manager" role: any user listed as a manager of a domain automatically gets scoped access to the **Activity Report** and **Projects Report → Team activities** tab for that domain, even without any other role.
+- On those two pages, a domain manager's team dropdown lists their domain(s) with the domain's teams indented underneath. Selecting a domain shows the Team Summary aggregated across every team of that domain (deduplicated by user); the Daily Breakdown table and per-team project-activity figures are only shown when a single team is selected.
+
+---
+
 ## Roles & Permissions
 
 Roles are cumulative (stored as a comma-separated string per user). The `global` role grants all permissions. The display label shown in **👤 Users & Roles** is given alongside each role ID below.
@@ -425,6 +436,8 @@ Roles are cumulative (stored as a comma-separated string per user). The `global`
 
 Roles are assigned from **👤 Users & Roles** (`/admin/users`), accessible to the `global` role only.
 
+Domain managers are a separate, role-independent mechanism: assign a user as manager of a domain from **🏢 Domains** (`/admin/domains`, `global` only) to grant them scoped access to the Activity Report and Projects Report for that domain — see [Domains](#domains) above.
+
 ---
 
 ## Pages
@@ -436,11 +449,12 @@ Roles are assigned from **👤 Users & Roles** (`/admin/users`), accessible to t
 | `/projects` | Any logged-in user | Declare and track time on projects |
 | `/settings/tokens` | Any logged-in user | Manage Personal Access Tokens (API keys) |
 | `/admin/teams` | `team_manager` or `team_leader` | Manage teams and members |
+| `/admin/domains` | `global` | Manage domains (managers and attached teams) |
 | `/admin/statuses` | `status_manager` | Manage presence statuses |
-| `/admin/activity` | `activity_viewer` or `team_leader` | Activity report by team and period |
+| `/admin/activity` | `activity_viewer` or `team_leader` (or a domain manager, for their domain) | Activity report by team, domain, and period |
 | `/admin/floorplans` | `floorplan_manager` | Manage floor plans and seats |
 | `/admin/projects` | `projects_admin` | Create and manage projects |
-| `/admin/projects-report` | `projects_admin`, `projects_viewer`, or `team_leader` | Project time tracking and reporting |
+| `/admin/projects-report` | `projects_admin`, `projects_viewer`, or `team_leader` (or a domain manager, for their domain) | Project time tracking and reporting |
 | `/admin/holidays` | `global` | Manage public holidays |
 | `/admin/users` | `global` | Manage users, roles and passwords |
 | `/admin/users/{id}/logs` | `global` | Presence audit log for a user |
@@ -763,6 +777,9 @@ docker compose down && docker compose up -d --build
 
 ### Teams
 ![Teams management](docs/screenshots/05-teams.png)
+
+### Domains
+![Domains management](docs/screenshots/05b-domains.png)
 
 ### Users & Roles
 ![Users and roles management](docs/screenshots/04-users.png)

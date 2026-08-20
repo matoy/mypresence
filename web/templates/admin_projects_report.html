@@ -38,7 +38,20 @@
         <input type="hidden" name="year" value="{{.ActivityYear}}">
         <input type="hidden" name="month" value="{{.ActivityMonth}}">
         <div class="flex flex-wrap gap-3 items-end">
-            {{if .ManualTeams}}
+            {{if .IsDomainManager}}
+            <div class="flex-1 min-w-[200px]">
+                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "teams.title"}}</label>
+                <select onchange="const [kind, id] = this.value.split(':'); window.location.href='/admin/projects-report?view=activities&year={{.ActivityYear}}&month={{.ActivityMonth}}&'+kind+'='+id"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+                    {{range .DomainGroups}}
+                    <option value="domain:{{.Domain.ID}}" {{if eq .Domain.ID $.Data.SelectedDomainID}}selected{{end}}>🌐 {{.Domain.Name}}</option>
+                    {{range .Teams}}
+                    <option value="team:{{.ID}}" {{if and (eq .ID $.Data.SelectedTeamID) (not $.Data.SelectedDomainID)}}selected{{end}}>&nbsp;&nbsp;&nbsp;&nbsp;{{.Name}}</option>
+                    {{end}}
+                    {{end}}
+                </select>
+            </div>
+            {{else if .ManualTeams}}
             <div class="flex-1 min-w-[200px]">
                 <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "teams.title"}}</label>
                 <select name="team" onchange="this.form.requestSubmit()" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
@@ -49,7 +62,7 @@
             </div>
             {{end}}
             <div class="flex items-center gap-2">
-                <a href="/admin/projects-report?view=activities&team={{.SelectedTeamID}}&year={{.PrevYear}}&month={{.PrevMonth}}"
+                <a href="/admin/projects-report?view=activities&{{if .SelectedDomainID}}domain={{.SelectedDomainID}}{{else}}team={{.SelectedTeamID}}{{end}}&year={{.PrevYear}}&month={{.PrevMonth}}"
                    class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
@@ -58,7 +71,7 @@
                 <span class="font-semibold text-gray-800 min-w-[140px] text-center">
                     {{index $.T (printf "cal.month.%d" .ActivityMonth)}} {{.ActivityYear}}
                 </span>
-                <a href="/admin/projects-report?view=activities&team={{.SelectedTeamID}}&year={{.NextYear}}&month={{.NextMonth}}"
+                <a href="/admin/projects-report?view=activities&{{if .SelectedDomainID}}domain={{.SelectedDomainID}}{{else}}team={{.SelectedTeamID}}{{end}}&year={{.NextYear}}&month={{.NextMonth}}"
                    class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>

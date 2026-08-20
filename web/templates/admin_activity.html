@@ -1,6 +1,6 @@
 {{define "content"}}
 {{with .Data}}
-{{$allStatuses := .Statuses}}{{$selectedTeamID := .SelectedTeamID}}{{$days := .Days}}{{$presenceMap := .PresenceMap}}{{$statusTotals := .StatusTotals}}{{$workingDays := .WorkingDays}}{{$workingDaysExcl := .WorkingDaysExcl}}{{$holidayCount := .HolidayCount}}{{$dayBillable := .DayBillable}}{{$dayOnSite := .DayOnSite}}{{$showProjectActivity := .ShowProjectActivity}}{{$projectActivityByUser := .ProjectActivityByUser}}{{$showExecSummary := .ShowExecSummary}}{{$execStatusTotals := .ExecStatusTotals}}{{$execTotalBillable := .ExecTotalBillable}}{{$execTotalOnSite := .ExecTotalOnSite}}{{$execTotalNotSet := .ExecTotalNotSet}}{{$execTotalWorkingDays := .ExecTotalWorkingDays}}{{$execProjectActivityPct := .ExecProjectActivityPct}}{{$execUserCount := .ExecUserCount}}{{$ytdBillableByUser := .YTDBillableByUser}}{{$totalYTDBillable := .TotalYTDBillable}}{{$certifiedUsers := .Certified}}{{$projectCertifiedUsers := .ProjectCertified}}{{$canDecertify := .CanDecertify}}{{$month := .Month}}{{$year := .Year}}
+{{$allStatuses := .Statuses}}{{$selectedTeamID := .SelectedTeamID}}{{$selectedDomainID := .SelectedDomainID}}{{$days := .Days}}{{$presenceMap := .PresenceMap}}{{$statusTotals := .StatusTotals}}{{$workingDays := .WorkingDays}}{{$workingDaysExcl := .WorkingDaysExcl}}{{$holidayCount := .HolidayCount}}{{$dayBillable := .DayBillable}}{{$dayOnSite := .DayOnSite}}{{$showProjectActivity := .ShowProjectActivity}}{{$projectActivityByUser := .ProjectActivityByUser}}{{$showExecSummary := .ShowExecSummary}}{{$execStatusTotals := .ExecStatusTotals}}{{$execTotalBillable := .ExecTotalBillable}}{{$execTotalOnSite := .ExecTotalOnSite}}{{$execTotalNotSet := .ExecTotalNotSet}}{{$execTotalWorkingDays := .ExecTotalWorkingDays}}{{$execProjectActivityPct := .ExecProjectActivityPct}}{{$execUserCount := .ExecUserCount}}{{$ytdBillableByUser := .YTDBillableByUser}}{{$totalYTDBillable := .TotalYTDBillable}}{{$certifiedUsers := .Certified}}{{$projectCertifiedUsers := .ProjectCertified}}{{$canDecertify := .CanDecertify}}{{$month := .Month}}{{$year := .Year}}{{$showDailyBreakdown := .ShowDailyBreakdown}}
 <div class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
     <div class="flex items-center justify-between mb-6">
         <h1 class="text-2xl font-bold text-gray-900">{{index $.T "activity.title"}}</h1>
@@ -9,14 +9,14 @@
     <!-- Filters -->
     <div class="bg-white rounded-xl shadow-md p-4 mb-6 flex flex-wrap items-center gap-4">
         <div class="flex items-center gap-2">
-            <a href="/admin/activity?year={{.PrevYear}}&month={{.PrevMonth}}{{if .SelectedTeamID}}&team={{.SelectedTeamID}}{{end}}"
+            <a href="/admin/activity?year={{.PrevYear}}&month={{.PrevMonth}}{{if .SelectedDomainID}}&domain={{.SelectedDomainID}}{{else if .SelectedTeamID}}&team={{.SelectedTeamID}}{{end}}"
                class="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition">
                 <svg class="h-4 w-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
                 </svg>
             </a>
             <span class="text-lg font-semibold text-gray-800 min-w-[180px] text-center">{{index $.T (printf "cal.month.%d" .Month)}} {{.Year}}</span>
-            <a href="/admin/activity?year={{.NextYear}}&month={{.NextMonth}}{{if .SelectedTeamID}}&team={{.SelectedTeamID}}{{end}}"
+            <a href="/admin/activity?year={{.NextYear}}&month={{.NextMonth}}{{if .SelectedDomainID}}&domain={{.SelectedDomainID}}{{else if .SelectedTeamID}}&team={{.SelectedTeamID}}{{end}}"
                class="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition">
                 <svg class="h-4 w-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
@@ -25,12 +25,24 @@
         </div>
         <div class="flex items-center gap-2">
             <label class="text-sm text-gray-500 font-medium">{{index $.T "activity.team"}}</label>
+            {{if .IsDomainManager}}
+            <select onchange="const [kind, id] = this.value.split(':'); window.location.href='/admin/activity?year={{.Year}}&month={{.Month}}&'+kind+'='+id"
+                    class="px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm">
+                {{range .DomainGroups}}
+                <option value="domain:{{.Domain.ID}}" {{if eq .Domain.ID $selectedDomainID}}selected{{end}}>🌐 {{.Domain.Name}}</option>
+                {{range .Teams}}
+                <option value="team:{{.ID}}" {{if and (eq .ID $selectedTeamID) (not $selectedDomainID)}}selected{{end}}>&nbsp;&nbsp;&nbsp;&nbsp;{{.Name}}</option>
+                {{end}}
+                {{end}}
+            </select>
+            {{else}}
             <select onchange="window.location.href='/admin/activity?year={{.Year}}&month={{.Month}}&team='+this.value"
                     class="px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm">
                 {{range .Teams}}
                 <option value="{{.ID}}" {{if eq .ID $selectedTeamID}}selected{{end}}>{{.Name}}</option>
                 {{end}}
             </select>
+            {{end}}
         </div>
     </div>
 
@@ -367,6 +379,7 @@
         </table>
     </div>
 
+    {{if $showDailyBreakdown}}
     <!-- Daily Breakdown Table -->
     <div class="flex items-center justify-between mb-3">
         <h2 class="text-lg font-semibold text-gray-800">{{index $.T "activity.daily"}}</h2>
@@ -479,6 +492,7 @@
             </tfoot>
         </table>
     </div>
+    {{end}}
     {{else}}
     <div class="bg-gray-50 rounded-xl p-8 text-center">
         <p class="text-gray-500">{{index $.T "activity.no_data"}}</p>

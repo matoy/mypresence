@@ -572,6 +572,46 @@ For `team_leader`, results are automatically restricted to their teams.
 }
 ```
 
+#### `GET /admin/projects-report?view=activities&team=&domain=&year=&month=`
+#### `GET /api/projects-report?view=activities&team=&domain=&year=&month=`
+The "team activities" view: lists every project activity (Jira ticket,
+ServiceNow ticket or free-text entry) declared by the members of a manual-
+timesheet team for a given month. Requires `projects_admin`, `projects_viewer`,
+`team_leader`, or membership in a domain's manager list (see
+[Domains](#domains-requires-global-role)).
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `team`   | int | Team ID (ignored if `domain` is set) |
+| `domain` | int | Domain ID; only valid for a domain the current user manages. Merges activities across every manual-timesheet team of the domain |
+| `year`   | int | Optional (default: current year) |
+| `month`  | int | Optional (default: current month, 1-12) |
+
+Domain managers additionally receive a domain-grouped team selector (domains
+with their teams indented underneath), restricted to the domains they manage.
+
+**Response 200** (`/api/projects-report?view=activities`)
+```json
+{
+  "teams": [{ "id": 2, "name": "Support", "domain_id": 1, "...": "..." }],
+  "selected_team": 2,
+  "selected_domain": 0,
+  "activities": [
+    {
+      "id": 10,
+      "user_id": 5,
+      "user_name": "Alice Dupont",
+      "date": "2026-05-04",
+      "activity_type": "jira",
+      "jira_key": "SUP-123",
+      "percentage": 40
+    }
+  ],
+  "year": 2026,
+  "month": 5
+}
+```
+
 ---
 
 ### Projects Admin _(requires `projects_admin` role)_
@@ -660,18 +700,23 @@ List all teams. `team_leader` users see all teams (same scope as `team_manager`)
   {
     "id": 1,
     "name": "Engineering",
+    "jira_space_key": "",
+    "timesheets_managed_manually": false,
+    "domain_id": 0,
     "created_at": "2026-01-15T09:00:00Z"
   }
 ]
 ```
+`domain_id` is `0` when the team is not attached to a domain (see [Domains](#domains-requires-global-role) below).
 
 #### `POST /admin/teams`
 Create a new team. Requires `team_manager` or `global`.
 
 **Request**
 ```json
-{ "name": "Engineering" }
+{ "name": "Engineering", "jira_space_key": "", "timesheets_managed_manually": false, "domain_id": 0 }
 ```
+`domain_id` is optional; omit or set to `0` to leave the team unattached to a domain.
 
 **Response 200**
 ```json
@@ -682,11 +727,11 @@ Create a new team. Requires `team_manager` or `global`.
 **Error 500** — name already exists (unique constraint)
 
 #### `PUT /admin/teams/{id}`
-Rename a team. Requires `team_manager` or `global`.
+Rename a team, and optionally change its properties, including its domain. Requires `team_manager` or `global`.
 
 **Request**
 ```json
-{ "name": "Platform Engineering" }
+{ "name": "Platform Engineering", "jira_space_key": "", "timesheets_managed_manually": false, "domain_id": 2 }
 ```
 
 **Response 200**
@@ -717,6 +762,70 @@ Add a user to a team. Requires `team_manager`, `global`, or `team_leader` (own t
 
 #### `DELETE /admin/teams/{id}/members/{userId}`
 Remove a user from a team. Same role requirements as adding a member.
+
+**Response 200**
+```json
+{ "status": "ok" }
+```
+
+---
+
+### Domains _(requires `global` role)_
+
+Domains group several teams under one or more managers, so activity data can be
+aggregated across a whole department instead of one team at a time. A team
+belongs to at most one domain (`teams.domain_id`, `0` = none).
+
+There is no dedicated "domain manager" role: any user listed as a manager of a
+domain automatically gets scoped read access to [`/admin/activity`](#activity-report-requires-activity_viewer-or-team_leader)
+and [`/admin/projects-report?view=activities`](#projects-disabled-if-disable_projectstrue) for
+that domain and its teams, even without any other role.
+
+#### `GET /api/domains`
+List all domains together with their attached teams.
+
+**Response 200**
+```json
+[
+  {
+    "Domain": { "id": 1, "name": "Engineering", "created_at": "2026-01-15T09:00:00Z" },
+    "Teams": [ { "id": 3, "name": "Platform", "domain_id": 1, "...": "..." } ]
+  }
+]
+```
+
+#### `POST /admin/domains`
+Create a new domain with its managers and attached teams.
+
+**Request**
+```json
+{ "name": "Engineering", "manager_ids": [5, 8], "team_ids": [3, 4] }
+```
+
+**Response 200**
+```json
+{ "id": 1, "status": "ok" }
+```
+
+**Error 400** — name missing or blank
+
+#### `PUT /admin/domains/{id}`
+Update a domain's name, managers and attached teams. Any team previously
+attached to the domain but omitted from `team_ids` is detached (its
+`domain_id` is reset to `0`).
+
+**Request**
+```json
+{ "name": "Engineering & Product", "manager_ids": [5], "team_ids": [3] }
+```
+
+**Response 200**
+```json
+{ "status": "ok" }
+```
+
+#### `DELETE /admin/domains/{id}`
+Delete a domain. Its teams are detached (`domain_id` reset to `0`), not deleted.
 
 **Response 200**
 ```json
@@ -807,7 +916,7 @@ Delete a status. Existing presences that reference this status are **not** autom
 
 ---
 
-### Activity Report _(requires `activity_viewer` or `team_leader`)_
+### Activity Report _(requires `activity_viewer` or `team_leader`, or membership in a domain's manager list — see [Domains](#domains-requires-global-role))_
 
 #### `GET /api/activity?team_id=&year=&month=`
 Returns presence statistics for a team over a month.
@@ -833,6 +942,15 @@ Returns presence statistics for a team over a month.
   "working_days": 22
 }
 ```
+
+#### `GET /admin/activity?year=&month=&team=` / `&domain=`
+The HTML activity report page. Pass `team=<id>` to view a single team, or
+`domain=<id>` (only valid for a domain the current user manages) to view
+aggregated stats across every team of that domain — the per-user list is
+merged and deduplicated, but the daily breakdown table and project-activity
+column are not shown in domain mode. Domain managers see a domain-grouped
+team selector (domains with their teams indented underneath) restricted to
+the domains they manage.
 
 ---
 

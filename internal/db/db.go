@@ -391,6 +391,22 @@ FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
 FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
 `),
 
+		// domains group several teams under a shared manager for aggregated
+		// activity reporting.
+		dl.createTableIfNotExists("domains", fmt.Sprintf(`
+id %s,
+name %s UNIQUE NOT NULL,
+created_at %s DEFAULT CURRENT_TIMESTAMP
+`, ai, nameType, dt)),
+
+		dl.createTableIfNotExists("domain_managers", `
+domain_id BIGINT NOT NULL,
+user_id BIGINT NOT NULL,
+PRIMARY KEY (domain_id, user_id),
+FOREIGN KEY (domain_id) REFERENCES domains(id) ON DELETE CASCADE,
+FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+`),
+
 		dl.createTableIfNotExists("sessions", fmt.Sprintf(`
 id %s PRIMARY KEY,
 user_id BIGINT NOT NULL,
@@ -445,6 +461,7 @@ FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	d.core.Exec(dl.rebind(dl.addColumnIfNotExists("user_teams", "left_at", dl.varcharType(10)+" DEFAULT NULL")))                                                 //nolint:errcheck
 	d.core.Exec(dl.rebind(dl.addColumnIfNotExists("teams", "jira_space_key", nameType+" DEFAULT ''")))                                                           //nolint:errcheck
 	d.core.Exec(dl.rebind(dl.addColumnIfNotExists("teams", "timesheets_managed_manually", fmt.Sprintf("%s NOT NULL DEFAULT %s", bool_, dl.boolDefault(false))))) //nolint:errcheck
+	d.core.Exec(dl.rebind(dl.addColumnIfNotExists("teams", "domain_id", "BIGINT NOT NULL DEFAULT 0")))                                                           //nolint:errcheck
 	return nil
 }
 
@@ -1187,7 +1204,7 @@ func (d *DB) DeleteLocalUser(id int64) error {
 // --- Team management ---
 
 func (d *DB) ListTeams() ([]models.Team, error) {
-	rows, err := d.core.Query("SELECT id, name, COALESCE(jira_space_key,''), timesheets_managed_manually, created_at FROM teams ORDER BY name")
+	rows, err := d.core.Query("SELECT id, name, COALESCE(jira_space_key,''), timesheets_managed_manually, domain_id, created_at FROM teams ORDER BY name")
 	if err != nil {
 		return nil, err
 	}
@@ -1196,7 +1213,7 @@ func (d *DB) ListTeams() ([]models.Team, error) {
 	var teams []models.Team
 	for rows.Next() {
 		var t models.Team
-		if err := rows.Scan(&t.ID, &t.Name, &t.JiraSpaceKey, &t.TimesheetsManagedManually, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.Name, &t.JiraSpaceKey, &t.TimesheetsManagedManually, &t.DomainID, &t.CreatedAt); err != nil {
 			return nil, err
 		}
 		teams = append(teams, t)
@@ -1223,6 +1240,12 @@ func (d *DB) UpdateTeam(id int64, name string) error {
 // UpdateTeamDetails updates a team's name and extra properties.
 func (d *DB) UpdateTeamDetails(id int64, name, jiraSpaceKey string, timesheetsManagedManually bool) error {
 	_, err := d.core.Exec("UPDATE teams SET name = ?, jira_space_key = ?, timesheets_managed_manually = ? WHERE id = ?", name, jiraSpaceKey, timesheetsManagedManually, id)
+	return err
+}
+
+// UpdateTeamDomain sets (or clears, with domainID=0) the domain a team is attached to.
+func (d *DB) UpdateTeamDomain(teamID, domainID int64) error {
+	_, err := d.core.Exec("UPDATE teams SET domain_id = ? WHERE id = ?", domainID, teamID)
 	return err
 }
 
@@ -1335,7 +1358,7 @@ func (d *DB) RemoveTeamMember(teamID, userID int64) error {
 
 func (d *DB) GetUserTeams(userID int64) ([]models.Team, error) {
 	rows, err := d.core.Query(`
-SELECT t.id, t.name, COALESCE(t.jira_space_key,''), t.timesheets_managed_manually, t.created_at
+SELECT t.id, t.name, COALESCE(t.jira_space_key,''), t.timesheets_managed_manually, t.domain_id, t.created_at
 FROM teams t
 JOIN user_teams ut ON t.id = ut.team_id
 WHERE ut.user_id = ? AND ut.left_at IS NULL
@@ -1349,7 +1372,7 @@ ORDER BY t.name
 	var teams []models.Team
 	for rows.Next() {
 		var t models.Team
-		if err := rows.Scan(&t.ID, &t.Name, &t.JiraSpaceKey, &t.TimesheetsManagedManually, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.Name, &t.JiraSpaceKey, &t.TimesheetsManagedManually, &t.DomainID, &t.CreatedAt); err != nil {
 			return nil, err
 		}
 		teams = append(teams, t)

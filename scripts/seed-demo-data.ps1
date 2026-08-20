@@ -313,6 +313,28 @@ foreach ($m in $memberships) {
     Write-Host "  $($m.team) (id=$tid): $($m.keys -join ',')"
 }
 
+# ── 5b. Domains ────────────────────────────────────────────────────────────────
+# Domains group several teams under one or more managers for aggregated
+# activity reporting (see /admin/activity and /admin/projects-report?view=activities).
+Write-Host "`nCreating domains..."
+$domains = @(
+    @{ name="Go To Market"; managers=@("emma"); teams=@("Marketing","Sales") },
+    @{ name="Corporate";    managers=@("alice"); teams=@("Engineering","HR") }
+)
+foreach ($d in $domains) {
+    # NB: use distinct names from $teamIDs (the team name->id map) — PowerShell
+    # variable names are case-insensitive, so a local $teamIds would silently
+    # overwrite it after the first iteration, breaking every domain after that.
+    $domainManagerIds = @($d.managers | ForEach-Object { [int]$U[$_] })
+    $domainTeamIds     = @($d.teams    | ForEach-Object { [int]$teamIDs[$_] })
+    $r = PostJSON "$Base/admin/domains" @{ name=$d.name; manager_ids=$domainManagerIds; team_ids=$domainTeamIds }
+    if ($r -and $r.id) {
+        Write-Host "  '$($d.name)' id=$($r.id) — managers: $($d.managers -join ','); teams: $($d.teams -join ',')"
+    } else {
+        Write-Warning "  Failed to create domain '$($d.name)' (may already exist)"
+    }
+}
+
 # ── 6. Presences: M-3 and M-1 (all users — on-site except Wed=remote) ─────────
 Write-Host "`nSeeding $($m3.ToString('MMMM yyyy')) and $($m1.ToString('MMMM yyyy')) presences..."
 $allUIDs = @($U.admin, $U.alice, $U.bob, $U.claire, $U.david, $U.emma, $U.felix, $U.grace, $U.hugo, $U.iris, $U.julien)

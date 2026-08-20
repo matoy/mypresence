@@ -29,6 +29,7 @@ func (h *AdminHandler) TeamsPage(w http.ResponseWriter, r *http.Request) {
 	currentUser := middleware.GetUser(r)
 	teams, _ := h.DB.ListTeams()
 	users, _ := h.DB.ListUsers()
+	domains, _ := h.DB.ListDomains()
 
 	canManageTeams := currentUser != nil && currentUser.HasAnyRole(models.RoleTeamManager, models.RoleGlobal)
 	isTeamLeader := currentUser != nil && currentUser.HasRole(models.RoleTeamLeader) && !canManageTeams
@@ -60,6 +61,7 @@ func (h *AdminHandler) TeamsPage(w http.ResponseWriter, r *http.Request) {
 	h.Render(w, r, "admin_teams", map[string]interface{}{
 		"Teams":          teamsList,
 		"Users":          users,
+		"Domains":        domains,
 		"CanManageTeams": canManageTeams,
 		"JiraEnabled":    h.Config != nil && h.Config.JiraEnabled,
 	})
@@ -87,6 +89,7 @@ func (h *AdminHandler) CreateTeam(w http.ResponseWriter, r *http.Request) {
 		Name                      string `json:"name"`
 		JiraSpaceKey              string `json:"jira_space_key"`
 		TimesheetsManagedManually bool   `json:"timesheets_managed_manually"`
+		DomainID                  int64  `json:"domain_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Name) == "" {
 		metrics.AdminOpsTotal.WithLabelValues("team", "create", "failure").Inc()
@@ -98,6 +101,9 @@ func (h *AdminHandler) CreateTeam(w http.ResponseWriter, r *http.Request) {
 		metrics.AdminOpsTotal.WithLabelValues("team", "create", "failure").Inc()
 		jsonError(w, "Erreur création équipe", http.StatusInternalServerError)
 		return
+	}
+	if req.DomainID > 0 {
+		h.DB.UpdateTeamDomain(id, req.DomainID) //nolint:errcheck
 	}
 	if currentUser != nil {
 		h.DB.LogAdminAction(currentUser.ID, "team", id, "create", req.Name)
@@ -139,9 +145,11 @@ func (h *AdminHandler) UpdateTeam(w http.ResponseWriter, r *http.Request) {
 		Name                      string `json:"name"`
 		JiraSpaceKey              string `json:"jira_space_key"`
 		TimesheetsManagedManually bool   `json:"timesheets_managed_manually"`
+		DomainID                  int64  `json:"domain_id"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)                                                                     //nolint:errcheck
 	h.DB.UpdateTeamDetails(id, req.Name, strings.TrimSpace(req.JiraSpaceKey), req.TimesheetsManagedManually) //nolint:errcheck
+	h.DB.UpdateTeamDomain(id, req.DomainID)                                                                  //nolint:errcheck
 	if currentUser != nil {
 		h.DB.LogAdminAction(currentUser.ID, "team", id, "update", req.Name)
 		slog.Info("admin.team.update", "actor", currentUser.Email, "team", req.Name, "team_id", id)

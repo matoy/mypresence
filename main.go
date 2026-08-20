@@ -223,6 +223,13 @@ func main() {
 		http.Redirect(w, r, "/admin/users", http.StatusMovedPermanently)
 	})
 
+	domainsMux := http.NewServeMux()
+	domainsMux.HandleFunc("GET /admin/domains", adminHandler.DomainsPage)
+	domainsMux.HandleFunc("POST /admin/domains", adminHandler.CreateDomain)
+	domainsMux.HandleFunc("PUT /admin/domains/{id}", adminHandler.UpdateDomain)
+	domainsMux.HandleFunc("DELETE /admin/domains/{id}", adminHandler.DeleteDomain)
+	domainsMux.HandleFunc("GET /api/domains", adminHandler.ListDomainsAPI)
+
 	// Wire role-based middleware
 	mux.Handle("/admin/teams", middleware.Auth(database, middleware.RequireRole(models.RoleTeamManager, models.RoleTeamLeader)(teamMux)))
 	mux.Handle("/admin/teams/", middleware.Auth(database, middleware.RequireRole(models.RoleTeamManager, models.RoleTeamLeader)(teamMux)))
@@ -230,8 +237,8 @@ func main() {
 	mux.Handle("/api/teams/", middleware.Auth(database, middleware.RequireRole(models.RoleTeamManager, models.RoleTeamLeader)(teamMux)))
 	mux.Handle("/admin/statuses", middleware.Auth(database, middleware.RequireRole(models.RoleStatusManager)(statusMux)))
 	mux.Handle("/admin/statuses/", middleware.Auth(database, middleware.RequireRole(models.RoleStatusManager)(statusMux)))
-	mux.Handle("/admin/activity", middleware.Auth(database, middleware.RequireRole(models.RoleActivityViewer, models.RoleTeamLeader)(activityMux)))
-	mux.Handle("/api/activity", middleware.Auth(database, middleware.RequireRole(models.RoleActivityViewer, models.RoleTeamLeader)(activityMux)))
+	mux.Handle("/admin/activity", middleware.Auth(database, middleware.RequireRoleOrDomainManager(database, models.RoleActivityViewer, models.RoleTeamLeader)(activityMux)))
+	mux.Handle("/api/activity", middleware.Auth(database, middleware.RequireRoleOrDomainManager(database, models.RoleActivityViewer, models.RoleTeamLeader)(activityMux)))
 	mux.Handle("/admin/holidays", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(holidaysMux)))
 	mux.Handle("/admin/holidays/", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(holidaysMux)))
 	mux.Handle("/api/decertify", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal, models.RoleActivityViewer, models.RoleTeamLeader)(certificationMux)))
@@ -240,6 +247,9 @@ func main() {
 	mux.Handle("/api/users/", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(usersMux)))
 	mux.Handle("/admin/users", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(usersMux)))
 	mux.Handle("/admin/users/", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(usersMux)))
+	mux.Handle("/admin/domains", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(domainsMux)))
+	mux.Handle("/admin/domains/", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(domainsMux)))
+	mux.Handle("/api/domains", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(domainsMux)))
 
 	generalSettingsMux := http.NewServeMux()
 	generalSettingsMux.HandleFunc("GET /admin/settings", generalSettingsHandler.GeneralSettingsPage)
@@ -419,8 +429,8 @@ func registerOptionalAdminRoutes(mux, authMux *http.ServeMux, cfg *config.Config
 		projReportMux := http.NewServeMux()
 		projReportMux.HandleFunc("GET /admin/projects-report", projectsHandler.ProjectsReportPage)
 		projReportMux.HandleFunc("GET /api/projects-report", projectsHandler.ProjectsReportAPI)
-		mux.Handle("/admin/projects-report", middleware.Auth(database, middleware.RequireRole(models.RoleProjectsAdmin, models.RoleProjectsViewer, models.RoleTeamLeader)(projReportMux)))
-		mux.Handle("/api/projects-report", middleware.Auth(database, middleware.RequireRole(models.RoleProjectsAdmin, models.RoleProjectsViewer, models.RoleTeamLeader)(projReportMux)))
+		mux.Handle("/admin/projects-report", middleware.Auth(database, middleware.RequireRoleOrDomainManager(database, models.RoleProjectsAdmin, models.RoleProjectsViewer, models.RoleTeamLeader)(projReportMux)))
+		mux.Handle("/api/projects-report", middleware.Auth(database, middleware.RequireRoleOrDomainManager(database, models.RoleProjectsAdmin, models.RoleProjectsViewer, models.RoleTeamLeader)(projReportMux)))
 
 		projCertMux := http.NewServeMux()
 		projCertMux.HandleFunc("POST /api/decertify-project", projectsHandler.DecertifyProjectMonth)

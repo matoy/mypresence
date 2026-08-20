@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"time"
 
@@ -25,17 +26,66 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 	statuses, _ := h.DB.ListStatuses()
 
 	teams, myTeamIDs := filterTeamsForUser(h.DB, currentUser, allTeams)
+	myDomains, teamsByDomain := domainsAccessForUser(h.DB, currentUser, allTeams)
+	myDomainIDs := map[int64]bool{}
+	for _, dm := range myDomains {
+		myDomainIDs[dm.ID] = true
+	}
+	if len(myDomains) > 0 && (currentUser == nil || !currentUser.HasAnyRole(models.RoleActivityViewer, models.RoleGlobal)) {
+		domainTeamIDs := map[int64]bool{}
+		for _, ts := range teamsByDomain {
+			for _, t := range ts {
+				domainTeamIDs[t.ID] = true
+			}
+		}
+		if myTeamIDs == nil {
+			// Pure domain manager (no team_leader role): restrict to the
+			// teams within their managed domains.
+			var filtered []models.Team
+			for _, t := range teams {
+				if domainTeamIDs[t.ID] {
+					filtered = append(filtered, t)
+				}
+			}
+			teams = filtered
+		} else {
+			// Also a team_leader: merge their own led teams with the teams of
+			// the domain(s) they manage, so selecting a domain team they
+			// don't personally lead isn't rejected and silently swapped for
+			// one of their own teams.
+			existingIDs := map[int64]bool{}
+			for _, t := range teams {
+				existingIDs[t.ID] = true
+				myTeamIDs[t.ID] = true
+			}
+			for _, ts := range teamsByDomain {
+				for _, t := range ts {
+					myTeamIDs[t.ID] = true
+					if !existingIDs[t.ID] {
+						teams = append(teams, t)
+						existingIDs[t.ID] = true
+					}
+				}
+			}
+			sort.Slice(teams, func(i, j int) bool { return teams[i].Name < teams[j].Name })
+		}
+	}
 
-	year, month, viewMode, teamID := normalizeActivityParams(r, time.Now(), teams, myTeamIDs)
+	year, month, viewMode, teamID, domainID := normalizeActivityParams(r, time.Now(), teams, myTeamIDs, myDomainIDs)
 
 	startDate := fmt.Sprintf("%04d-%02d-01", year, month)
 	lastDay := time.Date(year, time.Month(month)+1, 0, 0, 0, 0, 0, time.UTC)
 	endDate := lastDay.Format("2006-01-02")
 
 	var stats []models.UserStats
-	if teamID > 0 {
+	var domainTeams []models.Team
+	if domainID > 0 {
+		domainTeams = teamsByDomain[domainID]
+		stats = h.computeDomainStats(domainTeams, startDate, endDate)
+	} else if teamID > 0 {
 		stats, _ = h.DB.GetTeamStats(teamID, startDate, endDate)
 	}
+	showDailyBreakdown := domainID == 0
 
 	totalBillable, totalSetDays, statusTotals := computeStatusTotals(stats)
 
@@ -43,7 +93,13 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 	allHolidays, _ := h.DB.ListHolidays()
 	days := getDaysInMonth(year, month)
 	markHolidaysOnDays(days, allHolidays)
-	members, presenceMap := h.buildActivityMemberData(stats, teamID, startDate, endDate)
+	var members []models.User
+	var presenceMap map[int64]map[string]map[string]int64
+	if showDailyBreakdown {
+		members, presenceMap = h.buildActivityMemberData(stats, teamID, startDate, endDate)
+	} else {
+		presenceMap = map[int64]map[string]map[string]int64{}
+	}
 
 	// Count working days in the month (Mon–Fri) and holidays on those days.
 	workingDays, holidayCount := computeWorkingDays(year, month, allHolidays)
@@ -55,7 +111,8 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 
 	projectActivityByUser := make(map[int64]float64)
 	totalProjectDeclared := 0.0
-	if !h.DisableProjects {
+	showProjectActivity := !h.DisableProjects && domainID == 0
+	if showProjectActivity {
 		if teamHasManualTimesheets(allTeams, teamID) {
 			projectActivityByUser, totalProjectDeclared = h.computeManualProjectActivity(stats, year, month)
 		} else {
@@ -75,8 +132,14 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 	// YTD billable days per user (Jan 1 → end of current month)
 	ytdBillableByUser := make(map[int64]float64)
 	totalYTDBillable := 0.0
-	if teamID > 0 {
-		ytdStart := fmt.Sprintf("%04d-01-01", year)
+	ytdStart := fmt.Sprintf("%04d-01-01", year)
+	if domainID > 0 {
+		ytdStats := h.computeDomainStats(domainTeams, ytdStart, endDate)
+		for _, s := range ytdStats {
+			ytdBillableByUser[s.User.ID] = s.BillableDays
+			totalYTDBillable += s.BillableDays
+		}
+	} else if teamID > 0 {
 		ytdStats, _ := h.DB.GetTeamStats(teamID, ytdStart, endDate)
 		for _, s := range ytdStats {
 			ytdBillableByUser[s.User.ID] = s.BillableDays
@@ -108,14 +171,26 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 	// or "Timesheets managed manually"), shown as a separate red seal.
 	projectCertifiedUsers, _ := h.DB.GetCertifiedProjectUserIDs(statUserIDs, year, month)
 
+	// Domain groups for the team-selector dropdown: only built for users who
+	// manage at least one domain, so the dropdown can list domains with their
+	// teams indented underneath.
+	var domainGroups []domainGroupView
+	for _, dm := range myDomains {
+		domainGroups = append(domainGroups, domainGroupView{Domain: dm, Teams: teamsByDomain[dm.ID]})
+	}
+
 	h.Render(w, r, "admin_activity", map[string]interface{}{
 		"Teams":                  teams,
+		"DomainGroups":           domainGroups,
+		"IsDomainManager":        len(myDomains) > 0,
 		"Statuses":               statuses,
 		"Stats":                  stats,
-		"ShowProjectActivity":    !h.DisableProjects,
+		"ShowProjectActivity":    showProjectActivity,
 		"ProjectActivityByUser":  projectActivityByUser,
 		"TotalProjectDeclared":   totalProjectDeclared,
 		"SelectedTeamID":         teamID,
+		"SelectedDomainID":       domainID,
+		"ShowDailyBreakdown":     showDailyBreakdown,
 		"Year":                   year,
 		"Month":                  month,
 		"ViewMode":               viewMode,
@@ -152,6 +227,59 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// domainGroupView pairs a domain with the teams it contains, for the
+// domain-grouped team selector dropdown.
+type domainGroupView struct {
+	Domain models.Domain
+	Teams  []models.Team
+}
+
+// domainsAccessForUser returns the domains the given user manages, along with
+// the (allTeams-filtered) teams attached to each. Returns nil, nil if the user
+// manages no domain.
+func domainsAccessForUser(database *db.DB, user *models.User, allTeams []models.Team) ([]models.Domain, map[int64][]models.Team) {
+	if user == nil {
+		return nil, nil
+	}
+	myDomains, _ := database.GetUserDomains(user.ID)
+	if len(myDomains) == 0 {
+		return nil, nil
+	}
+	teamsByDomain := map[int64][]models.Team{}
+	for _, dm := range myDomains {
+		var ts []models.Team
+		for _, t := range allTeams {
+			if t.DomainID == dm.ID {
+				ts = append(ts, t)
+			}
+		}
+		teamsByDomain[dm.ID] = ts
+	}
+	return myDomains, teamsByDomain
+}
+
+// computeDomainStats aggregates per-user stats across all teams of a domain,
+// deduplicating users who might appear in more than one team.
+func (h *ActivityHandler) computeDomainStats(domainTeams []models.Team, startDate, endDate string) []models.UserStats {
+	seen := map[int64]bool{}
+	var out []models.UserStats
+	for _, t := range domainTeams {
+		stats, err := h.DB.GetTeamStats(t.ID, startDate, endDate)
+		if err != nil {
+			continue
+		}
+		for _, s := range stats {
+			if seen[s.User.ID] {
+				continue
+			}
+			seen[s.User.ID] = true
+			out = append(out, s)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].User.Name < out[j].User.Name })
+	return out
+}
+
 // ActivityAPI returns activity report data as JSON.
 func (h *ActivityHandler) ActivityAPI(w http.ResponseWriter, r *http.Request) {
 	currentUser := middleware.GetUser(r)
@@ -164,7 +292,8 @@ func (h *ActivityHandler) ActivityAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Team leaders can only request stats for their own teams
+	// Team leaders can only request stats for their own teams, or a team
+	// attached to a domain they manage.
 	if currentUser != nil && currentUser.HasRole(models.RoleTeamLeader) && !currentUser.HasAnyRole(models.RoleActivityViewer, models.RoleGlobal) {
 		myTeams, _ := h.DB.GetUserTeams(currentUser.ID)
 		allowed := false
@@ -175,8 +304,48 @@ func (h *ActivityHandler) ActivityAPI(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if !allowed {
+			myDomains, _ := h.DB.GetUserDomains(currentUser.ID)
+			myDomainIDs := map[int64]bool{}
+			for _, dm := range myDomains {
+				myDomainIDs[dm.ID] = true
+			}
+			if len(myDomainIDs) > 0 {
+				allTeams, _ := h.DB.ListTeams()
+				for _, t := range allTeams {
+					if t.ID == teamID && myDomainIDs[t.DomainID] {
+						allowed = true
+						break
+					}
+				}
+			}
+		}
+		if !allowed {
 			jsonError(w, "Access denied", http.StatusForbidden)
 			return
+		}
+	}
+
+	// Domain managers (without a broader role) can only request stats for
+	// teams attached to one of the domains they manage.
+	if currentUser != nil && !currentUser.HasAnyRole(models.RoleActivityViewer, models.RoleGlobal, models.RoleTeamLeader) {
+		if isManager, _ := h.DB.IsDomainManager(currentUser.ID); isManager {
+			myDomains, _ := h.DB.GetUserDomains(currentUser.ID)
+			myDomainIDs := map[int64]bool{}
+			for _, dm := range myDomains {
+				myDomainIDs[dm.ID] = true
+			}
+			allTeams, _ := h.DB.ListTeams()
+			allowed := false
+			for _, t := range allTeams {
+				if t.ID == teamID && myDomainIDs[t.DomainID] {
+					allowed = true
+					break
+				}
+			}
+			if !allowed {
+				jsonError(w, "Access denied", http.StatusForbidden)
+				return
+			}
 		}
 	}
 
@@ -384,12 +553,14 @@ func (h *ActivityHandler) computeManualProjectActivity(stats []models.UserStats,
 	return
 }
 
-// normalizeActivityParams parses and normalizes the year, month, viewMode and teamID
-// query parameters, applying defaults and enforcing team-leader access restrictions.
-func normalizeActivityParams(r *http.Request, now time.Time, teams []models.Team, myTeamIDs map[int64]bool) (year, month int, viewMode string, teamID int64) {
+// normalizeActivityParams parses and normalizes the year, month, viewMode, teamID
+// and domainID query parameters, applying defaults and enforcing team-leader /
+// domain-manager access restrictions.
+func normalizeActivityParams(r *http.Request, now time.Time, teams []models.Team, myTeamIDs map[int64]bool, myDomainIDs map[int64]bool) (year, month int, viewMode string, teamID, domainID int64) {
 	year, _ = strconv.Atoi(r.URL.Query().Get("year"))
 	month, _ = strconv.Atoi(r.URL.Query().Get("month"))
 	teamID, _ = strconv.ParseInt(r.URL.Query().Get("team"), 10, 64)
+	domainID, _ = strconv.ParseInt(r.URL.Query().Get("domain"), 10, 64)
 	viewMode = r.URL.Query().Get("view")
 	if year == 0 {
 		year = now.Year()
@@ -399,6 +570,13 @@ func normalizeActivityParams(r *http.Request, now time.Time, teams []models.Team
 	}
 	if viewMode == "" {
 		viewMode = "month"
+	}
+	if domainID > 0 && (len(myDomainIDs) == 0 || !myDomainIDs[domainID]) {
+		domainID = 0
+	}
+	if domainID > 0 {
+		// A domain selection takes precedence over any team selection.
+		return year, month, viewMode, 0, domainID
 	}
 	if teamID == 0 && len(teams) > 0 {
 		teamID = teams[0].ID

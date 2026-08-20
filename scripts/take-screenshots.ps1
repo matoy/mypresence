@@ -228,6 +228,9 @@ try {
     # 5. Teams
     $cmdId = Take-Screenshot $ws $cmdId "$BaseUrl/admin/teams"          "05-teams"     2500
 
+    # 5b. Domains
+    $cmdId = Take-Screenshot $ws $cmdId "$BaseUrl/admin/domains"        "05b-domains"  2500
+
     # 6. Holidays
     $cmdId = Take-Screenshot $ws $cmdId "$BaseUrl/admin/holidays"       "06-holidays"  2500
 
