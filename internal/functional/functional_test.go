@@ -380,12 +380,12 @@ func buildRouter(database *db.DB, cfg *config.Config, dataDir string, rateLimite
 	mux.Handle("/admin/users/", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(usersMux)))
 	mux.Handle("/api/activity", middleware.Auth(database, middleware.RequireRole(models.RoleActivityViewer)(activityMux)))
 	mux.Handle("/admin/activity", middleware.Auth(database, middleware.RequireRole(models.RoleActivityViewer, models.RoleTeamLeader)(activityMux)))
-	mux.Handle("/admin/projects", middleware.Auth(database, middleware.RequireRole(models.RoleProjectsAdmin)(projAdminMux)))
-	mux.Handle("/admin/projects/", middleware.Auth(database, middleware.RequireRole(models.RoleProjectsAdmin)(projAdminMux)))
-	mux.Handle("/api/admin/projects", middleware.Auth(database, middleware.RequireRole(models.RoleProjectsAdmin)(projAdminMux)))
-	mux.Handle("/api/admin/projects/", middleware.Auth(database, middleware.RequireRole(models.RoleProjectsAdmin)(projAdminMux)))
-	mux.Handle("/admin/projects-report", middleware.Auth(database, middleware.RequireRole(models.RoleProjectsAdmin, models.RoleProjectsViewer, models.RoleTeamLeader)(projReportMux)))
-	mux.Handle("/api/projects-report", middleware.Auth(database, middleware.RequireRole(models.RoleProjectsAdmin, models.RoleProjectsViewer, models.RoleTeamLeader)(projReportMux)))
+	mux.Handle("/admin/projects", middleware.Auth(database, middleware.RequireRole(models.RoleProjectsManager)(projAdminMux)))
+	mux.Handle("/admin/projects/", middleware.Auth(database, middleware.RequireRole(models.RoleProjectsManager)(projAdminMux)))
+	mux.Handle("/api/admin/projects", middleware.Auth(database, middleware.RequireRole(models.RoleProjectsManager)(projAdminMux)))
+	mux.Handle("/api/admin/projects/", middleware.Auth(database, middleware.RequireRole(models.RoleProjectsManager)(projAdminMux)))
+	mux.Handle("/admin/projects-report", middleware.Auth(database, middleware.RequireRole(models.RoleProjectsManager, models.RoleProjectsViewer, models.RoleTeamLeader)(projReportMux)))
+	mux.Handle("/api/projects-report", middleware.Auth(database, middleware.RequireRole(models.RoleProjectsManager, models.RoleProjectsViewer, models.RoleTeamLeader)(projReportMux)))
 	fpRole := middleware.RequireRole(models.RoleFloorplanManager)
 	mux.Handle("/admin/floorplans", middleware.Auth(database, fpRole(fpAdminMux)))
 	mux.Handle("/admin/floorplans/", middleware.Auth(database, fpRole(fpAdminMux)))
@@ -693,7 +693,7 @@ func TestAdminProjects_ProjectsAdmin_Allowed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := e.db.UpdateUserRoles(id, models.RoleProjectsAdmin); err != nil {
+	if err := e.db.UpdateUserRoles(id, models.RoleProjectsManager); err != nil {
 		t.Fatal(err)
 	}
 	e.injectSession(t, id)
@@ -702,7 +702,7 @@ func TestAdminProjects_ProjectsAdmin_Allowed(t *testing.T) {
 	defer drain(resp)
 
 	if resp.StatusCode != http.StatusOK {
-		t.Errorf("expected 200 on /admin/projects for projects_admin, got %d", resp.StatusCode)
+		t.Errorf("expected 200 on /admin/projects for projects_manager, got %d", resp.StatusCode)
 	}
 }
 

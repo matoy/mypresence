@@ -25,15 +25,15 @@ import (
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
-// createProjectsAdminUser seeds a user with the projects_admin role and returns their ID.
+// createProjectsAdminUser seeds a user with the projects_manager role and returns their ID.
 func createProjectsAdminUser(t *testing.T, e *testEnv) int64 {
 	t.Helper()
 	uid, err := e.db.CreateLocalUser("projadmin@test.com", "ProjAdmin", "password123")
 	if err != nil {
 		t.Fatalf("create projects admin user: %v", err)
 	}
-	if err := e.db.UpdateUserRoles(uid, models.RoleProjectsAdmin); err != nil {
-		t.Fatalf("set projects_admin role: %v", err)
+	if err := e.db.UpdateUserRoles(uid, models.RoleProjectsManager); err != nil {
+		t.Fatalf("set projects_manager role: %v", err)
 	}
 	return uid
 }
@@ -345,7 +345,7 @@ func TestAdminProjectsAPI_AsProjectsAdmin_Returns200(t *testing.T) {
 	defer drain(resp)
 
 	if resp.StatusCode != http.StatusOK {
-		t.Errorf("expected 200 for projects_admin on /api/admin/projects, got %d", resp.StatusCode)
+		t.Errorf("expected 200 for projects_manager on /api/admin/projects, got %d", resp.StatusCode)
 	}
 }
 
@@ -441,7 +441,7 @@ func TestProjectsReportAPI_AsProjectsAdmin_Returns200(t *testing.T) {
 	defer drain(resp)
 
 	if resp.StatusCode != http.StatusOK {
-		t.Errorf("expected 200 for projects_admin on /api/projects-report, got %d", resp.StatusCode)
+		t.Errorf("expected 200 for projects_manager on /api/projects-report, got %d", resp.StatusCode)
 	}
 }
 

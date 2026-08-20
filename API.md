@@ -371,7 +371,7 @@ List all users.
 #### `PUT /api/users/{id}/roles`
 Update roles for a user.
 
-Valid roles: `basic`, `team_manager`, `team_leader`, `status_manager`, `activity_viewer`, `floorplan_manager`, `projects_admin`, `projects_viewer`, `global`.
+Valid roles: `basic`, `team_manager`, `team_leader`, `status_manager`, `activity_viewer`, `floorplan_manager`, `projects_manager`, `projects_viewer`, `global`.
 
 **Request** — roles as a JSON array:
 ```json
@@ -528,7 +528,7 @@ The backend enforces the billable cap: total declared days cannot exceed billabl
 
 #### `GET /api/projects-report?q=&active=&team=`
 Returns the project report payload (same scope as `/admin/projects-report`).
-Requires `projects_admin`, `projects_viewer`, or `team_leader`.
+Requires `projects_manager`, `projects_viewer`, or `team_leader`.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -576,7 +576,7 @@ For `team_leader`, results are automatically restricted to their teams.
 #### `GET /api/projects-report?view=activities&team=&domain=&year=&month=`
 The "team activities" view: lists every project activity (Jira ticket,
 ServiceNow ticket or free-text entry) declared by the members of a manual-
-timesheet team for a given month. Requires `projects_admin`, `projects_viewer`,
+timesheet team for a given month. Requires `projects_manager`, `projects_viewer`,
 `team_leader`, or membership in a domain's manager list (see
 [Domains](#domains-requires-global-role)).
 
@@ -614,7 +614,7 @@ with their teams indented underneath), restricted to the domains they manage.
 
 ---
 
-### Projects Admin _(requires `projects_admin` role)_
+### Projects Admin _(requires `projects_manager` role)_
 
 #### `GET /api/admin/projects?q=&active=&team=`
 List projects and teams for admin management with optional filters.

@@ -44,7 +44,7 @@
 </head>
 <body class="h-full bg-gray-50 font-sans">
     {{if .User}}
-    {{$hasAdminNav := or (and (not .DisableFloorplans) (.User.HasRole "floorplan_manager")) (or (.User.HasRole "team_manager") (.User.HasRole "team_leader")) (.User.HasRole "global") (.User.HasRole "status_manager") (and (not .DisableProjects) (.User.HasRole "projects_admin")) (.User.HasRole "activity_viewer")}}
+    {{$hasAdminNav := or (and (not .DisableFloorplans) (.User.HasRole "floorplan_manager")) (or (.User.HasRole "team_manager") (.User.HasRole "team_leader")) (.User.HasRole "global") (.User.HasRole "status_manager") (and (not .DisableProjects) (.User.HasRole "projects_manager")) (.User.HasRole "activity_viewer")}}
     <!-- Navigation -->
     <nav class="bg-gradient-to-r from-primary to-secondary shadow-lg" x-data="{ mobileMenu: false }">
         <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
@@ -84,7 +84,7 @@
                         {{index .T "nav.activity"}}
                     </a>
                     {{end}}
-                    {{if and (not .DisableProjects) (or (.User.HasRole "projects_admin") (.User.HasRole "projects_viewer") (.User.HasRole "team_leader") .IsDomainManager)}}
+                    {{if and (not .DisableProjects) (or (.User.HasRole "projects_manager") (.User.HasRole "projects_viewer") (.User.HasRole "team_leader") .IsDomainManager)}}
                     <a href="/admin/projects-report" class="inline-flex items-center gap-1.5 text-white/80 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition {{if eq .Page "admin_projects_report"}}bg-white/20 text-white{{end}}">
                         <svg class="h-4 w-4 opacity-90" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 19h16M6 15l4-4 3 3 5-6"/>
@@ -125,10 +125,10 @@
                                 {{index .T "nav.floorplans_admin"}}
                             </a>
                             {{end}}
-                            {{if and (not .DisableProjects) (.User.HasRole "projects_admin")}}
+                            {{if and (not .DisableProjects) (.User.HasRole "projects_manager")}}
                             <a href="/admin/projects" class="flex items-center gap-2.5 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition {{if eq .Page "admin_projects"}}font-semibold{{end}}">
                                 <span aria-hidden="true">📂</span>
-                                {{index .T "nav.projects_admin"}}
+                                {{index .T "nav.projects_manager"}}
                             </a>
                             {{end}}
                             {{if or (.User.HasRole "team_manager") (.User.HasRole "team_leader")}}
@@ -276,7 +276,7 @@
                 {{if or (.User.HasRole "activity_viewer") (.User.HasRole "team_leader") .IsDomainManager}}
                 <a href="/admin/activity" class="block text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">{{index .T "nav.activity"}}</a>
                 {{end}}
-                {{if and (not .DisableProjects) (or (.User.HasRole "projects_admin") (.User.HasRole "projects_viewer") (.User.HasRole "team_leader") .IsDomainManager)}}
+                {{if and (not .DisableProjects) (or (.User.HasRole "projects_manager") (.User.HasRole "projects_viewer") (.User.HasRole "team_leader") .IsDomainManager)}}
                 <a href="/admin/projects-report" class="inline-flex items-center gap-1.5 text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">
                     <svg class="h-4 w-4 opacity-90" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 19h16M6 15l4-4 3 3 5-6"/>
@@ -297,7 +297,7 @@
                     {{if and (not .DisableFloorplans) (.User.HasRole "floorplan_manager")}}
                     <a href="/admin/floorplans" class="block text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">{{index .T "nav.floorplans_admin"}}</a>
                     {{end}}
-                    {{if and (not .DisableProjects) (.User.HasRole "projects_admin")}}
+                    {{if and (not .DisableProjects) (.User.HasRole "projects_manager")}}
                     <a href="/admin/projects" class="inline-flex items-center gap-1.5 text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">
                         <svg class="h-4 w-4 opacity-90" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 19h16M6 15l4-4 3 3 5-6"/>
@@ -306,7 +306,7 @@
                             <circle cx="13" cy="14" r="1" fill="currentColor"/>
                             <circle cx="18" cy="8" r="1" fill="currentColor"/>
                         </svg>
-                        {{index .T "nav.projects_admin"}}
+                        {{index .T "nav.projects_manager"}}
                     </a>
                     {{end}}
                     {{if or (.User.HasRole "team_manager") (.User.HasRole "team_leader")}}

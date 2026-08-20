@@ -592,7 +592,7 @@ func joinStrings(s []string, sep string) string {
 	return result
 }
 
-// GetTeamIDsForUser returns the IDs of teams the user is a leader of (or all teams if global/projects_admin).
+// GetTeamIDsForUser returns the IDs of teams the user is a leader of (or all teams if global/projects_manager).
 // Used for scoping the report to team-leader users.
 func (d *DB) GetTeamIDsForUser(userID int64) ([]int64, error) {
 	rows, err := d.core.Query(`SELECT team_id FROM user_teams WHERE user_id = ?`, userID)

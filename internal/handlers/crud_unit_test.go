@@ -95,7 +95,7 @@ func TestAdminCreateProjectAndUpdateProject_WithMiniProjectDetails(t *testing.T)
 	d := newCRUDTestDB(t)
 	h := &ProjectsHandler{DB: d}
 
-	createReq := createAuthedReq(t, d, http.MethodPost, "/api/admin/projects", "padmin@example.com", "PAdmin", "password1", models.RoleProjectsAdmin,
+	createReq := createAuthedReq(t, d, http.MethodPost, "/api/admin/projects", "padmin@example.com", "PAdmin", "password1", models.RoleProjectsManager,
 		[]byte(`{"name":"Mini Proj","code":"MINIP","active":true,"mini_project":true,"start_date":"2026-01-01","end_date":"2026-12-31","initial_end_date":"2026-06-30"}`))
 	wCreate := httptest.NewRecorder()
 	middleware.Auth(d, http.HandlerFunc(h.CreateProject)).ServeHTTP(wCreate, createReq)
@@ -119,7 +119,7 @@ func TestAdminCreateProjectAndUpdateProject_WithMiniProjectDetails(t *testing.T)
 		t.Errorf("InitialEndDate: want 2026-06-30, got %q", p.InitialEndDate)
 	}
 
-	updateReq := createAuthedReq(t, d, http.MethodPut, "/api/admin/projects/"+strconvI64(projID), "padmin2@example.com", "PAdmin2", "password1", models.RoleProjectsAdmin,
+	updateReq := createAuthedReq(t, d, http.MethodPut, "/api/admin/projects/"+strconvI64(projID), "padmin2@example.com", "PAdmin2", "password1", models.RoleProjectsManager,
 		[]byte(`{"name":"Mini Proj Updated","code":"MINIP2","active":true,"mini_project":false,"start_date":"2026-01-01","end_date":"2026-12-31","initial_end_date":"2026-09-15"}`))
 	updateReq.SetPathValue("id", strconvI64(projID))
 	wUpdate := httptest.NewRecorder()
@@ -144,7 +144,7 @@ func TestAdminCreateProject_EmptyInitialEndDateDefaultsToEndDate(t *testing.T) {
 	d := newCRUDTestDB(t)
 	h := &ProjectsHandler{DB: d}
 
-	createReq := createAuthedReq(t, d, http.MethodPost, "/api/admin/projects", "padmin3@example.com", "PAdmin3", "password1", models.RoleProjectsAdmin,
+	createReq := createAuthedReq(t, d, http.MethodPost, "/api/admin/projects", "padmin3@example.com", "PAdmin3", "password1", models.RoleProjectsManager,
 		[]byte(`{"name":"NoInitialEnd","code":"NIE","active":true,"start_date":"2026-01-01","end_date":"2026-12-31"}`))
 	wCreate := httptest.NewRecorder()
 	middleware.Auth(d, http.HandlerFunc(h.CreateProject)).ServeHTTP(wCreate, createReq)
@@ -271,7 +271,7 @@ func TestFloorplanAndProjectAdminValidation(t *testing.T) {
 		t.Fatalf("expected 400 invalid reserve payload, got %d", wRes.Code)
 	}
 
-	reqCreate := createAuthedReq(t, d, http.MethodPost, "/api/admin/projects", "padm@example.com", "PAdm", "password1", models.RoleProjectsAdmin, []byte(`{"name":"","code":"X","start_date":"2026-01-01","end_date":"2026-12-31"}`))
+	reqCreate := createAuthedReq(t, d, http.MethodPost, "/api/admin/projects", "padm@example.com", "PAdm", "password1", models.RoleProjectsManager, []byte(`{"name":"","code":"X","start_date":"2026-01-01","end_date":"2026-12-31"}`))
 	wCreate := httptest.NewRecorder()
 	middleware.Auth(d, http.HandlerFunc(ph.CreateProject)).ServeHTTP(wCreate, reqCreate)
 	if wCreate.Code != http.StatusBadRequest {
@@ -691,7 +691,7 @@ func TestUpdateProject_ValidationAndSuccess(t *testing.T) {
 
 	// Missing name → 400.
 	reqBad := createAuthedReq(t, d, http.MethodPut, "/api/admin/projects/"+strconvI64(projID),
-		"pa@proj.com", "PA", "password1", models.RoleProjectsAdmin,
+		"pa@proj.com", "PA", "password1", models.RoleProjectsManager,
 		[]byte(`{"name":"","code":"ORIG","start_date":"2026-01-01","end_date":"2026-12-31"}`))
 	reqBad.SetPathValue("id", strconvI64(projID))
 	wBad := httptest.NewRecorder()
@@ -702,7 +702,7 @@ func TestUpdateProject_ValidationAndSuccess(t *testing.T) {
 
 	// Valid update → 200.
 	reqOK := createAuthedReq(t, d, http.MethodPut, "/api/admin/projects/"+strconvI64(projID),
-		"pa2@proj.com", "PA2", "password1", models.RoleProjectsAdmin,
+		"pa2@proj.com", "PA2", "password1", models.RoleProjectsManager,
 		[]byte(`{"name":"Updated","code":"UPD","active":true,"start_date":"2026-01-01","end_date":"2026-12-31"}`))
 	reqOK.SetPathValue("id", strconvI64(projID))
 	wOK := httptest.NewRecorder()

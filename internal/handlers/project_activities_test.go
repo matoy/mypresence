@@ -449,7 +449,7 @@ func TestAccessibleManualTeams_ProjectsAdmin_SeesAll(t *testing.T) {
 	d.CreateTeamWithDetails("Beta", "BET", false) //nolint:errcheck
 	tid3, _ := d.CreateTeamWithDetails("Gamma", "GAM", true)
 
-	admin := &models.User{Roles: models.RoleProjectsAdmin}
+	admin := &models.User{Roles: models.RoleProjectsManager}
 	teams := h.accessibleManualTeams(admin)
 	if len(teams) != 2 {
 		t.Fatalf("expected 2 manual teams, got %d", len(teams))

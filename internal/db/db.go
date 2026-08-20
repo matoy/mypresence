@@ -457,6 +457,7 @@ FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	d.core.Exec(dl.rebind(dl.addColumnIfNotExists("users", "disabled", fmt.Sprintf("%s NOT NULL DEFAULT %s", bool_, dl.boolDefault(false)))))                    //nolint:errcheck
 	d.core.Exec(`UPDATE users SET role = REPLACE(role, 'stats_viewer', 'activity_viewer') WHERE role LIKE '%stats_viewer%'`)                                     //nolint:errcheck
 	d.core.Exec(`UPDATE users SET role = REPLACE(role, 'cra_viewer', 'activity_viewer') WHERE role LIKE '%cra_viewer%'`)                                         //nolint:errcheck
+	d.core.Exec(`UPDATE users SET role = REPLACE(role, 'projects_admin', 'projects_manager') WHERE role LIKE '%projects_admin%'`)                                //nolint:errcheck
 	d.core.Exec(dl.rebind(dl.modifyColumnType("users", "role", dl.varcharType(128), "VARCHAR(64)")))                                                             //nolint:errcheck
 	d.core.Exec(dl.rebind(dl.addColumnIfNotExists("user_teams", "left_at", dl.varcharType(10)+" DEFAULT NULL")))                                                 //nolint:errcheck
 	d.core.Exec(dl.rebind(dl.addColumnIfNotExists("teams", "jira_space_key", nameType+" DEFAULT ''")))                                                           //nolint:errcheck
@@ -1132,7 +1133,7 @@ func (d *DB) UpdateUserRoles(id int64, roles string) error {
 		models.RoleBasic: true, models.RoleTeamManager: true,
 		models.RoleTeamLeader: true, models.RoleStatusManager: true,
 		models.RoleActivityViewer: true, models.RoleFloorplanManager: true,
-		models.RoleProjectsAdmin: true, models.RoleProjectsViewer: true,
+		models.RoleProjectsManager: true, models.RoleProjectsViewer: true,
 		models.RoleGlobal: true,
 	}
 	for _, r := range strings.Split(roles, ",") {
