@@ -71,7 +71,16 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	year, month, viewMode, teamID, domainID := normalizeActivityParams(r, time.Now(), teams, myTeamIDs, myDomainIDs)
+	// Activity viewers who don't manage a domain default to their own first
+	// team rather than an arbitrary one, which may show no data at all.
+	var preferredTeamID int64
+	if currentUser != nil && len(myDomains) == 0 && currentUser.HasRole(models.RoleActivityViewer) {
+		if myOwnTeams, err := h.DB.GetUserTeams(currentUser.ID); err == nil && len(myOwnTeams) > 0 {
+			preferredTeamID = myOwnTeams[0].ID
+		}
+	}
+
+	year, month, viewMode, teamID, domainID := normalizeActivityParams(r, time.Now(), teams, myTeamIDs, myDomains, preferredTeamID)
 
 	startDate := fmt.Sprintf("%04d-%02d-01", year, month)
 	lastDay := time.Date(year, time.Month(month)+1, 0, 0, 0, 0, 0, time.UTC)
@@ -555,8 +564,13 @@ func (h *ActivityHandler) computeManualProjectActivity(stats []models.UserStats,
 
 // normalizeActivityParams parses and normalizes the year, month, viewMode, teamID
 // and domainID query parameters, applying defaults and enforcing team-leader /
-// domain-manager access restrictions.
-func normalizeActivityParams(r *http.Request, now time.Time, teams []models.Team, myTeamIDs map[int64]bool, myDomainIDs map[int64]bool) (year, month int, viewMode string, teamID, domainID int64) {
+// domain-manager access restrictions. preferredTeamID, when set, is used as the
+// default team instead of the alphabetically first one (e.g. the user's own team).
+func normalizeActivityParams(r *http.Request, now time.Time, teams []models.Team, myTeamIDs map[int64]bool, myDomains []models.Domain, preferredTeamID int64) (year, month int, viewMode string, teamID, domainID int64) {
+	myDomainIDs := map[int64]bool{}
+	for _, dm := range myDomains {
+		myDomainIDs[dm.ID] = true
+	}
 	year, _ = strconv.Atoi(r.URL.Query().Get("year"))
 	month, _ = strconv.Atoi(r.URL.Query().Get("month"))
 	teamID, _ = strconv.ParseInt(r.URL.Query().Get("team"), 10, 64)
@@ -574,9 +588,18 @@ func normalizeActivityParams(r *http.Request, now time.Time, teams []models.Team
 	if domainID > 0 && (len(myDomainIDs) == 0 || !myDomainIDs[domainID]) {
 		domainID = 0
 	}
+	// When no team/domain was explicitly requested, a domain manager
+	// defaults to the aggregated view of their first managed domain rather
+	// than an arbitrary team, which may show no data at all.
+	if domainID == 0 && teamID == 0 && len(myDomains) > 0 {
+		domainID = myDomains[0].ID
+	}
 	if domainID > 0 {
 		// A domain selection takes precedence over any team selection.
 		return year, month, viewMode, 0, domainID
+	}
+	if teamID == 0 && preferredTeamID > 0 {
+		teamID = preferredTeamID
 	}
 	if teamID == 0 && len(teams) > 0 {
 		teamID = teams[0].ID
