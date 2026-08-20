@@ -871,6 +871,7 @@ function teamsAdmin(initialTeams) {
         newTeamName: '',
         newTeamJiraKey: '',
         newTeamManual: false,
+        newTeamDomainId: 0,
         createError: '',
         showCreateModal: false,
         filterText: '',
@@ -912,7 +913,8 @@ function teamsAdmin(initialTeams) {
                 body: JSON.stringify({
                     name: this.newTeamName.trim(),
                     jira_space_key: this.newTeamJiraKey.trim(),
-                    timesheets_managed_manually: this.newTeamManual
+                    timesheets_managed_manually: this.newTeamManual,
+                    domain_id: parseInt(this.newTeamDomainId) || 0
                 })
             });
             if (r.ok) {
@@ -928,14 +930,15 @@ function teamsAdmin(initialTeams) {
             }
         },
 
-        async saveTeamDetails(id, name, jiraSpaceKey, timesheetsManagedManually) {
+        async saveTeamDetails(id, name, jiraSpaceKey, timesheetsManagedManually, domainId) {
             await fetch(`/admin/teams/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     name,
                     jira_space_key: (jiraSpaceKey || '').trim(),
-                    timesheets_managed_manually: !!timesheetsManagedManually
+                    timesheets_managed_manually: !!timesheetsManagedManually,
+                    domain_id: parseInt(domainId) || 0
                 })
             });
             window.location.reload();
@@ -977,6 +980,104 @@ function teamsAdmin(initialTeams) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ left_at: null })
             });
+            window.location.reload();
+        }
+    };
+}
+
+// ============================================================
+// Admin: Domains management
+// ============================================================
+function domainsAdmin(initialDomains) {
+    return {
+        domains: initialDomains || [],
+        showModal: false,
+        editId: null,
+        form: { name: '', manager_ids: [], team_ids: [] },
+        managerSearch: '',
+        teamSearch: '',
+        formError: '',
+
+        userName(id) {
+            const u = (allUsersForDomains || []).find(u => u.id === id);
+            return u ? u.name : id;
+        },
+
+        teamName(id) {
+            const t = (allTeamsForDomains || []).find(t => t.id === id);
+            return t ? t.name : id;
+        },
+
+        get filteredManagerCandidates() {
+            const q = this.managerSearch.trim().toLowerCase();
+            return (allUsersForDomains || []).filter(u =>
+                !this.form.manager_ids.includes(u.id) &&
+                (q === '' || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q))
+            );
+        },
+
+        get filteredTeamCandidates() {
+            const q = this.teamSearch.trim().toLowerCase();
+            return (allTeamsForDomains || []).filter(t =>
+                !this.form.team_ids.includes(t.id) &&
+                (q === '' || t.name.toLowerCase().includes(q))
+            );
+        },
+
+        openCreateModal() {
+            this.editId = null;
+            this.form = { name: '', manager_ids: [], team_ids: [] };
+            this.managerSearch = '';
+            this.teamSearch = '';
+            this.formError = '';
+            this.showModal = true;
+        },
+
+        openEditModal(d) {
+            this.editId = d.Domain.id;
+            this.form = {
+                name: d.Domain.name,
+                manager_ids: (d.Managers || []).map(u => u.id),
+                team_ids: (d.Teams || []).map(t => t.id)
+            };
+            this.managerSearch = '';
+            this.teamSearch = '';
+            this.formError = '';
+            this.showModal = true;
+        },
+
+        async save() {
+            this.formError = '';
+            if (!this.form.name.trim()) {
+                this.formError = 'Name is required';
+                return;
+            }
+            const url = this.editId ? `/admin/domains/${this.editId}` : '/admin/domains';
+            const method = this.editId ? 'PUT' : 'POST';
+            const r = await fetch(url, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: this.form.name.trim(),
+                    manager_ids: this.form.manager_ids,
+                    team_ids: this.form.team_ids
+                })
+            });
+            if (r.ok) {
+                this.showModal = false;
+                window.location.reload();
+                return;
+            }
+            try {
+                const d = await r.json();
+                this.formError = d.error || 'Error';
+            } catch (e) {
+                this.formError = 'Error';
+            }
+        },
+
+        async deleteDomain(id) {
+            await fetch(`/admin/domains/${id}`, { method: 'DELETE' });
             window.location.reload();
         }
     };

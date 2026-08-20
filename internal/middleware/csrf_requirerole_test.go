@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/matoy/mypresence/internal/config"
+	"github.com/matoy/mypresence/internal/db"
 	"github.com/matoy/mypresence/internal/models"
 )
 
@@ -255,5 +257,102 @@ func TestRequireRole_MultipleRolesNoneMatchForbidden(t *testing.T) {
 
 	if rec.Code != http.StatusForbidden {
 		t.Errorf("expected 403 for basic user, got %d", rec.Code)
+	}
+}
+
+// ─── RequireRoleOrDomainManager ───────────────────────────────────────────────
+
+func newDomainMiddlewareTestDB(t *testing.T) *db.DB {
+	t.Helper()
+	dir := t.TempDir()
+	database, err := db.Open(&config.Config{DBDriver: "sqlite", DataDir: dir})
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	t.Cleanup(func() { database.Close() })
+	return database
+}
+
+func TestRequireRoleOrDomainManager_NoUserForbidden(t *testing.T) {
+	d := newDomainMiddlewareTestDB(t)
+	handler := RequireRoleOrDomainManager(d, models.RoleActivityViewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/activity", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("expected 403 with no user, got %d", rec.Code)
+	}
+}
+
+func TestRequireRoleOrDomainManager_RoleMatchAllowed(t *testing.T) {
+	d := newDomainMiddlewareTestDB(t)
+	called := false
+	handler := RequireRoleOrDomainManager(d, models.RoleActivityViewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/activity", nil)
+	req = userInCtx(req, &models.User{ID: 1, Roles: models.RoleActivityViewer})
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if !called || rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for matching role, got %d (called=%v)", rec.Code, called)
+	}
+}
+
+func TestRequireRoleOrDomainManager_NoRoleNoDomainForbidden(t *testing.T) {
+	d := newDomainMiddlewareTestDB(t)
+	uid, err := d.CreateLocalUser("basic@example.com", "Basic", "password1")
+	if err != nil {
+		t.Fatalf("CreateLocalUser: %v", err)
+	}
+
+	handler := RequireRoleOrDomainManager(d, models.RoleActivityViewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/activity", nil)
+	req = userInCtx(req, &models.User{ID: uid, Roles: models.RoleBasic})
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("expected 403 for user with no role and no managed domain, got %d", rec.Code)
+	}
+}
+
+func TestRequireRoleOrDomainManager_DomainManagerAllowed(t *testing.T) {
+	d := newDomainMiddlewareTestDB(t)
+	uid, err := d.CreateLocalUser("dm@example.com", "Domain Mgr", "password1")
+	if err != nil {
+		t.Fatalf("CreateLocalUser: %v", err)
+	}
+	domainID, err := d.CreateDomain("Engineering")
+	if err != nil {
+		t.Fatalf("CreateDomain: %v", err)
+	}
+	if err := d.SetDomainManagers(domainID, []int64{uid}); err != nil {
+		t.Fatalf("SetDomainManagers: %v", err)
+	}
+
+	called := false
+	handler := RequireRoleOrDomainManager(d, models.RoleActivityViewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/activity", nil)
+	req = userInCtx(req, &models.User{ID: uid, Roles: models.RoleBasic})
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if !called || rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for domain manager, got %d (called=%v)", rec.Code, called)
 	}
 }

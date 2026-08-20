@@ -123,7 +123,7 @@ func buildTemplateFuncMap(cfg *config.Config) template.FuncMap {
 // Calls log.Fatalf if any template fails to parse.
 func loadTemplates(funcMap template.FuncMap) map[string]*template.Template {
 	pages := []string{
-		"login", "calendar", "admin_teams", "admin_statuses", "admin_activity",
+		"login", "calendar", "admin_teams", "admin_domains", "admin_statuses", "admin_activity",
 		"admin_holidays", "admin_users", "admin_user_logs", "floorplan", "admin_floorplans",
 		"pat", "settings_change_password", "settings_passkeys", "forgot_password", "reset_password",
 		"impersonate", "projects", "admin_projects", "admin_projects_report",
@@ -188,6 +188,13 @@ func newRenderPage(cfg *config.Config, database *db.DB, templates map[string]*te
 			}
 		}
 
+		// Domain managers get scoped access to Activity/Projects Report nav
+		// links even without any other role.
+		var isDomainManager bool
+		if user != nil {
+			isDomainManager, _ = database.IsDomainManager(user.ID)
+		}
+
 		pd := models.PageData{
 			Config: map[string]string{
 				"AppName":        cfg.AppName,
@@ -213,6 +220,7 @@ func newRenderPage(cfg *config.Config, database *db.DB, templates map[string]*te
 			CSRFToken:                  csrfToken,
 			RealAdmin:                  realAdmin,
 			UserTasksMode:              userTasksMode,
+			IsDomainManager:            isDomainManager,
 			TeamCalendarRefreshMinutes: cfg.TeamCalendarRefreshMinutes,
 		}
 		// Fetch active news banners for authenticated users.

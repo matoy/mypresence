@@ -383,16 +383,72 @@ func (h *ProjectsHandler) accessibleManualTeams(currentUser *models.User) []mode
 	for _, id := range ids {
 		myTeamIDs[id] = true
 	}
+	// Domain managers additionally see the manual teams within domains they manage.
+	myDomains, _ := h.DB.GetUserDomains(currentUser.ID)
+	if len(myDomains) > 0 {
+		domainIDs := map[int64]bool{}
+		for _, dm := range myDomains {
+			domainIDs[dm.ID] = true
+		}
+		for _, t := range allTeams {
+			if domainIDs[t.DomainID] {
+				myTeamIDs[t.ID] = true
+			}
+		}
+	}
 	return manualTeamsForUser(allTeams, myTeamIDs)
 }
 
-// resolveActivitiesReportParams parses year/month/team query params for the
-// team-activities report view, restricting the team to one the user can access.
-func (h *ProjectsHandler) resolveActivitiesReportParams(r *http.Request, currentUser *models.User) (teams []models.Team, teamID int64, year, month int) {
+// domainTeamsByID returns the teams of the domain group matching domainID.
+func domainTeamsByID(groups []domainGroupView, domainID int64) []models.Team {
+	for _, g := range groups {
+		if g.Domain.ID == domainID {
+			return g.Teams
+		}
+	}
+	return nil
+}
+
+// domainActivitiesForMonth loads and merges the project activities of every
+// team in the given slice for a given month, sorted by user name then date.
+func (h *ProjectsHandler) domainActivitiesForMonth(teams []models.Team, year, month int) []models.ProjectActivity {
+	var all []models.ProjectActivity
+	for _, t := range teams {
+		acts, err := h.teamActivitiesForMonth(t.ID, year, month)
+		if err != nil {
+			continue
+		}
+		all = append(all, acts...)
+	}
+	sort.Slice(all, func(i, j int) bool {
+		if all[i].UserName != all[j].UserName {
+			return all[i].UserName < all[j].UserName
+		}
+		if all[i].Date != all[j].Date {
+			return all[i].Date < all[j].Date
+		}
+		return all[i].ID < all[j].ID
+	})
+	return all
+}
+
+// activitiesReportParams bundles the resolved query parameters and access
+// scope for the team-activities report view.
+type activitiesReportParams struct {
+	Teams        []models.Team
+	TeamID       int64
+	DomainID     int64
+	DomainGroups []domainGroupView
+	Year, Month  int
+}
+
+// resolveActivitiesReportParams parses year/month/team/domain query params for
+// the team-activities report view, restricting access to what the user can see.
+func (h *ProjectsHandler) resolveActivitiesReportParams(r *http.Request, currentUser *models.User) activitiesReportParams {
 	now := time.Now()
 	query := r.URL.Query()
-	year, _ = strconv.Atoi(query.Get("year"))
-	month, _ = strconv.Atoi(query.Get("month"))
+	year, _ := strconv.Atoi(query.Get("year"))
+	month, _ := strconv.Atoi(query.Get("month"))
 	if year == 0 {
 		year = now.Year()
 	}
@@ -400,32 +456,59 @@ func (h *ProjectsHandler) resolveActivitiesReportParams(r *http.Request, current
 		month = int(now.Month())
 	}
 
-	teams = h.accessibleManualTeams(currentUser)
-	teamID, _ = strconv.ParseInt(query.Get("team"), 10, 64)
-	allowed := teamID == 0
-	for _, t := range teams {
-		if t.ID == teamID {
-			allowed = true
+	teams := h.accessibleManualTeams(currentUser)
+	myDomains, teamsByDomain := domainsAccessForUser(h.DB, currentUser, teams)
+	var domainGroups []domainGroupView
+	for _, dm := range myDomains {
+		domainGroups = append(domainGroups, domainGroupView{Domain: dm, Teams: teamsByDomain[dm.ID]})
+	}
+
+	domainID, _ := strconv.ParseInt(query.Get("domain"), 10, 64)
+	validDomain := false
+	for _, dm := range myDomains {
+		if dm.ID == domainID {
+			validDomain = true
 			break
 		}
 	}
-	if !allowed {
-		teamID = 0
+	if !validDomain {
+		domainID = 0
 	}
-	if teamID == 0 && len(teams) > 0 {
-		teamID = teams[0].ID
+
+	var teamID int64
+	if domainID == 0 {
+		teamID, _ = strconv.ParseInt(query.Get("team"), 10, 64)
+		allowed := teamID == 0
+		for _, t := range teams {
+			if t.ID == teamID {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			teamID = 0
+		}
+		if teamID == 0 && len(teams) > 0 {
+			teamID = teams[0].ID
+		}
 	}
-	return
+
+	return activitiesReportParams{
+		Teams: teams, TeamID: teamID, DomainID: domainID,
+		DomainGroups: domainGroups, Year: year, Month: month,
+	}
 }
 
 // renderTeamActivitiesReportPage renders the team-activities view of the
 // projects report page (GET /admin/projects-report?view=activities).
 func (h *ProjectsHandler) renderTeamActivitiesReportPage(w http.ResponseWriter, r *http.Request, currentUser *models.User, showProjectsTab, showTasksTab bool) {
-	teams, teamID, year, month := h.resolveActivitiesReportParams(r, currentUser)
+	p := h.resolveActivitiesReportParams(r, currentUser)
 
 	var activities []models.ProjectActivity
-	if teamID > 0 {
-		activities, _ = h.teamActivitiesForMonth(teamID, year, month)
+	if p.DomainID > 0 {
+		activities = h.domainActivitiesForMonth(domainTeamsByID(p.DomainGroups, p.DomainID), p.Year, p.Month)
+	} else if p.TeamID > 0 {
+		activities, _ = h.teamActivitiesForMonth(p.TeamID, p.Year, p.Month)
 	}
 	if activities == nil {
 		activities = []models.ProjectActivity{}
@@ -437,44 +520,50 @@ func (h *ProjectsHandler) renderTeamActivitiesReportPage(w http.ResponseWriter, 
 	}
 
 	h.Render(w, r, "admin_projects_report", map[string]interface{}{
-		"ViewMode":        "activities",
-		"ManualTeams":     teams,
-		"SelectedTeamID":  teamID,
-		"Activities":      activities,
-		"ActivityYear":    year,
-		"ActivityMonth":   month,
-		"PrevYear":        prevYM(year, month),
-		"PrevMonth":       prevMonth(month),
-		"NextYear":        nextYM(year, month),
-		"NextMonth":       nextMonth(month),
-		"JiraBaseURL":     jiraBaseURL,
-		"ShowProjectsTab": showProjectsTab,
-		"ShowTasksTab":    showTasksTab,
+		"ViewMode":         "activities",
+		"ManualTeams":      p.Teams,
+		"SelectedTeamID":   p.TeamID,
+		"SelectedDomainID": p.DomainID,
+		"DomainGroups":     p.DomainGroups,
+		"IsDomainManager":  len(p.DomainGroups) > 0,
+		"Activities":       activities,
+		"ActivityYear":     p.Year,
+		"ActivityMonth":    p.Month,
+		"PrevYear":         prevYM(p.Year, p.Month),
+		"PrevMonth":        prevMonth(p.Month),
+		"NextYear":         nextYM(p.Year, p.Month),
+		"NextMonth":        nextMonth(p.Month),
+		"JiraBaseURL":      jiraBaseURL,
+		"ShowProjectsTab":  showProjectsTab,
+		"ShowTasksTab":     showTasksTab,
 	})
 	metrics.ProjectOpsTotal.WithLabelValues("team_activities_report", "success").Inc()
-	slog.Info("project.team_activities_report.view", "user", currentUser.Email, "team_id", teamID, "rows", len(activities))
+	slog.Info("project.team_activities_report.view", "user", currentUser.Email, "team_id", p.TeamID, "domain_id", p.DomainID, "rows", len(activities))
 }
 
 // renderTeamActivitiesReportAPI returns the team-activities report payload as JSON
 // (GET /api/projects-report?view=activities).
 func (h *ProjectsHandler) renderTeamActivitiesReportAPI(w http.ResponseWriter, r *http.Request, currentUser *models.User) {
-	teams, teamID, year, month := h.resolveActivitiesReportParams(r, currentUser)
+	p := h.resolveActivitiesReportParams(r, currentUser)
 
 	var activities []models.ProjectActivity
-	if teamID > 0 {
-		activities, _ = h.teamActivitiesForMonth(teamID, year, month)
+	if p.DomainID > 0 {
+		activities = h.domainActivitiesForMonth(domainTeamsByID(p.DomainGroups, p.DomainID), p.Year, p.Month)
+	} else if p.TeamID > 0 {
+		activities, _ = h.teamActivitiesForMonth(p.TeamID, p.Year, p.Month)
 	}
 	if activities == nil {
 		activities = []models.ProjectActivity{}
 	}
 
 	jsonOK(w, map[string]interface{}{
-		"teams":         teams,
-		"selected_team": teamID,
-		"activities":    activities,
-		"year":          year,
-		"month":         month,
+		"teams":           p.Teams,
+		"selected_team":   p.TeamID,
+		"selected_domain": p.DomainID,
+		"activities":      activities,
+		"year":            p.Year,
+		"month":           p.Month,
 	})
 	metrics.ProjectOpsTotal.WithLabelValues("team_activities_report", "success").Inc()
-	slog.Info("project.team_activities_report.api", "user", currentUser.Email, "team_id", teamID, "rows", len(activities))
+	slog.Info("project.team_activities_report.api", "user", currentUser.Email, "team_id", p.TeamID, "domain_id", p.DomainID, "rows", len(activities))
 }
