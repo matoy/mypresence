@@ -463,6 +463,24 @@ func (h *ProjectsHandler) resolveActivitiesReportParams(r *http.Request, current
 		domainGroups = append(domainGroups, domainGroupView{Domain: dm, Teams: teamsByDomain[dm.ID]})
 	}
 
+	// projects_admin/projects_viewer users who don't manage a domain default
+	// to their own first manual team rather than an arbitrary one.
+	var preferredTeamID int64
+	if len(myDomains) == 0 && currentUser.HasAnyRole(models.RoleProjectsAdmin, models.RoleProjectsViewer) {
+		if myOwnTeams, err := h.DB.GetUserTeams(currentUser.ID); err == nil {
+			teamSet := make(map[int64]bool, len(teams))
+			for _, t := range teams {
+				teamSet[t.ID] = true
+			}
+			for _, t := range myOwnTeams {
+				if teamSet[t.ID] {
+					preferredTeamID = t.ID
+					break
+				}
+			}
+		}
+	}
+
 	domainID, _ := strconv.ParseInt(query.Get("domain"), 10, 64)
 	validDomain := false
 	for _, dm := range myDomains {
@@ -473,6 +491,12 @@ func (h *ProjectsHandler) resolveActivitiesReportParams(r *http.Request, current
 	}
 	if !validDomain {
 		domainID = 0
+	}
+	// When neither team nor domain was explicitly requested, a domain
+	// manager defaults to the aggregated view of their first managed domain
+	// rather than an arbitrary team, which may show no data at all.
+	if domainID == 0 && query.Get("team") == "" && query.Get("domain") == "" && len(myDomains) > 0 {
+		domainID = myDomains[0].ID
 	}
 
 	var teamID int64
@@ -487,6 +511,9 @@ func (h *ProjectsHandler) resolveActivitiesReportParams(r *http.Request, current
 		}
 		if !allowed {
 			teamID = 0
+		}
+		if teamID == 0 && preferredTeamID > 0 {
+			teamID = preferredTeamID
 		}
 		if teamID == 0 && len(teams) > 0 {
 			teamID = teams[0].ID
