@@ -230,11 +230,11 @@ func TestRequireRole_GlobalUserBypassesAllRoles(t *testing.T) {
 }
 
 func TestRequireRole_MultipleRolesAnyMatch(t *testing.T) {
-	handler := RequireRole(models.RoleProjectsAdmin, models.RoleProjectsViewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := RequireRole(models.RoleProjectsManager, models.RoleProjectsViewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	for _, role := range []string{models.RoleProjectsAdmin, models.RoleProjectsViewer} {
+	for _, role := range []string{models.RoleProjectsManager, models.RoleProjectsViewer} {
 		req := httptest.NewRequest(http.MethodGet, "/admin/projects-report", nil)
 		req = userInCtx(req, &models.User{ID: 1, Roles: role})
 		rec := httptest.NewRecorder()
@@ -246,7 +246,7 @@ func TestRequireRole_MultipleRolesAnyMatch(t *testing.T) {
 }
 
 func TestRequireRole_MultipleRolesNoneMatchForbidden(t *testing.T) {
-	handler := RequireRole(models.RoleProjectsAdmin, models.RoleProjectsViewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := RequireRole(models.RoleProjectsManager, models.RoleProjectsViewer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 

@@ -352,7 +352,7 @@ func (h *ProjectsHandler) teamActivitiesForMonth(teamID int64, year, month int) 
 }
 
 // manualTeamsForUser returns the teams with manual timesheets enabled that are
-// visible to the given user: all such teams for projects_admin/projects_viewer,
+// visible to the given user: all such teams for projects_manager/projects_viewer,
 // only their own team(s) for a team_leader.
 func manualTeamsForUser(allTeams []models.Team, myTeamIDs map[int64]bool) []models.Team {
 	var result []models.Team
@@ -375,7 +375,7 @@ func (h *ProjectsHandler) accessibleManualTeams(currentUser *models.User) []mode
 	if err != nil {
 		return nil
 	}
-	if currentUser.HasAnyRole(models.RoleProjectsAdmin, models.RoleProjectsViewer) {
+	if currentUser.HasAnyRole(models.RoleProjectsManager, models.RoleProjectsViewer) {
 		return manualTeamsForUser(allTeams, nil)
 	}
 	ids, _ := h.DB.GetTeamIDsForUser(currentUser.ID)
@@ -463,10 +463,10 @@ func (h *ProjectsHandler) resolveActivitiesReportParams(r *http.Request, current
 		domainGroups = append(domainGroups, domainGroupView{Domain: dm, Teams: teamsByDomain[dm.ID]})
 	}
 
-	// projects_admin/projects_viewer users who don't manage a domain default
+	// projects_manager/projects_viewer users who don't manage a domain default
 	// to their own first manual team rather than an arbitrary one.
 	var preferredTeamID int64
-	if len(myDomains) == 0 && currentUser.HasAnyRole(models.RoleProjectsAdmin, models.RoleProjectsViewer) {
+	if len(myDomains) == 0 && currentUser.HasAnyRole(models.RoleProjectsManager, models.RoleProjectsViewer) {
 		if myOwnTeams, err := h.DB.GetUserTeams(currentUser.ID); err == nil {
 			teamSet := make(map[int64]bool, len(teams))
 			for _, t := range teams {

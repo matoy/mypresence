@@ -13,7 +13,7 @@ const (
 	RoleStatusManager    = "status_manager"
 	RoleActivityViewer   = "activity_viewer"
 	RoleFloorplanManager = "floorplan_manager"
-	RoleProjectsAdmin    = "projects_admin"
+	RoleProjectsManager  = "projects_manager"
 	RoleProjectsViewer   = "projects_viewer"
 	RoleGlobal           = "global"
 )
@@ -27,9 +27,9 @@ var AllRoles = []struct {
 	{RoleTeamManager, "Team manager"},
 	{RoleTeamLeader, "Team leader"},
 	{RoleStatusManager, "Status manager"},
-	{RoleActivityViewer, "Activity manager"},
+	{RoleActivityViewer, "Activity viewer"},
 	{RoleFloorplanManager, "Floorplan manager"},
-	{RoleProjectsAdmin, "Projects manager"},
+	{RoleProjectsManager, "Projects manager"},
 	{RoleProjectsViewer, "Projects viewer"},
 	{RoleGlobal, "Global (admin)"},
 }

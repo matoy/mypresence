@@ -153,7 +153,7 @@ func TestProjectsAPI_AdminSeesAllProjects(t *testing.T) {
 	other, _ := d.CreateLocalUser("admsother@test.com", "AdmsOther", "password1")
 	d.SetProjectMembers(pid2, []int64{other}) //nolint:errcheck
 
-	// Admin user (projects_admin role)
+	// Admin user (projects_manager role)
 	req := createAdminReq(t, d, http.MethodGet, "/api/projects?year=2026&month=5", nil)
 	w := httptest.NewRecorder()
 	w.Body = new(bytes.Buffer)

@@ -207,7 +207,7 @@ func (h *ProjectsHandler) SetProjectTime(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Check assignment: only assigned users (or open projects) may declare time.
-	if !user.HasAnyRole(models.RoleProjectsAdmin, models.RoleProjectsViewer) {
+	if !user.HasAnyRole(models.RoleProjectsManager, models.RoleProjectsViewer) {
 		assigned, aErr := h.DB.IsUserAssignedToProject(user.ID, req.ProjectID)
 		if aErr != nil || !assigned {
 			metrics.ProjectOpsTotal.WithLabelValues("set_time", "failure").Inc()
@@ -461,11 +461,11 @@ func buildMonthKeysFromRange(dateFrom, dateTo string) []string {
 
 // reportTabVisibility determines whether the "Projects view" and "Tasks view"
 // tabs should be shown on the projects report page for the given user.
-// projects_admin/projects_viewer always see both (global visibility); a plain
+// projects_manager/projects_viewer always see both (global visibility); a plain
 // team_leader only sees the tab(s) matching the type(s) of team(s) they belong
 // to (manual-timesheet teams -> Tasks view, others -> Projects view).
 func (h *ProjectsHandler) reportTabVisibility(currentUser *models.User) (showProjects, showTasks bool) {
-	if currentUser.HasAnyRole(models.RoleProjectsAdmin, models.RoleProjectsViewer) {
+	if currentUser.HasAnyRole(models.RoleProjectsManager, models.RoleProjectsViewer) {
 		return true, true
 	}
 	ids, _ := h.DB.GetTeamIDsForUser(currentUser.ID)
@@ -646,7 +646,7 @@ func (h *ProjectsHandler) ToggleProjectFavoriteAPI(w http.ResponseWriter, r *htt
 // listProjectsForUser returns active projects for a given month, filtered by
 // user assignment unless the user holds an admin/viewer role.
 func (h *ProjectsHandler) listProjectsForUser(user *models.User, year, month int) []models.Project {
-	if user.HasAnyRole(models.RoleProjectsAdmin, models.RoleProjectsViewer) {
+	if user.HasAnyRole(models.RoleProjectsManager, models.RoleProjectsViewer) {
 		projects, _ := h.DB.ListActiveProjectsForMonth(year, month)
 		return projects
 	}
@@ -725,7 +725,7 @@ func (h *ProjectsHandler) exceedsBillableCap(userID, projectID int64, year, mont
 // and set of month keys, restricting to the user's teams when they lack admin/viewer role.
 func (h *ProjectsHandler) buildProjectReportRows(currentUser *models.User, monthKeys []string) ([]models.ProjectReportRow, []models.Team) {
 	var teamIDFilter []int64
-	if !currentUser.HasAnyRole(models.RoleProjectsAdmin, models.RoleProjectsViewer) {
+	if !currentUser.HasAnyRole(models.RoleProjectsManager, models.RoleProjectsViewer) {
 		ids, _ := h.DB.GetTeamIDsForUser(currentUser.ID)
 		teamIDFilter = ids
 	}

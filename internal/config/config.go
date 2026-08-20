@@ -7,7 +7,7 @@ import (
 )
 
 // Version is the application version, updated manually for each release.
-const Version = "0.6.4"
+const Version = "0.6.5"
 
 // Config holds all application configuration loaded from environment variables.
 //
@@ -68,7 +68,7 @@ type Config struct {
 	SAMLGroupStatusManager    string // group ID → status_manager role
 	SAMLGroupActivityViewer   string // group ID → activity_viewer role
 	SAMLGroupFloorplanManager string // group ID → floorplan_manager role
-	SAMLGroupProjectsManager  string // group ID → projects_admin role
+	SAMLGroupProjectsManager  string // group ID → projects_manager role
 	SAMLGroupProjectsViewer   string // group ID → projects_viewer role
 
 	// Internationalisation

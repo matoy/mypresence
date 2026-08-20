@@ -350,7 +350,7 @@ The floor plan feature allows administrators to set up interactive office maps s
 
 The project management feature allows organizations to track employee time allocation across projects, with automatic billable days enforcement and role-based reporting.
 
-### Admin setup (`projects_admin` role required)
+### Admin setup (`projects_manager` role required)
 
 1. Go to **📂 Projects (admin)** in the navigation.
 2. Create projects with:
@@ -369,7 +369,7 @@ The project management feature allows organizations to track employee time alloc
   - The app enforces a **billable days cap**: the total time declared cannot exceed billable days for the month (based on recorded presences).
   - A progress bar shows declared vs. available billable days.
   - **Save** each project entry individually.
-- Navigate to **📂 Projects (report)** (`projects_admin`, `projects_viewer`, or `team_leader`) to review:
+- Navigate to **📂 Projects (report)** (`projects_manager`, `projects_viewer`, or `team_leader`) to review:
   - All project time entries per user, aggregated by month.
   - **Filters**: text search (project name/code), active/inactive, team selection.
   - **Team leaders** see only projects in their assigned teams.
@@ -387,7 +387,7 @@ The project management feature allows organizations to track employee time alloc
 Once a user's project time declaration (percentage-based or "Timesheets managed manually") covers all of their billable days for the month, a **Certify** button appears on **📂 Projects**, mirroring the presence-declaration certification on the personal calendar. Confirming it locks that month's project declarations against further edits.
 
 - A certified user's name shows a blue 🔒 seal on **📋 Activity Report** (in addition to the amber 🔒 seal for a certified presence declaration — both can appear together).
-- `global`, `activity_viewer` (Activity manager), and `team_leader` (own team members only) can decertify a project declaration from the Activity Report, the same way as for presence declarations.
+- `global`, `activity_viewer` (Activity viewer), and `team_leader` (own team members only) can decertify a project declaration from the Activity Report, the same way as for presence declarations.
 
 ### "Timesheets managed manually" mode (daily activities)
 
@@ -397,9 +397,9 @@ Some teams may need finer-grained tracking than a monthly percentage per project
   - **Type**: Jira ticket, ServiceNow request, or other.
   - **Reference**: for the Jira type, the ticket is picked from a searchable dropdown (see Jira integration below); other types just take a free-text comment.
   - **Percentage**: the activities declared for a day must add up to that day's billable weight (100% for a full day, 50% for a half day) to be marked complete.
-- **📂 Projects (report) → Team activities** tab (`projects_admin`, `projects_viewer`, or `team_leader`) lists every declared activity for a team and month, with filters on person, type, reference, and comment; Jira references are clickable and open the ticket in a popup.
+- **📂 Projects (report) → Team activities** tab (`projects_manager`, `projects_viewer`, or `team_leader`) lists every declared activity for a team and month, with filters on person, type, reference, and comment; Jira references are clickable and open the ticket in a popup.
 - If a user belongs to several manual-timesheets teams, the first one (by name) is used.
-- `team_leader` users only see activities for their own team(s); `projects_admin`/`projects_viewer`/`global` see all manual teams.
+- `team_leader` users only see activities for their own team(s); `projects_manager`/`projects_viewer`/`global` see all manual teams.
 
 ### Jira integration
 
@@ -428,9 +428,9 @@ Roles are cumulative (stored as a comma-separated string per user). The `global`
 | `team_leader` | Team leader | View calendar and activity report for own team; view project reports for own teams; decertify declarations for own team members |
 | `team_manager` | Team manager | Team management + edit any user's presences |
 | `status_manager` | Status manager | Create / edit / delete presence statuses |
-| `activity_viewer` | Activity manager | View Activity Report (billable days) by team, across all teams; decertify any user's declarations |
+| `activity_viewer` | Activity viewer | View Activity Report (billable days) by team, across all teams; decertify any user's declarations |
 | `floorplan_manager` | Floorplan manager | Create / edit floor plans and seats |
-| `projects_admin` | Projects manager | Create / edit / delete projects; view full project reports |
+| `projects_manager` | Projects manager | Create / edit / delete projects; view full project reports |
 | `projects_viewer` | Projects viewer | View project time entries and reports |
 | `global` | Global (admin) | Full access — includes user/role management, public holidays, project administration, and decertifying any declaration |
 
@@ -453,8 +453,8 @@ Domain managers are a separate, role-independent mechanism: assign a user as man
 | `/admin/statuses` | `status_manager` | Manage presence statuses |
 | `/admin/activity` | `activity_viewer` or `team_leader` (or a domain manager, for their domain) | Activity report by team, domain, and period |
 | `/admin/floorplans` | `floorplan_manager` | Manage floor plans and seats |
-| `/admin/projects` | `projects_admin` | Create and manage projects |
-| `/admin/projects-report` | `projects_admin`, `projects_viewer`, or `team_leader` (or a domain manager, for their domain) | Project time tracking and reporting |
+| `/admin/projects` | `projects_manager` | Create and manage projects |
+| `/admin/projects-report` | `projects_manager`, `projects_viewer`, or `team_leader` (or a domain manager, for their domain) | Project time tracking and reporting |
 | `/admin/holidays` | `global` | Manage public holidays |
 | `/admin/users` | `global` | Manage users, roles and passwords |
 | `/admin/users/{id}/logs` | `global` | Presence audit log for a user |

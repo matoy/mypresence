@@ -90,13 +90,13 @@ func TestLayoutTemplate_AdminMenu_ShowsProjectsAndImpersonateForGlobal(t *testin
 }
 
 func TestLayoutTemplate_AdminMenu_ShowsForProjectsAdminOnly(t *testing.T) {
-	html := renderLayoutForUser(t, &models.User{ID: 1, Name: "Proj Admin", Roles: models.RoleProjectsAdmin}, false)
+	html := renderLayoutForUser(t, &models.User{ID: 1, Name: "Proj Admin", Roles: models.RoleProjectsManager}, false)
 
 	if !strings.Contains(html, "adminMenuOpen") {
-		t.Fatal("admin menu should be visible for projects_admin")
+		t.Fatal("admin menu should be visible for projects_manager")
 	}
 	if !strings.Contains(html, "/admin/projects") {
-		t.Fatal("admin projects link should be present for projects_admin")
+		t.Fatal("admin projects link should be present for projects_manager")
 	}
 }
 

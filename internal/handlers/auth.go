@@ -392,7 +392,7 @@ func (h *AuthHandler) syncSAMLGroupRoles(user *models.User, assertion *saml.Asse
 		{cfg.SAMLGroupStatusManager, models.RoleStatusManager},
 		{cfg.SAMLGroupActivityViewer, models.RoleActivityViewer},
 		{cfg.SAMLGroupFloorplanManager, models.RoleFloorplanManager},
-		{cfg.SAMLGroupProjectsManager, models.RoleProjectsAdmin},
+		{cfg.SAMLGroupProjectsManager, models.RoleProjectsManager},
 		{cfg.SAMLGroupProjectsViewer, models.RoleProjectsViewer},
 	} {
 		if m.groupID != "" && groupSet[m.groupID] {

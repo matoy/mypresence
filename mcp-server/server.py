@@ -427,7 +427,7 @@ def update_user_roles(user_id: int, roles: list[str]) -> dict:
     Requires the `global` role.
 
     Valid roles: basic, team_manager, team_leader, status_manager, activity_viewer,
-    floorplan_manager, projects_admin, projects_viewer, global.
+    floorplan_manager, projects_manager, projects_viewer, global.
 
     Args:
         user_id: ID of the user to update.
@@ -708,7 +708,7 @@ def get_projects_report(
 ) -> dict:
     """
     Return the project report (all projects, all users, monthly breakdown).
-    Requires `projects_admin`, `projects_viewer`, or `team_leader` role.
+    Requires `projects_manager`, `projects_viewer`, or `team_leader` role.
     Team leaders only see their own teams.
 
     Args:
@@ -727,7 +727,7 @@ def list_admin_projects(
 ) -> dict:
     """
     List projects and teams for admin management.
-    Requires `projects_admin` role.
+    Requires `projects_manager` role.
 
     Args:
         q:      Optional text filter on project code or name.
@@ -748,7 +748,7 @@ def create_project(
 ) -> dict:
     """
     Create a new project.
-    Requires `projects_admin` role.
+    Requires `projects_manager` role.
 
     Args:
         name:       Project display name.
@@ -778,7 +778,7 @@ def update_project(
 ) -> dict:
     """
     Update an existing project.
-    Requires `projects_admin` role.
+    Requires `projects_manager` role.
 
     Args:
         project_id: ID of the project to update.

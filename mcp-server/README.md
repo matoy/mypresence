@@ -206,10 +206,10 @@ In `.vscode/mcp.json` at the workspace root:
 | `get_my_projects` | `GET /api/projects` | Authenticated |
 | `get_my_project_time` | `GET /api/project-time` | Authenticated |
 | `set_project_time` | `POST /api/project-time` | Authenticated |
-| `get_projects_report` | `GET /api/projects-report` | `projects_admin`, `projects_viewer`, or `team_leader` |
-| `list_admin_projects` | `GET /api/admin/projects` | `projects_admin` |
-| `create_project` | `POST /api/admin/projects` | `projects_admin` |
-| `update_project` | `PUT /api/admin/projects/{id}` | `projects_admin` |
+| `get_projects_report` | `GET /api/projects-report` | `projects_manager`, `projects_viewer`, or `team_leader` |
+| `list_admin_projects` | `GET /api/admin/projects` | `projects_manager` |
+| `create_project` | `POST /api/admin/projects` | `projects_manager` |
+| `update_project` | `PUT /api/admin/projects/{id}` | `projects_manager` |
 
 ### 📈 Activity Report
 

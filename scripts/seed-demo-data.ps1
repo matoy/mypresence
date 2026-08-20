@@ -400,9 +400,9 @@ if ($r) { Write-Host "  Seat A1 reserved: $($r.booked) days" }
 
 # ── 9. Projects ───────────────────────────────────────────────────────────────
 Write-Host "`nCreating projects..."
-# Give alice projects_admin role (in addition to her team_manager role)
-PutJSON "$Base/api/users/$($U.alice)/roles" @{ roles=@("team_manager","projects_admin") } | Out-Null
-Write-Host "  alice: roles set to team_manager + projects_admin"
+# Give alice projects_manager role (in addition to her team_manager role)
+PutJSON "$Base/api/users/$($U.alice)/roles" @{ roles=@("team_manager","projects_manager") } | Out-Null
+Write-Host "  alice: roles set to team_manager + projects_manager"
 
 $projIDs = @{}
 # Pre-load any projects that already exist so we never create duplicates
