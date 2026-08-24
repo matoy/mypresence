@@ -2,11 +2,14 @@ package handlers
 
 import (
 	"bytes"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/matoy/mypresence/internal/middleware"
+	"github.com/matoy/mypresence/internal/models"
 )
 
 // TestGetPresencesAPI_WithMembers covers calendar.go L.255-257 (loop body when members non-empty)
@@ -104,5 +107,69 @@ func TestFloorplan_UpdateSeatDBError(t *testing.T) {
 	})).ServeHTTP(w, req)
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestFloorplan_Reservations_Branches(t *testing.T) {
+	d := newExtraTestDB(t)
+	h := &FloorplanHandler{DB: d}
+
+	uID, _ := d.CreateLocalUser("seat_res_user@test.com", "Seat User", "pass")
+	user, _ := d.GetUserByID(uID)
+
+	sID, _ := d.CreateStatus(models.Status{Name: "Work", Color: "#000000", OnSite: true, Billable: true})
+	fpID, _ := d.CreateFloorplan("Floor 1", 0)
+	seatID, _ := d.CreateSeat(fpID, "Desk 1", 10, 10)
+
+	// 1. Bad JSON
+	rec := httptest.NewRecorder()
+	req := reqWithUser(d, user, http.MethodPost, "/api/reservations", strings.NewReader("bad-json"))
+	h.ReserveSeat(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 on bad json ReserveSeat, got %d", rec.Code)
+	}
+
+	// 2. Missing params (seat_id == 0)
+	rec = httptest.NewRecorder()
+	req = reqWithUser(d, user, http.MethodPost, "/api/reservations", strings.NewReader(`{"seat_id":0,"date":"2026-08-20"}`))
+	h.ReserveSeat(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 on missing seat_id, got %d", rec.Code)
+	}
+
+	// 3. User not on-site -> 403
+	rec = httptest.NewRecorder()
+	req = reqWithUser(d, user, http.MethodPost, "/api/reservations", strings.NewReader(fmt.Sprintf(`{"seat_id":%d,"date":"2026-08-20"}`, seatID)))
+	h.ReserveSeat(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("expected 403 when user not declared on site, got %d", rec.Code)
+	}
+
+	// 4. User on-site -> reserve success (200)
+	_ = d.SetPresences(uID, []string{"2026-08-20"}, sID, "full")
+	rec = httptest.NewRecorder()
+	req = reqWithUser(d, user, http.MethodPost, "/api/reservations", strings.NewReader(fmt.Sprintf(`{"seat_id":%d,"date":"2026-08-20"}`, seatID)))
+	h.ReserveSeat(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 on ReserveSeat success, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// 5. Conflict: duplicate reservation on same seat & date -> 409
+	rec = httptest.NewRecorder()
+	req = reqWithUser(d, user, http.MethodPost, "/api/reservations", strings.NewReader(fmt.Sprintf(`{"seat_id":%d,"date":"2026-08-20"}`, seatID)))
+	h.ReserveSeat(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Errorf("expected 409 on duplicate reservation, got %d", rec.Code)
+	}
+
+	// 6. CancelReservation
+	resDates, _ := d.GetUserReservationDates(uID, "2026-08-01", "2026-08-31")
+	_ = resDates
+	rec = httptest.NewRecorder()
+	req = reqWithUser(d, user, http.MethodDelete, "/api/reservations/1", nil)
+	req.SetPathValue("id", "1")
+	h.CancelReservation(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200 on CancelReservation, got %d", rec.Code)
 	}
 }

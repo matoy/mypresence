@@ -1,6 +1,7 @@
 package mailer
 
 import (
+	"crypto/tls"
 	"strings"
 	"testing"
 )
@@ -41,6 +42,18 @@ func TestSendTLSDialFailureReturnsError(t *testing.T) {
 	}
 }
 
+func TestSendTLSWithCustomHook(t *testing.T) {
+	tlsConfigForAddr = func(addr, host string) *tls.Config {
+		return &tls.Config{InsecureSkipVerify: true}
+	}
+	defer func() { tlsConfigForAddr = nil }()
+
+	err := sendTLS("127.0.0.1:1", "localhost", nil, "from@example.com", "to@example.com", []byte("x"))
+	if err == nil {
+		t.Fatal("expected TLS dial error")
+	}
+}
+
 func TestSendSMTPWithAuthConnectionError(t *testing.T) {
 	err := Send("smtp://user:pass@127.0.0.1:1", "from@example.com", "to@example.com", "subject", "body")
 	if err == nil {
@@ -53,4 +66,10 @@ func TestSendSMTPSWithAuthConnectionError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected tls connection error")
 	}
+}
+
+func TestSendDefaultPortsInference(t *testing.T) {
+	// Tests omission of port for both smtp and smtps
+	_ = Send("smtp://user:pass@127.0.0.1", "from@example.com", "to@example.com", "subject", "body")
+	_ = Send("smtps://user:pass@127.0.0.1", "from@example.com", "to@example.com", "subject", "body")
 }

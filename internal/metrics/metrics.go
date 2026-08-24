@@ -102,7 +102,7 @@ type HealthStats struct {
 // RegisterHealthCollector constructs and registers a custom Prometheus collector
 // that invokes fn on every scrape to obtain current health data.
 func RegisterHealthCollector(fn func() HealthStats) {
-	prometheus.MustRegister(newHealthCollector(fn))
+	_ = prometheus.Register(newHealthCollector(fn))
 }
 
 type healthCollector struct {
@@ -152,7 +152,7 @@ type DBStats struct {
 // RegisterDBCollector constructs and registers a custom Prometheus collector
 // that invokes fn on every scrape to obtain current DB counts.
 func RegisterDBCollector(fn func() DBStats) {
-	prometheus.MustRegister(newDBCollector(fn))
+	_ = prometheus.Register(newDBCollector(fn))
 }
 
 type dbCollector struct {

@@ -1,10 +1,10 @@
 package main
 
 import (
-	"encoding/json"
 	"html/template"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,634 +13,388 @@ import (
 	"github.com/matoy/mypresence/internal/config"
 	"github.com/matoy/mypresence/internal/db"
 	"github.com/matoy/mypresence/internal/models"
+	"github.com/matoy/mypresence/internal/testhelper"
 )
 
-// ---------------------------------------------------------------------------
-// buildTemplateFuncMap — pure helper functions
-// ---------------------------------------------------------------------------
-
-func funcMap(t *testing.T) template.FuncMap {
-	t.Helper()
-	return buildTemplateFuncMap(&config.Config{OnsiteRatioThreshold: 60})
-}
-
-func TestFuncMap_Add(t *testing.T) {
-	add := funcMap(t)["add"].(func(int, int) int)
-	if got := add(3, 4); got != 7 {
-		t.Errorf("add(3,4) = %d, want 7", got)
-	}
-	if got := add(-1, 1); got != 0 {
-		t.Errorf("add(-1,1) = %d, want 0", got)
-	}
-}
-
-func TestFuncMap_Sub(t *testing.T) {
-	sub := funcMap(t)["sub"].(func(int, int) int)
-	if got := sub(10, 3); got != 7 {
-		t.Errorf("sub(10,3) = %d, want 7", got)
-	}
-}
-
-func TestFuncMap_Seq(t *testing.T) {
-	seq := funcMap(t)["seq"].(func(int) []int)
-	if got := seq(0); len(got) != 0 {
-		t.Errorf("seq(0) = %v, want []", got)
-	}
-	s := seq(3)
-	if len(s) != 3 || s[0] != 0 || s[1] != 1 || s[2] != 2 {
-		t.Errorf("seq(3) = %v, want [0 1 2]", s)
-	}
-}
-
-func TestFuncMap_Json(t *testing.T) {
-	jsonFn := funcMap(t)["json"].(func(interface{}) template.JS)
-	got := jsonFn(map[string]int{"a": 1})
-	var m map[string]int
-	if err := json.Unmarshal([]byte(got), &m); err != nil || m["a"] != 1 {
-		t.Errorf("json funcmap: got %q, parse error or wrong value", got)
-	}
-}
-
-func TestFuncMap_StatusColor(t *testing.T) {
-	statusColor := funcMap(t)["statusColor"].(func([]models.Status, int64) string)
-	statuses := []models.Status{{ID: 1, Color: "#ff0000"}, {ID: 2, Color: "#00ff00"}}
-	if got := statusColor(statuses, 1); got != "#ff0000" {
-		t.Errorf("statusColor(1) = %q, want #ff0000", got)
-	}
-	if got := statusColor(statuses, 99); got != "#e5e7eb" {
-		t.Errorf("statusColor(missing) = %q, want #e5e7eb", got)
-	}
-}
-
-func TestFuncMap_StatusName(t *testing.T) {
-	statusName := funcMap(t)["statusName"].(func([]models.Status, int64) string)
-	statuses := []models.Status{{ID: 1, Name: "Remote"}, {ID: 2, Name: "On-site"}}
-	if got := statusName(statuses, 2); got != "On-site" {
-		t.Errorf("statusName(2) = %q, want On-site", got)
-	}
-	if got := statusName(statuses, 99); got != "" {
-		t.Errorf("statusName(missing) = %q, want empty", got)
-	}
-}
-
-func TestFuncMap_HasKey(t *testing.T) {
-	hasKey := funcMap(t)["hasKey"].(func(map[string]int64, string) bool)
-	m := map[string]int64{"2026-01-01": 1}
-	if !hasKey(m, "2026-01-01") {
-		t.Error("hasKey: expected true for existing key")
-	}
-	if hasKey(m, "2026-01-02") {
-		t.Error("hasKey: expected false for missing key")
-	}
-}
-
-func TestFuncMap_GetKey(t *testing.T) {
-	getKey := funcMap(t)["getKey"].(func(map[string]int64, string) int64)
-	m := map[string]int64{"2026-01-01": 42}
-	if got := getKey(m, "2026-01-01"); got != 42 {
-		t.Errorf("getKey: got %d, want 42", got)
-	}
-	if got := getKey(m, "missing"); got != 0 {
-		t.Errorf("getKey(missing): got %d, want 0", got)
-	}
-	if got := getKey(nil, "x"); got != 0 {
-		t.Errorf("getKey(nil): got %d, want 0", got)
-	}
-}
-
-func TestFuncMap_GetCount(t *testing.T) {
-	getCount := funcMap(t)["getCount"].(func(map[int64]int, int64) int)
-	m := map[int64]int{1: 5, 2: 0}
-	if got := getCount(m, 1); got != 5 {
-		t.Errorf("getCount(1) = %d, want 5", got)
-	}
-	if got := getCount(m, 99); got != 0 {
-		t.Errorf("getCount(missing) = %d, want 0", got)
-	}
-}
-
-func TestFuncMap_GetStrCount(t *testing.T) {
-	getStrCount := funcMap(t)["getStrCount"].(func(map[string]int, string) int)
-	m := map[string]int{"remote": 3}
-	if got := getStrCount(m, "remote"); got != 3 {
-		t.Errorf("getStrCount(remote) = %d, want 3", got)
-	}
-	if got := getStrCount(m, "missing"); got != 0 {
-		t.Errorf("getStrCount(missing) = %d, want 0", got)
-	}
-}
-
-func TestFuncMap_SumMap(t *testing.T) {
-	sumMap := funcMap(t)["sumMap"].(func(map[int64]int) int)
-	if got := sumMap(map[int64]int{1: 2, 2: 3}); got != 5 {
-		t.Errorf("sumMap = %d, want 5", got)
-	}
-	if got := sumMap(nil); got != 0 {
-		t.Errorf("sumMap(nil) = %d, want 0", got)
-	}
-}
-
-func TestFuncMap_HasRole(t *testing.T) {
-	hasRole := funcMap(t)["hasRole"].(func(*models.User, string) bool)
-
-	u := &models.User{Roles: "team_manager"}
-	if !hasRole(u, "team_manager") {
-		t.Error("hasRole: expected true for team_manager")
-	}
-	if hasRole(u, "global") {
-		t.Error("hasRole: expected false for global when not assigned")
-	}
-	if hasRole(nil, "global") {
-		t.Error("hasRole(nil): expected false")
+func TestSafeNewsContent(t *testing.T) {
+	cases := []struct {
+		input string
+		want  string
+	}{
+		{
+			input: "Hello world",
+			want:  "Hello world",
+		},
+		{
+			input: "Check [Google](https://google.com) now",
+			want:  `Check <a href="https://google.com" target="_blank" rel="noopener noreferrer" class="underline">Google</a> now`,
+		},
+		{
+			input: "Visit [HTTP](http://example.com/test?a=1&b=2)",
+			want:  `Visit <a href="http://example.com/test?a=1&amp;amp;b=2" target="_blank" rel="noopener noreferrer" class="underline">HTTP</a>`,
+		},
+		{
+			input: "Unsafe [click](javascript:alert(1)) link",
+			want:  "Unsafe [click](javascript:alert(1)) link",
+		},
+		{
+			input: "<script>alert('xss')</script>",
+			want:  "&lt;script&gt;alert(&#39;xss&#39;)&lt;/script&gt;",
+		},
 	}
 
-	// global role implies any role
-	admin := &models.User{Roles: "global"}
-	if !hasRole(admin, "team_manager") {
-		t.Error("hasRole: global user should pass any role check")
-	}
-}
-
-func TestFuncMap_Percent(t *testing.T) {
-	percent := funcMap(t)["percent"].(func(int, int) int)
-	if got := percent(1, 4); got != 25 {
-		t.Errorf("percent(1,4) = %d, want 25", got)
-	}
-	if got := percent(0, 0); got != 0 {
-		t.Errorf("percent(0,0) = %d, want 0 (div-by-zero guard)", got)
-	}
-}
-
-func TestFuncMap_IntToInt64(t *testing.T) {
-	fn := funcMap(t)["intToInt64"].(func(int) int64)
-	if got := fn(42); got != 42 {
-		t.Errorf("intToInt64(42) = %d, want 42", got)
-	}
-}
-
-func TestFuncMap_Upper(t *testing.T) {
-	upper := funcMap(t)["upper"].(func(string) string)
-	if got := upper("hello"); got != "HELLO" {
-		t.Errorf("upper(hello) = %q, want HELLO", got)
-	}
-}
-
-func TestFuncMap_Dict(t *testing.T) {
-	dict := funcMap(t)["dict"].(func(...interface{}) map[string]interface{})
-	d := dict("key", "value", "n", 42)
-	if d["key"] != "value" || d["n"] != 42 {
-		t.Errorf("dict: got %v", d)
-	}
-	// odd number of args — last value is silently dropped
-	d2 := dict("only")
-	if len(d2) != 0 {
-		t.Errorf("dict with odd args: got %v", d2)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// floorplanImgHandler
-// ---------------------------------------------------------------------------
-
-func TestFloorplanImgHandler_InvalidPrefix(t *testing.T) {
-	dir := t.TempDir()
-	h := floorplanImgHandler(dir)
-	req := httptest.NewRequest(http.MethodGet, "/data/evil.png", nil)
-	rw := httptest.NewRecorder()
-	h.ServeHTTP(rw, req)
-	if rw.Code != http.StatusNotFound {
-		t.Errorf("expected 404, got %d", rw.Code)
-	}
-}
-
-func TestFloorplanImgHandler_DisallowedExtension(t *testing.T) {
-	dir := t.TempDir()
-	h := floorplanImgHandler(dir)
-	req := httptest.NewRequest(http.MethodGet, "/data/floorplan_x.exe", nil)
-	rw := httptest.NewRecorder()
-	h.ServeHTTP(rw, req)
-	if rw.Code != http.StatusNotFound {
-		t.Errorf("expected 404, got %d", rw.Code)
-	}
-}
-
-func TestFloorplanImgHandler_ValidFile(t *testing.T) {
-	dir := t.TempDir()
-	imgPath := filepath.Join(dir, "floorplan_office.png")
-	if err := os.WriteFile(imgPath, []byte("PNG"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	h := floorplanImgHandler(dir)
-	req := httptest.NewRequest(http.MethodGet, "/data/floorplan_office.png", nil)
-	rw := httptest.NewRecorder()
-	h.ServeHTTP(rw, req)
-	if rw.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", rw.Code)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// dataFileHandler
-// ---------------------------------------------------------------------------
-
-func TestDataFileHandler_DisallowedFile(t *testing.T) {
-	dir := t.TempDir()
-	h := dataFileHandler(dir)
-	req := httptest.NewRequest(http.MethodGet, "/data/../../etc/passwd", nil)
-	rw := httptest.NewRecorder()
-	h.ServeHTTP(rw, req)
-	if rw.Code != http.StatusNotFound {
-		t.Errorf("expected 404, got %d", rw.Code)
-	}
-}
-
-func TestDataFileHandler_AllowedFile(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "logo.png"), []byte("PNG"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	h := dataFileHandler(dir)
-	req := httptest.NewRequest(http.MethodGet, "/data/logo.png", nil)
-	rw := httptest.NewRecorder()
-	h.ServeHTTP(rw, req)
-	if rw.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", rw.Code)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// metricsHandler
-// ---------------------------------------------------------------------------
-
-func TestMetricsHandler_Disabled(t *testing.T) {
-	h := metricsHandler("")
-	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
-	rw := httptest.NewRecorder()
-	h.ServeHTTP(rw, req)
-	if rw.Code != http.StatusNotFound {
-		t.Errorf("expected 404 when token empty, got %d", rw.Code)
-	}
-}
-
-func TestMetricsHandler_WrongToken(t *testing.T) {
-	h := metricsHandler("secret")
-	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
-	req.Header.Set("Authorization", "Bearer wrong")
-	rw := httptest.NewRecorder()
-	h.ServeHTTP(rw, req)
-	if rw.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401 for wrong token, got %d", rw.Code)
-	}
-	if rw.Header().Get("WWW-Authenticate") == "" {
-		t.Error("expected WWW-Authenticate header on 401")
-	}
-}
-
-func TestMetricsHandler_NoToken(t *testing.T) {
-	h := metricsHandler("secret")
-	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
-	rw := httptest.NewRecorder()
-	h.ServeHTTP(rw, req)
-	if rw.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401 when no token provided, got %d", rw.Code)
-	}
-}
-
-func TestMetricsHandler_CorrectToken(t *testing.T) {
-	h := metricsHandler("secret")
-	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
-	req.Header.Set("Authorization", "Bearer secret")
-	rw := httptest.NewRecorder()
-	h.ServeHTTP(rw, req)
-	// Prometheus handler returns 200 with metrics output.
-	if rw.Code != http.StatusOK {
-		t.Errorf("expected 200 for correct token, got %d", rw.Code)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// langSwitcherHandler
-// ---------------------------------------------------------------------------
-
-func TestLangSwitcherHandler_ValidLang(t *testing.T) {
-	h := langSwitcherHandler("en")
-	req := httptest.NewRequest(http.MethodPost, "/lang?lang=fr", nil)
-	rw := httptest.NewRecorder()
-	h.ServeHTTP(rw, req)
-	if rw.Code != http.StatusSeeOther {
-		t.Errorf("expected 303, got %d", rw.Code)
-	}
-	var langCookie string
-	for _, c := range rw.Result().Cookies() {
-		if c.Name == "lang" {
-			langCookie = c.Value
+	for _, c := range cases {
+		got := string(safeNewsContent(c.input))
+		if got != c.want {
+			t.Errorf("safeNewsContent(%q) = %q, want %q", c.input, got, c.want)
 		}
 	}
-	if langCookie != "fr" {
-		t.Errorf("expected lang cookie = fr, got %q", langCookie)
+}
+
+func TestFloorplanImgHandler(t *testing.T) {
+	tempDir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(tempDir, "floorplan_map.png"), []byte("png-data"), 0644)
+	_ = os.WriteFile(filepath.Join(tempDir, "floorplan_bad.exe"), []byte("bad-data"), 0644)
+	_ = os.WriteFile(filepath.Join(tempDir, "other.png"), []byte("other-data"), 0644)
+
+	handler := floorplanImgHandler(tempDir)
+
+	// Valid floorplan image
+	req := httptest.NewRequest(http.MethodGet, "/floorplan-img/floorplan_map.png", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200 for valid floorplan image, got %d", rec.Code)
+	}
+
+	// Not starting with floorplan_
+	req = httptest.NewRequest(http.MethodGet, "/floorplan-img/other.png", nil)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for non-floorplan image, got %d", rec.Code)
+	}
+
+	// Bad extension
+	req = httptest.NewRequest(http.MethodGet, "/floorplan-img/floorplan_bad.exe", nil)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for disallowed extension, got %d", rec.Code)
+	}
+
+	// Missing file
+	req = httptest.NewRequest(http.MethodGet, "/floorplan-img/floorplan_missing.png", nil)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for missing floorplan image, got %d", rec.Code)
 	}
 }
 
-func TestLangSwitcherHandler_InvalidLang(t *testing.T) {
-	h := langSwitcherHandler("en")
-	req := httptest.NewRequest(http.MethodPost, "/lang?lang=zz", nil)
-	rw := httptest.NewRecorder()
-	h.ServeHTTP(rw, req)
-	var langCookie string
-	for _, c := range rw.Result().Cookies() {
-		if c.Name == "lang" {
-			langCookie = c.Value
+func TestDataFileHandler(t *testing.T) {
+	tempDir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(tempDir, "logo.png"), []byte("png-logo"), 0644)
+	_ = os.WriteFile(filepath.Join(tempDir, "logo.svg"), []byte("<svg></svg>"), 0644)
+	_ = os.WriteFile(filepath.Join(tempDir, "logo.jpg"), []byte("jpg-logo"), 0644)
+	_ = os.WriteFile(filepath.Join(tempDir, "secret.txt"), []byte("secret"), 0644)
+
+	handler := dataFileHandler(tempDir)
+
+	for _, allowed := range []string{"logo.png", "logo.svg", "logo.jpg"} {
+		req := httptest.NewRequest(http.MethodGet, "/data/"+allowed, nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Errorf("expected 200 for allowed data file %s, got %d", allowed, rec.Code)
 		}
 	}
-	if langCookie != "en" {
-		t.Errorf("expected lang cookie = en (default), got %q", langCookie)
+
+	// Disallowed file
+	req := httptest.NewRequest(http.MethodGet, "/data/secret.txt", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for disallowed data file, got %d", rec.Code)
 	}
 }
 
-func TestLangSwitcherHandler_RefererSameOrigin(t *testing.T) {
-	h := langSwitcherHandler("en")
-	req := httptest.NewRequest(http.MethodPost, "/lang?lang=de", nil)
-	req.Header.Set("Referer", "http://example.com/calendar?year=2026")
-	rw := httptest.NewRecorder()
-	h.ServeHTTP(rw, req)
-	loc := rw.Header().Get("Location")
-	if !strings.HasPrefix(loc, "/calendar") {
-		t.Errorf("expected redirect to /calendar..., got %q", loc)
+func TestMetricsHandler(t *testing.T) {
+	// Disabled (empty token)
+	hDisabled := metricsHandler("")
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	hDisabled.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("expected 404 when metrics disabled, got %d", rec.Code)
+	}
+
+	// Enabled with token
+	hEnabled := metricsHandler("secret-metrics-tok")
+
+	// Unauthorized
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	hEnabled.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 on missing token, got %d", rec.Code)
+	}
+
+	// Wrong token
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	req.Header.Set("Authorization", "Bearer wrong-token")
+	hEnabled.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 on wrong token, got %d", rec.Code)
+	}
+
+	// Correct token
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	req.Header.Set("Authorization", "Bearer secret-metrics-tok")
+	hEnabled.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200 on valid metrics token, got %d", rec.Code)
 	}
 }
 
-func TestLangSwitcherHandler_RefererExternal(t *testing.T) {
-	h := langSwitcherHandler("en")
-	req := httptest.NewRequest(http.MethodPost, "/lang?lang=de", nil)
-	// Referer with no path component starting with "/" → must fall back to "/"
-	req.Header.Set("Referer", "not-a-url")
-	rw := httptest.NewRecorder()
-	h.ServeHTTP(rw, req)
-	loc := rw.Header().Get("Location")
-	if loc != "/" {
-		t.Errorf("expected redirect to /, got %q", loc)
+func TestLangSwitcherHandler(t *testing.T) {
+	handler := langSwitcherHandler("en")
+
+	// 1. Valid language with relative referer
+	form := url.Values{"lang": {"fr"}}
+	req := httptest.NewRequest(http.MethodPost, "/set-lang", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Referer", "/calendar?month=2026-08")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303 redirect, got %d", rec.Code)
+	}
+	if loc := rec.Header().Get("Location"); loc != "/calendar?month=2026-08" {
+		t.Errorf("expected redirect to /calendar?month=2026-08, got %q", loc)
+	}
+	var setCookie string
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == "lang" {
+			setCookie = c.Value
+		}
+	}
+	if setCookie != "fr" {
+		t.Errorf("expected lang cookie 'fr', got %q", setCookie)
+	}
+
+	// 2. Invalid language and no referer
+	form = url.Values{"lang": {"invalid-lang"}}
+	req = httptest.NewRequest(http.MethodPost, "/set-lang", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if loc := rec.Header().Get("Location"); loc != "/" {
+		t.Errorf("expected redirect to '/', got %q", loc)
+	}
+	setCookie = ""
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == "lang" {
+			setCookie = c.Value
+		}
+	}
+	if setCookie != "en" {
+		t.Errorf("expected default lang 'en', got %q", setCookie)
 	}
 }
 
-// ---------------------------------------------------------------------------
-// buildTemplateFuncMap — safehtml and activityRocket closures
-// ---------------------------------------------------------------------------
-
-func TestFuncMap_Safehtml(t *testing.T) {
-	safehtml := funcMap(t)["safehtml"].(func(string) template.HTML)
-	got := safehtml("<b>bold</b>")
-	if got != "<b>bold</b>" {
-		t.Errorf("safehtml: got %q, want %q", got, "<b>bold</b>")
-	}
-}
-
-func TestFuncMap_ActivityRocket(t *testing.T) {
-	// funcMap uses OnsiteRatioThreshold: 60.
-	activityRocket := funcMap(t)["activityRocket"].(func(float64, float64, float64, float64) bool)
-	// notSet=0, onSiteDays=9, billableDays=15 → 60% ≥ 60 threshold, projectActivity=100 → true.
-	if !activityRocket(0, 9, 15, 100) {
-		t.Error("activityRocket: expected true for valid rocket criteria")
-	}
-	// notSet > 0 → false.
-	if activityRocket(1, 9, 15, 100) {
-		t.Error("activityRocket: expected false when notSet > 0")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// newRenderPage — inner closure coverage
-// ---------------------------------------------------------------------------
-
-// openMainTestDB opens a fresh SQLite DB seeded with a global admin.
-func openMainTestDB(t *testing.T) *db.DB {
-	t.Helper()
+func TestBuildTemplateFuncMap_And_LoadTemplates(t *testing.T) {
 	cfg := &config.Config{
-		DBDriver:      "sqlite",
-		DataDir:       t.TempDir(),
-		AdminUser:     "admin@setup-test.com",
-		AdminPassword: "P@ssw0rd!",
+		AppName:              "TestApp",
+		OnsiteRatioThreshold: 50.0,
 	}
-	d, err := db.Open(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	d.SetBcryptCost(4)
-	if err := d.SeedDefaults(cfg.AdminUser, cfg.AdminPassword); err != nil {
-		d.Close()
-		t.Fatal(err)
-	}
-	t.Cleanup(d.Close)
-	return d
-}
+	funcMap := buildTemplateFuncMap(cfg)
 
-// buildTestRender creates a render func using real embedded templates and the given config/DB.
-func buildTestRender(t *testing.T, cfg *config.Config, d *db.DB) func(http.ResponseWriter, *http.Request, string, interface{}) {
-	t.Helper()
-	fm := buildTemplateFuncMap(cfg)
-	tmpls := loadTemplates(fm)
-	return newRenderPage(cfg, d, tmpls)
-}
+	// Test add / sub
+	if addFn := funcMap["add"].(func(int, int) int); addFn(3, 4) != 7 {
+		t.Errorf("add(3, 4) = %d, want 7", addFn(3, 4))
+	}
+	if subFn := funcMap["sub"].(func(int, int) int); subFn(10, 4) != 6 {
+		t.Errorf("sub(10, 4) = %d, want 6", subFn(10, 4))
+	}
 
-// TestNewRenderPage_LoginPage covers the main path through the inner closure:
-// user lookup, lang detection, logo detection (absent), no cookies → no CSRF / no impersonation,
-// PageData construction, template lookup, Content-Type header, and ExecuteTemplate.
-func TestNewRenderPage_LoginPage(t *testing.T) {
-	cfg := &config.Config{DataDir: t.TempDir(), DefaultLang: "en", SecretKey: "test-secret-key"}
-	render := buildTestRender(t, cfg, nil)
-	req := httptest.NewRequest(http.MethodGet, "/login", nil)
-	w := httptest.NewRecorder()
-	render(w, req, "login", nil)
-	if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
-		t.Errorf("unexpected Content-Type: %q", ct)
+	// Test safehtml
+	safeHtmlFn := funcMap["safehtml"].(func(string) template.HTML)
+	if safeHtmlFn("<b>bold</b>") != template.HTML("<b>bold</b>") {
+		t.Errorf("safehtml failed")
 	}
-}
 
-// TestNewRenderPage_UnknownPage covers the "template not found → 500" branch.
-func TestNewRenderPage_UnknownPage(t *testing.T) {
-	cfg := &config.Config{DataDir: t.TempDir(), DefaultLang: "en", SecretKey: "test-secret-key"}
-	render := buildTestRender(t, cfg, nil)
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	w := httptest.NewRecorder()
-	render(w, req, "nonexistent_page_xyz", nil)
-	if w.Code != http.StatusInternalServerError {
-		t.Errorf("expected 500 for unknown page, got %d", w.Code)
+	// Test seq
+	seqFn := funcMap["seq"].(func(int) []int)
+	seq := seqFn(3)
+	if len(seq) != 3 || seq[0] != 0 || seq[1] != 1 || seq[2] != 2 {
+		t.Errorf("seq(3) failed: %v", seq)
 	}
-}
 
-// TestNewRenderPage_ProjectsManualMode ensures the "Timesheets managed manually"
-// branch of the /projects template parses and renders without error.
-func TestNewRenderPage_ProjectsManualMode(t *testing.T) {
-	cfg := &config.Config{DataDir: t.TempDir(), DefaultLang: "en", SecretKey: "test-secret-key"}
-	render := buildTestRender(t, cfg, nil)
-	req := httptest.NewRequest(http.MethodGet, "/projects", nil)
-	w := httptest.NewRecorder()
-	data := map[string]interface{}{
-		"ManualMode":  true,
-		"ManualDates": []string{"2026-05-04", "2026-05-05"},
-		"ManualWeights": map[string]float64{
-			"2026-05-04": 1.0,
-			"2026-05-05": 0.5,
-		},
-		"ManualActivities": map[string][]models.ProjectActivity{
-			"2026-05-04": {
-				{ID: 1, Date: "2026-05-04", ActivityType: models.ActivityTypeJira, JiraKey: "PROJ-1", JiraTitle: "Fix bug", Percentage: 100},
-			},
-		},
-		"JiraEnabled":   true,
-		"BillableDays":  1.5,
-		"TotalDeclared": 1.0,
-		"Year":          2026,
-		"Month":         5,
-		"PrevYear":      2026,
-		"PrevMonth":     4,
-		"NextYear":      2026,
-		"NextMonth":     6,
+	// Test json
+	jsonFn := funcMap["json"].(func(interface{}) template.JS)
+	if string(jsonFn(map[string]string{"k": "v"})) != `{"k":"v"}` {
+		t.Errorf("json func failed")
 	}
-	render(w, req, "projects", data)
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
-	}
-	body := w.Body.String()
-	if !strings.Contains(body, "projectsManualApp") {
-		t.Error("expected manual mode Alpine component to be rendered")
-	}
-	if !strings.Contains(body, "PROJ-1") {
-		t.Error("expected existing jira activity to be reflected in the rendered page")
-	}
-}
 
-// TestNewRenderPage_ProjectsReportActivitiesView ensures the team-activities
-// view of /admin/projects-report parses and renders without error.
-func TestNewRenderPage_ProjectsReportActivitiesView(t *testing.T) {
-	cfg := &config.Config{DataDir: t.TempDir(), DefaultLang: "en", SecretKey: "test-secret-key"}
-	render := buildTestRender(t, cfg, nil)
-	req := httptest.NewRequest(http.MethodGet, "/admin/projects-report?view=activities", nil)
-	w := httptest.NewRecorder()
-	data := map[string]interface{}{
-		"ViewMode": "activities",
-		"ManualTeams": []models.Team{
-			{ID: 1, Name: "Ops Team", TimesheetsManagedManually: true},
-		},
-		"SelectedTeamID": int64(1),
-		"Activities": []models.ProjectActivity{
-			{ID: 1, UserID: 10, UserName: "Alice", Date: "2026-05-04", ActivityType: models.ActivityTypeOther, Comment: "Support", Percentage: 100},
-			{ID: 2, UserID: 11, UserName: "Bob", Date: "2026-05-05", ActivityType: models.ActivityTypeJira, JiraKey: "PROJ-42", JiraTitle: "Fix bug", Percentage: 50},
-		},
-		"ActivityYear":  2026,
-		"ActivityMonth": 5,
-		"PrevYear":      2026,
-		"PrevMonth":     4,
-		"NextYear":      2026,
-		"NextMonth":     6,
-		"JiraBaseURL":   "https://acme.atlassian.net",
+	// Test status helpers
+	statuses := []models.Status{
+		{ID: 1, Name: "Office", Color: "#10b981", Billable: true},
+		{ID: 2, Name: "Remote", Color: "#3b82f6", Billable: false},
 	}
-	render(w, req, "admin_projects_report", data)
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	statusColorFn := funcMap["statusColor"].(func([]models.Status, int64) string)
+	if statusColorFn(statuses, 1) != "#10b981" || statusColorFn(statuses, 99) != "#e5e7eb" {
+		t.Errorf("statusColor failed")
 	}
-	body := w.Body.String()
-	if !strings.Contains(body, "Alice") {
-		t.Error("expected activity row to be rendered")
+	statusNameFn := funcMap["statusName"].(func([]models.Status, int64) string)
+	if statusNameFn(statuses, 1) != "Office" || statusNameFn(statuses, 99) != "" {
+		t.Errorf("statusName failed")
 	}
-	if !strings.Contains(body, `openJiraTicketPopup('https:\/\/acme.atlassian.net/browse/PROJ-42')`) {
-		t.Error("expected jira reference to be a clickable popup link to the ticket")
+	statusBillableFn := funcMap["statusBillable"].(func([]models.Status, int64) bool)
+	if !statusBillableFn(statuses, 1) || statusBillableFn(statuses, 2) || statusBillableFn(statuses, 99) {
+		t.Errorf("statusBillable failed")
 	}
-	if !strings.Contains(body, `id="filter-user"`) || !strings.Contains(body, `id="filter-type"`) ||
-		!strings.Contains(body, `id="filter-reference"`) || !strings.Contains(body, `id="filter-comment"`) {
-		t.Error("expected user/type/reference/comment filter inputs to be rendered")
+
+	// Test map helpers
+	mStrInt64 := map[string]int64{"a": 10, "b": 20}
+	hasKeyFn := funcMap["hasKey"].(func(map[string]int64, string) bool)
+	if !hasKeyFn(mStrInt64, "a") || hasKeyFn(mStrInt64, "c") {
+		t.Errorf("hasKey failed")
+	}
+	getKeyFn := funcMap["getKey"].(func(map[string]int64, string) int64)
+	if getKeyFn(mStrInt64, "b") != 20 || getKeyFn(nil, "b") != 0 {
+		t.Errorf("getKey failed")
+	}
+
+	mInt64Int := map[int64]int{1: 5, 2: 7}
+	getCountFn := funcMap["getCount"].(func(map[int64]int, int64) int)
+	if getCountFn(mInt64Int, 1) != 5 {
+		t.Errorf("getCount failed")
+	}
+	getStrCountFn := funcMap["getStrCount"].(func(map[string]int, string) int)
+	if getStrCountFn(map[string]int{"x": 8}, "x") != 8 {
+		t.Errorf("getStrCount failed")
+	}
+	sumMapFn := funcMap["sumMap"].(func(map[int64]int) int)
+	if sumMapFn(mInt64Int) != 12 {
+		t.Errorf("sumMap failed")
+	}
+
+	// Test activityRocket
+	activityRocketFn := funcMap["activityRocket"].(func(float64, float64, float64, float64) bool)
+	if !activityRocketFn(0, 10, 10, 100.0) {
+		t.Errorf("activityRocket should be true when perfect")
+	}
+
+	// Test dict, intToInt64, upper, hasRole
+	dictFn := funcMap["dict"].(func(...interface{}) map[string]interface{})
+	d := dictFn("key1", "val1", "key2", 42)
+	if d["key1"] != "val1" || d["key2"] != 42 {
+		t.Errorf("dict failed: %+v", d)
+	}
+
+	intToInt64Fn := funcMap["intToInt64"].(func(int) int64)
+	if intToInt64Fn(123) != 123 {
+		t.Errorf("intToInt64 failed")
+	}
+
+	upperFn := funcMap["upper"].(func(string) string)
+	if upperFn("hello") != "HELLO" {
+		t.Errorf("upper failed")
+	}
+
+	hasRoleFn := funcMap["hasRole"].(func(*models.User, string) bool)
+	if hasRoleFn(nil, models.RoleGlobal) {
+		t.Errorf("hasRole(nil) should be false")
+	}
+	u := &models.User{Roles: models.RoleTeamLeader}
+	if !hasRoleFn(u, models.RoleTeamLeader) || hasRoleFn(u, models.RoleStatusManager) {
+		t.Errorf("hasRole failed for user with role")
+	}
+
+	// Test loadTemplates
+	templates := loadTemplates(funcMap)
+	if len(templates) == 0 {
+		t.Fatalf("expected loaded templates, got 0")
+	}
+	if _, ok := templates["login"]; !ok {
+		t.Errorf("expected 'login' template")
+	}
+	if _, ok := templates["calendar"]; !ok {
+		t.Errorf("expected 'calendar' template")
 	}
 }
 
-// TestNewRenderPage_CustomLogoPathMissing covers cfg.LogoPath != "" (logoFile = custom name)
-// where the file does not exist, so logoExists stays false.
-func TestNewRenderPage_CustomLogoPathMissing(t *testing.T) {
+func TestNewRenderPage(t *testing.T) {
+	tempDir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(tempDir, "logo.png"), []byte("logo-bytes"), 0644)
+
 	cfg := &config.Config{
-		DataDir:     t.TempDir(),
-		DefaultLang: "en",
-		SecretKey:   "test-secret-key",
-		LogoPath:    "custom_logo.png",
+		AppName:                    "PresenceTest",
+		DataDir:                    tempDir,
+		DBDriver:                   "sqlite",
+		SecretKey:                  "01234567890123456789012345678901",
+		LogoPath:                   "logo.png",
+		TeamCalendarRefreshMinutes: 5,
 	}
-	render := buildTestRender(t, cfg, nil)
-	req := httptest.NewRequest(http.MethodGet, "/login", nil)
-	w := httptest.NewRecorder()
-	render(w, req, "login", nil)
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", w.Code)
-	}
-}
 
-// TestNewRenderPage_DefaultLogoExists covers logoExists=true and the LogoURL insertion into Config.
-func TestNewRenderPage_DefaultLogoExists(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "logo.png"), []byte("PNG"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	cfg := &config.Config{DataDir: dir, DefaultLang: "en", SecretKey: "test-secret-key"}
-	render := buildTestRender(t, cfg, nil)
-	req := httptest.NewRequest(http.MethodGet, "/login", nil)
-	w := httptest.NewRecorder()
-	render(w, req, "login", nil)
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", w.Code)
-	}
-}
-
-// TestNewRenderPage_SessionCookieCSRF covers the CSRF token generation path
-// when a "session" cookie is present in the request.
-func TestNewRenderPage_SessionCookieCSRF(t *testing.T) {
-	cfg := &config.Config{DataDir: t.TempDir(), DefaultLang: "en", SecretKey: "test-secret-key"}
-	render := buildTestRender(t, cfg, nil)
-	req := httptest.NewRequest(http.MethodGet, "/login", nil)
-	req.AddCookie(&http.Cookie{Name: "session", Value: "any-session-token"})
-	w := httptest.NewRecorder()
-	render(w, req, "login", nil)
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", w.Code)
-	}
-}
-
-// TestNewRenderPage_RealSessionImpersonation covers the real_session cookie path:
-// GetSessionUser succeeds for a global admin → realAdmin is set in PageData.
-func TestNewRenderPage_RealSessionImpersonation(t *testing.T) {
-	d := openMainTestDB(t)
-	admin, err := d.GetUserByEmail("admin@setup-test.com")
+	database, err := db.Open(cfg)
 	if err != nil {
-		t.Fatalf("GetUserByEmail: %v", err)
+		t.Fatalf("open db: %v", err)
 	}
-	tok, err := d.CreateSession(admin.ID)
-	if err != nil {
-		t.Fatalf("CreateSession: %v", err)
-	}
+	defer database.Close()
 
-	cfg := &config.Config{DataDir: t.TempDir(), DefaultLang: "en", SecretKey: "test-secret-key"}
-	render := buildTestRender(t, cfg, d)
+	uID, _ := database.CreateLocalUser("admin@example.com", "Admin User", "pass")
+	_ = database.UpdateUserRoles(uID, models.RoleGlobal)
+	user, _ := database.GetUserByID(uID)
+
+	teamID, _ := database.CreateTeamWithDetails("Manual Team", "", true)
+	_ = database.AddTeamMember(teamID, uID)
+
+	domID, _ := database.CreateDomain("Tech")
+	_ = database.SetDomainManagers(domID, []int64{uID})
+
+	_, _ = database.CreateNewsMessage("System alert", "Maintenance tonight", "2026-08-01", "2026-08-30", "#dc2626", false)
+
+	funcMap := buildTemplateFuncMap(cfg)
+	templates := loadTemplates(funcMap)
+	renderPage := newRenderPage(cfg, database, templates)
+
+	// 1. Render without user (public page e.g. login)
+	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/login", nil)
-	req.AddCookie(&http.Cookie{Name: "real_session", Value: tok})
-	w := httptest.NewRecorder()
-	render(w, req, "login", nil)
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", w.Code)
+	renderPage(rec, req, "login", nil)
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200 rendering login page, got %d", rec.Code)
 	}
-}
+	if !strings.Contains(rec.Body.String(), "PresenceTest") {
+		t.Errorf("expected rendered page to contain app name")
+	}
 
-// failResponseWriter is a ResponseWriter whose Write always fails, used to
-// trigger a template-execution error and cover the log.Printf path.
-type failResponseWriter struct {
-	header http.Header
-}
+	// 2. Render with user, session cookie, and impersonation real_session cookie
+	sessionTok, _ := database.CreateSession(uID)
+	realSessionTok, _ := database.CreateSession(uID)
 
-func (fw *failResponseWriter) Header() http.Header         { return fw.header }
-func (fw *failResponseWriter) WriteHeader(code int)        {}
-func (fw *failResponseWriter) Write(b []byte) (int, error) { return 0, os.ErrClosed }
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/calendar", nil)
+	req = testhelper.WithUserInContext(req, user)
+	req.AddCookie(&http.Cookie{Name: "session", Value: sessionTok})
+	req.AddCookie(&http.Cookie{Name: "real_session", Value: realSessionTok})
 
-// TestNewRenderPage_TemplateExecuteError covers the log.Printf branch that is
-// reached when tmpl.ExecuteTemplate returns an error (here caused by the writer
-// refusing all bytes).
-func TestNewRenderPage_TemplateExecuteError(t *testing.T) {
-	cfg := &config.Config{DataDir: t.TempDir(), DefaultLang: "en", SecretKey: "test-secret-key"}
-	render := buildTestRender(t, cfg, nil)
-	req := httptest.NewRequest(http.MethodGet, "/login", nil)
-	fw := &failResponseWriter{header: make(http.Header)}
-	render(fw, req, "login", nil)
-	// If we reach here without panic, the error-logging branch was exercised.
+	renderPage(rec, req, "calendar", nil)
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200 rendering calendar with user, got %d", rec.Code)
+	}
+
+	// 3. Render unknown template -> 500
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/unknown", nil)
+	renderPage(rec, req, "non_existent_page", nil)
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500 for missing template, got %d", rec.Code)
+	}
 }

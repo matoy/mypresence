@@ -60,6 +60,28 @@ func main() {
 	database.CleanExpiredSessions()
 	database.CleanExpiredResetTokens()
 
+	handler := buildAppMux(cfg, database)
+
+	// Start server
+	addr := ":" + cfg.Port
+	slog.Info("server started", "app", cfg.AppName, "addr", "http://localhost"+addr, "admin", cfg.AdminUser)
+	logStartupInfo(cfg, addr)
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+	if err := srv.ListenAndServe(); err != nil {
+		slog.Error("server stopped", "error", err)
+		os.Exit(1)
+	}
+}
+
+// buildAppMux constructs the complete application router and middleware stack.
+func buildAppMux(cfg *config.Config, database *db.DB) http.Handler {
 	// Parse templates and build the render helper.
 	funcMap := buildTemplateFuncMap(cfg)
 	templates := loadTemplates(funcMap)
@@ -277,22 +299,7 @@ func main() {
 
 	mux.Handle("/", middleware.AuthWithOptions(database, !cfg.DisableAPI, authMux))
 
-	// Start server
-	addr := ":" + cfg.Port
-	slog.Info("server started", "app", cfg.AppName, "addr", "http://localhost"+addr, "admin", cfg.AdminUser)
-	logStartupInfo(cfg, addr)
-	srv := &http.Server{
-		Addr:              addr,
-		Handler:           middleware.SecurityHeaders(middleware.LimitRequestBody(metrics.Instrument(middleware.AccessLog(mux)))),
-		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       120 * time.Second,
-	}
-	if err := srv.ListenAndServe(); err != nil {
-		slog.Error("server stopped", "error", err)
-		os.Exit(1)
-	}
+	return middleware.SecurityHeaders(middleware.LimitRequestBody(metrics.Instrument(middleware.AccessLog(mux))))
 }
 
 // initOptionalHandlers creates handlers for API tokens and Projects if those features are enabled.
