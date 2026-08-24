@@ -346,6 +346,7 @@ func langSwitcherHandler(defaultLang string) http.HandlerFunc {
 			MaxAge:   365 * 24 * 3600,
 			SameSite: http.SameSiteLaxMode,
 			HttpOnly: true,
+			Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
 		})
 		// Prevent open redirect: only allow same-origin redirects.
 		target := "/"

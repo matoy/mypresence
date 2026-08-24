@@ -299,6 +299,7 @@ function adminFloorplanApp(allFloorplans) {
             if (!file || !this.selectedFpID) return;
             const formData = new FormData();
             formData.append('image', file);
+            formData.append('csrf_token', '{{$.CSRFToken}}');
             const resp = await fetch(`/admin/floorplans/${this.selectedFpID}/image`, {
                 method: 'POST',
                 body: formData

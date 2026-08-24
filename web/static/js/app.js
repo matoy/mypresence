@@ -1093,9 +1093,14 @@ function envVarsAdmin(initialVars) {
         editValue: '',
         envError: '',
 
+        isSensitive(key) {
+            const u = (key || '').toUpperCase();
+            return u.includes('PASSWORD') || u.includes('SECRET') || u.includes('TOKEN') || u.includes('KEY') || u.includes('CREDENTIAL') || u.includes('AUTH') || u === 'SMTP_URL';
+        },
+
         startEdit(v) {
             this.editingKey = v.Key;
-            this.editValue = v.Value;
+            this.editValue = (v.Value === '••••••••') ? '' : v.Value;
             this.envError = '';
         },
 
@@ -1112,7 +1117,7 @@ function envVarsAdmin(initialVars) {
                 body: JSON.stringify({ key: v.Key, value: this.editValue })
             });
             if (r.ok) {
-                v.Value = this.editValue;
+                v.Value = this.isSensitive(v.Key) && this.editValue !== '' ? '••••••••' : this.editValue;
                 this.editingKey = null;
                 return;
             }

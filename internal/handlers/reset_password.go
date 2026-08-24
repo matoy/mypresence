@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/matoy/mypresence/internal/config"
@@ -43,6 +44,9 @@ func (h *ResetPasswordHandler) ForgotPasswordPost(w http.ResponseWriter, r *http
 	}
 
 	if email == "" {
+		if h.RateLimiter != nil {
+			h.RateLimiter.RecordFailure(r)
+		}
 		renderSent()
 		return
 	}
@@ -106,6 +110,9 @@ func (h *ResetPasswordHandler) ResetPasswordPost(w http.ResponseWriter, r *http.
 	}
 
 	if token == "" {
+		if h.RateLimiter != nil {
+			h.RateLimiter.RecordFailure(r)
+		}
 		renderErr("invalid_token")
 		return
 	}
@@ -124,6 +131,9 @@ func (h *ResetPasswordHandler) ResetPasswordPost(w http.ResponseWriter, r *http.
 
 	user, err := h.DB.UsePasswordResetToken(token)
 	if err != nil {
+		if h.RateLimiter != nil {
+			h.RateLimiter.RecordFailure(r)
+		}
 		renderErr("invalid_token")
 		return
 	}
@@ -136,6 +146,10 @@ func (h *ResetPasswordHandler) ResetPasswordPost(w http.ResponseWriter, r *http.
 	// Invalidate all sessions — user must log in again with the new password.
 	h.DB.DeleteUserSessions(user.ID, "")
 
+	if h.RateLimiter != nil {
+		h.RateLimiter.Reset(r)
+	}
+
 	h.Render(w, r, "reset_password", map[string]interface{}{
 		"Token": "",
 		"Error": "",
@@ -143,14 +157,28 @@ func (h *ResetPasswordHandler) ResetPasswordPost(w http.ResponseWriter, r *http.
 	})
 }
 
+var validHostRE = regexp.MustCompile(`^[a-zA-Z0-9.-]+(:[0-9]+)?$`)
+
+func sanitizeHost(host string) string {
+	host = strings.TrimSpace(host)
+	if validHostRE.MatchString(host) {
+		return host
+	}
+	return "localhost:8080"
+}
+
 // baseURL returns the application base URL, derived from APP_URL config or the request Host.
 func (h *ResetPasswordHandler) baseURL(r *http.Request) string {
-	if h.Config.AppURL != "" {
+	if h.Config != nil && h.Config.AppURL != "" {
 		return strings.TrimRight(h.Config.AppURL, "/")
 	}
 	scheme := "http"
 	if r.Header.Get("X-Forwarded-Proto") == "https" || r.TLS != nil {
 		scheme = "https"
 	}
-	return scheme + "://" + r.Host
+	host := "localhost:8080"
+	if r != nil && r.Host != "" {
+		host = sanitizeHost(r.Host)
+	}
+	return scheme + "://" + host
 }

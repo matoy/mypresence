@@ -38,6 +38,20 @@ func TestResetBaseURL(t *testing.T) {
 	if got := h2.baseURL(req2); got != "https://app.local" {
 		t.Fatalf("baseURL from request = %q", got)
 	}
+
+	// Test invalid / malicious Host header falls back to localhost:8080
+	for _, badHost := range []string{
+		"attacker.com@legit.local",
+		"attacker.com/evil",
+		"attacker.com:port",
+		"attacker.com evil.local",
+	} {
+		reqBad := httptest.NewRequest(http.MethodGet, "/", nil)
+		reqBad.Host = badHost
+		if got := h2.baseURL(reqBad); got != "http://localhost:8080" {
+			t.Errorf("expected fallback for bad host %q, got %q", badHost, got)
+		}
+	}
 }
 
 func TestForgotPasswordPostAlwaysRendersSent(t *testing.T) {
@@ -198,5 +212,49 @@ func TestForgotPasswordPost_RateLimited(t *testing.T) {
 	h.ForgotPasswordPost(w, req)
 	if w.Code != http.StatusTooManyRequests {
 		t.Fatalf("expected 429, got %d", w.Code)
+	}
+}
+
+func TestResetPasswordPost_RateLimitAfterFailures(t *testing.T) {
+	database := newResetTestDB(t)
+	cfg := &config.Config{}
+	rl := middleware.NewLoginRateLimiter()
+	defer rl.Close()
+
+	h := &ResetPasswordHandler{
+		DB:          database,
+		Config:      cfg,
+		RateLimiter: rl,
+		Render: func(w http.ResponseWriter, r *http.Request, page string, d interface{}) {
+		},
+	}
+
+	ip := "192.168.10.10:8000"
+	// Submit 5 invalid token attempts
+	for i := 0; i < 5; i++ {
+		form := url.Values{
+			"token":    {"invalid_token_" + strings.Repeat("x", i)},
+			"password": {"newpassword123"},
+			"confirm":  {"newpassword123"},
+		}
+		req := httptest.NewRequest(http.MethodPost, "/reset-password", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.RemoteAddr = ip
+		h.ResetPasswordPost(httptest.NewRecorder(), req)
+	}
+
+	// 6th attempt should be blocked with 429
+	form := url.Values{
+		"token":    {"any_token"},
+		"password": {"newpassword123"},
+		"confirm":  {"newpassword123"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/reset-password", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.RemoteAddr = ip
+	w := httptest.NewRecorder()
+	h.ResetPasswordPost(w, req)
+	if w.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429 after 5 failures, got %d", w.Code)
 	}
 }

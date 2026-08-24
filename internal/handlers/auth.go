@@ -310,6 +310,7 @@ func (h *AuthHandler) SAMLACS(w http.ResponseWriter, r *http.Request) {
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   86400 * 30,
 	})

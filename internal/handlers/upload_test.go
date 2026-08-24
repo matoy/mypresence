@@ -80,3 +80,60 @@ func TestUploadFloorplanImage_FakeExtension(t *testing.T) {
 		t.Fatalf("expected 400 for invalid content type, got %d: %s", w.Code, w.Body.String())
 	}
 }
+
+func TestUploadFloorplanImage_CSRFProtection(t *testing.T) {
+	d := newExtraTestDB(t)
+	d.SetBcryptCost(4)
+	tmpDir := t.TempDir()
+	h := &FloorplanHandler{DB: d, Render: noRender, DataDir: tmpDir}
+	secretKey := "test-secret-key-32-chars-long!"
+
+	fpID, _ := d.CreateFloorplan("FP CSRF Test", 0)
+
+	// Create admin user and session token
+	adminID, _ := d.CreateLocalUser("admin_fp_csrf@test.com", "Admin FP", "password123")
+	d.UpdateUserRoles(adminID, "global") //nolint:errcheck
+	sessionToken, _ := d.CreateSession(adminID)
+	csrfToken := middleware.GenerateCSRFToken(secretKey, sessionToken)
+
+	handler := middleware.Auth(d, middleware.ValidateCSRF(secretKey)(http.HandlerFunc(h.UploadFloorplanImage)))
+
+	// 1. Without CSRF token -> 403 Forbidden
+	{
+		var buf bytes.Buffer
+		mw := multipart.NewWriter(&buf)
+		fw, _ := mw.CreateFormFile("image", "test.png")
+		fw.Write(minimalPNG) //nolint:errcheck
+		mw.Close()           //nolint:errcheck
+
+		req := httptest.NewRequest(http.MethodPost, "/admin/floorplans/"+strconvI64(fpID)+"/image", &buf)
+		req.SetPathValue("id", strconvI64(fpID))
+		req.Header.Set("Content-Type", mw.FormDataContentType())
+		req.AddCookie(&http.Cookie{Name: "session", Value: sessionToken})
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 when CSRF token is missing, got %d", w.Code)
+		}
+	}
+
+	// 2. With valid CSRF token in multipart form -> 200 OK
+	{
+		var buf bytes.Buffer
+		mw := multipart.NewWriter(&buf)
+		mw.WriteField("csrf_token", csrfToken) //nolint:errcheck
+		fw, _ := mw.CreateFormFile("image", "test.png")
+		fw.Write(minimalPNG) //nolint:errcheck
+		mw.Close()           //nolint:errcheck
+
+		req := httptest.NewRequest(http.MethodPost, "/admin/floorplans/"+strconvI64(fpID)+"/image", &buf)
+		req.SetPathValue("id", strconvI64(fpID))
+		req.Header.Set("Content-Type", mw.FormDataContentType())
+		req.AddCookie(&http.Cookie{Name: "session", Value: sessionToken})
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200 with valid CSRF token, got %d: %s", w.Code, w.Body.String())
+		}
+	}
+}

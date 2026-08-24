@@ -315,7 +315,7 @@ func buildRouter(database *db.DB, cfg *config.Config, dataDir string, rateLimite
 	fpAdminMux.HandleFunc("POST /admin/floorplans", fpH.CreateFloorplan)
 	fpAdminMux.HandleFunc("PUT /admin/floorplans/{id}", fpH.UpdateFloorplan)
 	fpAdminMux.HandleFunc("DELETE /admin/floorplans/{id}", fpH.DeleteFloorplan)
-	fpAdminMux.HandleFunc("POST /admin/floorplans/{id}/image", fpH.UploadFloorplanImage)
+	fpAdminMux.Handle("POST /admin/floorplans/{id}/image", middleware.ValidateCSRF(cfg.SecretKey)(http.HandlerFunc(fpH.UploadFloorplanImage)))
 	fpAdminMux.HandleFunc("POST /admin/floorplans/{id}/seats", fpH.CreateSeat)
 	fpAdminMux.HandleFunc("PUT /admin/seats/{id}", fpH.UpdateSeat)
 	fpAdminMux.HandleFunc("DELETE /admin/seats/{id}", fpH.DeleteSeat)

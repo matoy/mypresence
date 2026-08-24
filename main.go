@@ -391,7 +391,7 @@ func registerOptionalAdminRoutes(mux, authMux *http.ServeMux, cfg *config.Config
 		fpAdminMux.HandleFunc("POST /admin/floorplans", floorplanHandler.CreateFloorplan)
 		fpAdminMux.HandleFunc("PUT /admin/floorplans/{id}", floorplanHandler.UpdateFloorplan)
 		fpAdminMux.HandleFunc("DELETE /admin/floorplans/{id}", floorplanHandler.DeleteFloorplan)
-		fpAdminMux.HandleFunc("POST /admin/floorplans/{id}/image", floorplanHandler.UploadFloorplanImage)
+		fpAdminMux.Handle("POST /admin/floorplans/{id}/image", middleware.ValidateCSRF(cfg.SecretKey)(http.HandlerFunc(floorplanHandler.UploadFloorplanImage)))
 		fpAdminMux.HandleFunc("POST /admin/floorplans/{id}/seats", floorplanHandler.CreateSeat)
 		fpAdminMux.HandleFunc("PUT /admin/seats/{id}", floorplanHandler.UpdateSeat)
 		fpAdminMux.HandleFunc("DELETE /admin/seats/{id}", floorplanHandler.DeleteSeat)

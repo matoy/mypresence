@@ -29,6 +29,29 @@ type GeneralSettingsHandler struct {
 	Render  func(w http.ResponseWriter, r *http.Request, page string, data interface{})
 }
 
+// isSensitiveEnvKey reports whether the environment variable name indicates a sensitive secret.
+func isSensitiveEnvKey(key string) bool {
+	upper := strings.ToUpper(key)
+	return strings.Contains(upper, "PASSWORD") ||
+		strings.Contains(upper, "SECRET") ||
+		strings.Contains(upper, "TOKEN") ||
+		strings.Contains(upper, "KEY") ||
+		strings.Contains(upper, "CREDENTIAL") ||
+		strings.Contains(upper, "AUTH") ||
+		upper == "SMTP_URL"
+}
+
+// maskEnvValue masks the value with bullet points if key is sensitive and value is non-empty.
+func maskEnvValue(key, value string) string {
+	if value == "" {
+		return ""
+	}
+	if isSensitiveEnvKey(key) {
+		return "••••••••"
+	}
+	return value
+}
+
 // GeneralSettingsPage renders the general settings admin page.
 func (h *GeneralSettingsHandler) GeneralSettingsPage(w http.ResponseWriter, r *http.Request) {
 	_, err := os.Stat(filepath.Join(h.DataDir, "logo.png"))
@@ -39,7 +62,11 @@ func (h *GeneralSettingsHandler) GeneralSettingsPage(w http.ResponseWriter, r *h
 	envVars := make([]EnvEntry, 0, len(rawEnv))
 	for _, e := range rawEnv {
 		k, v, _ := strings.Cut(e, "=")
-		envVars = append(envVars, EnvEntry{Key: k, Value: v, Editable: config.IsLiveEditable(k)})
+		envVars = append(envVars, EnvEntry{
+			Key:      k,
+			Value:    maskEnvValue(k, v),
+			Editable: config.IsLiveEditable(k),
+		})
 	}
 
 	h.Render(w, r, "admin_general_settings", map[string]interface{}{
