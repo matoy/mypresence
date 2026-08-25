@@ -1466,17 +1466,6 @@ func TestGetUserHolidayMap_MultiCountryResolution(t *testing.T) {
 	}
 }
 
-	}
-
-	fp, err := d.GetFloorplan(fpID)
-	if err != nil {
-		t.Fatalf("GetFloorplan: %v", err)
-	}
-	if fp.ImagePath != "/images/map.png" {
-		t.Fatalf("expected image_path '/images/map.png', got %q", fp.ImagePath)
-	}
-}
-
 // ── GetSeatsWithStatus ────────────────────────────────────────────────────────
 
 func TestGetSeatsWithStatus_Free(t *testing.T) {
