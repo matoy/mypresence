@@ -1,4 +1,2 @@
 mypresence-data/*
-docker-compose.yml
-**/Dockerfile
 corporate-ca.crt
