@@ -151,13 +151,13 @@
                         {{$pmSid   := presenceHalf $presences .Date "PM"}}
                         <div class="relative">
                         {{if $fullSid}}
-                        <div class="w-full h-10 transition-all"
+                        <div class="w-full h-10 transition-all {{if not (or .IsWeekend (and .IsHoliday (not .HolidayAllowImputed)))}}hover:brightness-90{{end}}"
                              :class="isSelected({{$uid}}, '{{.Date}}') ? 'ring-2 ring-primary ring-inset' : ''"
                              style="background-color: {{statusColor $allStatuses $fullSid}}; opacity: {{if .IsWeekend}}0.6{{else}}1{{end}}"
                              title="{{statusName $allStatuses $fullSid}}">
                         </div>
                         {{else if or $amSid $pmSid}}
-                        <div class="w-full h-10 flex flex-col transition-all"
+                        <div class="w-full h-10 flex flex-col transition-all {{if not (or .IsWeekend (and .IsHoliday (not .HolidayAllowImputed)))}}hover:brightness-90{{end}}"
                              :class="isSelected({{$uid}}, '{{.Date}}') ? 'ring-2 ring-primary ring-inset' : ''">
                             <div class="flex-1 w-full"
                                  style="background-color: {{if $amSid}}{{statusColor $allStatuses $amSid}}{{else}}#e5e7eb{{end}}"
@@ -446,14 +446,14 @@
                         {{end}}>
                         <div class="relative">
                         {{if $fullSid}}
-                        <div class="w-full h-10 transition-all"
-                             {{if $tv.CanEdit}}:class="isSelected({{$memberID}}, '{{.Date}}') ? 'ring-2 ring-primary ring-inset' : '"{{end}}
+                        <div class="w-full h-10 transition-all {{if $tv.CanEdit}}{{if not (or .IsWeekend (and .IsHoliday (not .HolidayAllowImputed)))}}hover:brightness-90{{end}}{{end}}"
+                             {{if $tv.CanEdit}}:class="isSelected({{$memberID}}, '{{.Date}}') ? 'ring-2 ring-primary ring-inset' : ''"{{end}}
                              style="background-color: {{statusColor $allStatuses $fullSid}}; opacity: {{if .IsWeekend}}0.6{{else}}1{{end}}"
                              title="{{statusName $allStatuses $fullSid}}">
                         </div>
                         {{else if or $amSid $pmSid}}
-                        <div class="w-full h-10 flex flex-col transition-all"
-                             {{if $tv.CanEdit}}:class="isSelected({{$memberID}}, '{{.Date}}') ? 'ring-2 ring-primary ring-inset' : '"{{end}}>
+                        <div class="w-full h-10 flex flex-col transition-all {{if $tv.CanEdit}}{{if not (or .IsWeekend (and .IsHoliday (not .HolidayAllowImputed)))}}hover:brightness-90{{end}}{{end}}"
+                             {{if $tv.CanEdit}}:class="isSelected({{$memberID}}, '{{.Date}}') ? 'ring-2 ring-primary ring-inset' : ''"{{end}}>
                             <div class="flex-1 w-full"
                                  style="background-color: {{if $amSid}}{{statusColor $allStatuses $amSid}}{{else}}#e5e7eb{{end}}"
                                  title="AM{{if $amSid}}: {{statusName $allStatuses $amSid}}{{end}}"></div>
