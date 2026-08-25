@@ -129,3 +129,40 @@ func TestHelpKeys_AllLanguages(t *testing.T) {
 		}
 	}
 }
+
+func TestProjectsManualKeys_AllLanguages(t *testing.T) {
+	requiredKeys := []string{
+		"projects.manual.none",
+		"projects.manual.non_billable",
+		"projects.manual.complete",
+		"projects.manual.type_jira",
+		"projects.manual.type_servicenow",
+		"projects.manual.type_other",
+		"projects.manual.jira_placeholder",
+		"projects.manual.no_tickets",
+		"projects.manual.comments",
+		"projects.manual.comments_mandatory",
+		"projects.manual.comment_required",
+		"projects.manual.save_day",
+		"projects.manual.day_saved",
+		"projects.manual.add_activity",
+		"projects.manual.no_activities_day",
+		"projects.manual.filter_hide_non_billable",
+		"projects.manual.filter_hide_completed",
+		"projects.manual.collapse_all",
+		"projects.manual.expand_all",
+		"projects.manual.unsaved",
+		"projects.manual.unsaved_changes",
+	}
+
+	langs := []string{"en", "fr", "de", "es", "it"}
+	for _, lang := range langs {
+		m := T(lang)
+		for _, key := range requiredKeys {
+			val, ok := m[key]
+			if !ok || val == "" {
+				t.Errorf("lang %q is missing required manual tasks key %q", lang, key)
+			}
+		}
+	}
+}
