@@ -1,12 +1,12 @@
 {{define "content"}}
 {{with .Data}}
-<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8" x-data="holidayAdmin({{json .Holidays}})">
+<div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8" x-data="holidayAdmin({{json .Holidays}}, {{json .Countries}})">
 
     <div class="flex items-center justify-between mb-6">
         <h1 class="text-2xl font-bold text-gray-900">{{index $.T "holidays.title"}}</h1>
         <div class="flex items-center gap-3">
             <span class="text-sm text-gray-400" x-text="filteredCount + ' / ' + totalCount"></span>
-            <button @click="showCreateModal = true; createError = ''; newDate = ''; newName = ''; newAllowImputed = false"
+            <button @click="showCreateModal = true; createError = ''; newDate = ''; newName = ''; newAllowImputed = false; newCountryCode = ''"
                     class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
                 + {{index $.T "holidays.add"}}
             </button>
@@ -26,6 +26,17 @@
                 <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "admin.search"}}</label>
                 <input type="text" x-model="filterText" placeholder="{{index $.T "holidays.name_placeholder"}}"
                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "holidays.col_country"}}</label>
+                <select x-model="filterCountry"
+                        class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+                    <option value="all">{{index $.T "admin.all"}}</option>
+                    <option value="GLOBAL">{{index $.T "holidays.all_countries"}}</option>
+                    <template x-for="c in countries" :key="c.code">
+                        <option :value="c.code" x-text="c.flag + ' ' + c.name + ' (' + c.code + ')'"></option>
+                    </template>
+                </select>
             </div>
             <div>
                 <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "holidays.col_allow_imputed"}}</label>
@@ -61,6 +72,7 @@
                 <tr class="bg-gray-50 border-b border-gray-200">
                     <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T "admin.date"}}</th>
                     <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T "admin.name"}}</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T "holidays.col_country"}}</th>
                     <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">{{index $.T "holidays.col_allow_imputed"}}</th>
                     <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">{{index $.T "admin.actions"}}</th>
                 </tr>
@@ -68,18 +80,19 @@
             <tbody class="divide-y divide-gray-100">
                 {{range .Holidays}}
                 <tr class="hover:bg-gray-50 transition"
-                    x-show="matchesHoliday('{{.Date}}', {{json .Name}}, {{.AllowImputed}})"
+                    x-show="matchesHoliday('{{.Date}}', {{json .Name}}, {{.AllowImputed}}, '{{.CountryCode}}')"
                     x-cloak
                     x-data="{
                         editing: false,
                         editDate: '{{.Date}}',
                         editName: {{json .Name}},
                         editAllowImputed: {{.AllowImputed}},
+                        editCountryCode: '{{.CountryCode}}',
                         async save() {
                             const resp = await fetch('/admin/holidays/{{.ID}}', {
                                 method: 'PUT',
                                 headers: {'Content-Type': 'application/json'},
-                                body: JSON.stringify({date: this.editDate, name: this.editName, allow_imputed: this.editAllowImputed})
+                                body: JSON.stringify({date: this.editDate, name: this.editName, allow_imputed: this.editAllowImputed, country_code: this.editCountryCode})
                             });
                             if (resp.ok) { window.location.reload(); }
                             else { const d = await resp.json(); alert(d.error || 'Error'); }
@@ -113,6 +126,41 @@
                         <template x-if="editing">
                             <input type="text" x-model="editName"
                                    class="px-2 py-1 border rounded text-sm w-full">
+                        </template>
+                    </td>
+                    <!-- Country cell -->
+                    <td class="px-4 py-3">
+                        <template x-if="!editing">
+                            <div class="flex flex-wrap items-center gap-1">
+                                <template x-if="!editCountryCode">
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700">
+                                        🌐 {{index $.T "holidays.all_countries"}}
+                                    </span>
+                                </template>
+                                <template x-if="editCountryCode">
+                                    <template x-for="code in splitCountries(editCountryCode)" :key="code">
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200"
+                                              x-text="countryLabel(code)">
+                                        </span>
+                                    </template>
+                                </template>
+                            </div>
+                        </template>
+                        <template x-if="editing">
+                            <div class="space-y-1.5">
+                                <input type="text" x-model="editCountryCode"
+                                       placeholder="FR, MA, CZ..."
+                                       class="w-full px-2 py-1 border rounded text-xs uppercase focus:ring-2 focus:ring-primary/50">
+                                <div class="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
+                                    <template x-for="c in countries" :key="c.code">
+                                        <button type="button" @click="editCountryCode = toggleCountryInList(editCountryCode, c.code)"
+                                                class="text-xs px-2 py-0.5 rounded-full border transition"
+                                                :class="isCountryInList(editCountryCode, c.code) ? 'bg-primary text-white border-primary' : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'"
+                                                x-text="(c.flag ? c.flag + ' ' : '') + c.code">
+                                        </button>
+                                    </template>
+                                </div>
+                            </div>
                         </template>
                     </td>
                     <!-- Allow imputed cell -->
@@ -194,6 +242,21 @@
                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm"
                            @keydown.enter="createHoliday()">
                 </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-0.5">{{index $.T "holidays.country"}}</label>
+                    <p class="text-xs text-gray-400 mb-1">{{index $.T "holidays.countries_hint"}}</p>
+                    <input type="text" x-model="newCountryCode" placeholder="FR, MA, CZ..."
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm uppercase">
+                    <div class="flex flex-wrap gap-1 mt-1.5 max-h-32 overflow-y-auto">
+                        <template x-for="c in countries" :key="c.code">
+                            <button type="button" @click="newCountryCode = toggleCountryInList(newCountryCode, c.code)"
+                                    class="text-xs px-2 py-0.5 rounded-full border transition"
+                                    :class="isCountryInList(newCountryCode, c.code) ? 'bg-primary text-white border-primary' : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'"
+                                    x-text="(c.flag ? c.flag + ' ' : '') + c.code">
+                            </button>
+                        </template>
+                    </div>
+                </div>
                 <div class="flex items-center gap-2">
                     <input type="checkbox" x-model="newAllowImputed" id="allow_imputed"
                            class="h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary">
@@ -220,37 +283,74 @@
 </div>
 
 <script>
-function holidayAdmin(initialHolidays) {
+function holidayAdmin(initialHolidays, countriesCatalog) {
     return {
         holidays: initialHolidays || [],
+        countries: countriesCatalog || [],
         showCreateModal: false,
         newDate: '',
         newName: '',
         newAllowImputed: false,
+        newCountryCode: '',
         createError: '',
         filterText: '',
+        filterCountry: 'all',
         filterAllowImputed: 'all',
         filterYear: '',
+
+        splitCountries(codesStr) {
+            if (!codesStr) return [];
+            return codesStr.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+        },
+
+        countryLabel(code) {
+            if (!code) return '';
+            const c = this.countries.find(x => x.code === code);
+            if (c) return (c.flag ? c.flag + ' ' : '') + c.name + ' (' + c.code + ')';
+            return code;
+        },
+
+        isCountryInList(listStr, code) {
+            if (!listStr) return false;
+            const codes = listStr.split(',').map(s => s.trim().toUpperCase());
+            return codes.includes(code.toUpperCase());
+        },
+
+        toggleCountryInList(currentStr, code) {
+            let codes = (currentStr || '').split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+            const target = code.toUpperCase();
+            if (codes.includes(target)) {
+                codes = codes.filter(c => c !== target);
+            } else {
+                codes.push(target);
+            }
+            return codes.join(', ');
+        },
 
         get totalCount() {
             return this.holidays.length;
         },
 
         get filteredCount() {
-            return this.holidays.filter(h => this.matchesHoliday(h.date, h.name, h.allow_imputed)).length;
+            return this.holidays.filter(h => this.matchesHoliday(h.date, h.name, h.allow_imputed, h.country_code)).length;
         },
 
         resetFilters() {
             this.filterText = '';
+            this.filterCountry = 'all';
             this.filterAllowImputed = 'all';
             this.filterYear = '';
         },
 
-        matchesHoliday(date, name, allowImputed) {
+        matchesHoliday(date, name, allowImputed, countryCode) {
             const q = this.filterText.trim().toLowerCase();
             if (q) {
-                const hay = `${date} ${name || ''}`.toLowerCase();
+                const hay = `${date} ${name || ''} ${countryCode || ''}`.toLowerCase();
                 if (!hay.includes(q)) return false;
+            }
+            if (this.filterCountry === 'GLOBAL' && countryCode) return false;
+            if (this.filterCountry !== 'all' && this.filterCountry !== 'GLOBAL') {
+                if (!this.isCountryInList(countryCode, this.filterCountry)) return false;
             }
             if (this.filterAllowImputed === '1' && !allowImputed) return false;
             if (this.filterAllowImputed === '0' && allowImputed) return false;
@@ -264,7 +364,12 @@ function holidayAdmin(initialHolidays) {
             const resp = await fetch('/admin/holidays', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ date: this.newDate, name: this.newName, allow_imputed: this.newAllowImputed })
+                body: JSON.stringify({
+                    date: this.newDate,
+                    name: this.newName,
+                    allow_imputed: this.newAllowImputed,
+                    country_code: (this.newCountryCode || '').trim()
+                })
             });
             if (resp.ok) { this.showCreateModal = false; window.location.reload(); }
             else { const d = await resp.json(); this.createError = d.error || 'Error'; }

@@ -52,13 +52,14 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 	lastDay := time.Date(year, time.Month(month)+1, 0, 0, 0, 0, 0, time.UTC)
 	endDate := lastDay.Format("2006-01-02")
 
-	// Enrich days with holiday data
-	holidayMap, _ := h.DB.GetHolidayMap(startDate, endDate)
+	// Enrich days with holiday data for current user
+	holidayMap, _ := h.DB.GetUserHolidayMap(user.ID, startDate, endDate)
 	for i, d := range days {
 		if hol, ok := holidayMap[d.Date]; ok {
 			days[i].IsHoliday = true
 			days[i].HolidayName = hol.Name
 			days[i].HolidayAllowImputed = hol.AllowImputed
+			days[i].HolidayCountryCode = hol.CountryCode
 		}
 	}
 
@@ -202,8 +203,8 @@ func (h *CalendarHandler) SetPresences(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Reject dates that fall on non-imputable holidays
-	holidayMap, _ := h.DB.GetHolidayMap(minDate, maxDate)
+	// Reject dates that fall on non-imputable holidays for this user
+	holidayMap, _ := h.DB.GetUserHolidayMap(req.UserID, minDate, maxDate)
 	for _, d := range req.Dates {
 		if hol, ok := holidayMap[d]; ok && !hol.AllowImputed {
 			jsonError(w, "Jour férié non imputable: "+hol.Name+" ("+d+")", http.StatusUnprocessableEntity)
@@ -405,11 +406,12 @@ func (h *CalendarHandler) CertifyMonth(w http.ResponseWriter, r *http.Request) {
 	endDate := lastDay.Format("2006-01-02")
 
 	days := getDaysInMonth(req.Year, req.Month)
-	holidayMap, _ := h.DB.GetHolidayMap(startDate, endDate)
+	holidayMap, _ := h.DB.GetUserHolidayMap(user.ID, startDate, endDate)
 	for i, d := range days {
 		if hol, ok := holidayMap[d.Date]; ok {
 			days[i].IsHoliday = true
 			days[i].HolidayAllowImputed = hol.AllowImputed
+			days[i].HolidayCountryCode = hol.CountryCode
 		}
 	}
 

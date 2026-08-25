@@ -119,6 +119,86 @@ func FilterUsersByText(users []User, q string) []User {
 	return result
 }
 
+// Country represents a country with its ISO 3166-1 alpha-2 code, name, and flag emoji.
+type Country struct {
+	Code string `json:"code"`
+	Name string `json:"name"`
+	Flag string `json:"flag"`
+}
+
+// AllCountries is a curated catalog of countries with ISO 3166-1 alpha-2 codes and flag emojis.
+var AllCountries = []Country{
+	{Code: "FR", Name: "France", Flag: "🇫🇷"},
+	{Code: "MA", Name: "Morocco", Flag: "🇲🇦"},
+	{Code: "CZ", Name: "Czech Republic", Flag: "🇨🇿"},
+	{Code: "US", Name: "United States", Flag: "🇺🇸"},
+	{Code: "DE", Name: "Germany", Flag: "🇩🇪"},
+	{Code: "ES", Name: "Spain", Flag: "🇪🇸"},
+	{Code: "IT", Name: "Italy", Flag: "🇮🇹"},
+	{Code: "CH", Name: "Switzerland", Flag: "🇨🇭"},
+	{Code: "GB", Name: "United Kingdom", Flag: "🇬🇧"},
+	{Code: "BE", Name: "Belgium", Flag: "🇧🇪"},
+	{Code: "PT", Name: "Portugal", Flag: "🇵🇹"},
+	{Code: "TN", Name: "Tunisia", Flag: "🇹🇳"},
+	{Code: "SN", Name: "Senegal", Flag: "🇸🇳"},
+	{Code: "CA", Name: "Canada", Flag: "🇨🇦"},
+	{Code: "IN", Name: "India", Flag: "🇮🇳"},
+	{Code: "PL", Name: "Poland", Flag: "🇵🇱"},
+	{Code: "RO", Name: "Romania", Flag: "🇷🇴"},
+	{Code: "BR", Name: "Brazil", Flag: "🇧🇷"},
+	{Code: "JP", Name: "Japan", Flag: "🇯🇵"},
+	{Code: "AU", Name: "Australia", Flag: "🇦🇺"},
+	{Code: "SG", Name: "Singapore", Flag: "🇸🇬"},
+	{Code: "NL", Name: "Netherlands", Flag: "🇳🇱"},
+	{Code: "IE", Name: "Ireland", Flag: "🇮🇪"},
+	{Code: "SE", Name: "Sweden", Flag: "🇸🇪"},
+	{Code: "NO", Name: "Norway", Flag: "🇳🇴"},
+	{Code: "DK", Name: "Denmark", Flag: "🇩🇰"},
+	{Code: "FI", Name: "Finland", Flag: "🇫🇮"},
+	{Code: "AT", Name: "Austria", Flag: "🇦🇹"},
+	{Code: "LU", Name: "Luxembourg", Flag: "🇱🇺"},
+	{Code: "GR", Name: "Greece", Flag: "🇬🇷"},
+	{Code: "MX", Name: "Mexico", Flag: "🇲🇽"},
+	{Code: "AR", Name: "Argentina", Flag: "🇦🇷"},
+	{Code: "CO", Name: "Colombia", Flag: "🇨🇴"},
+	{Code: "CL", Name: "Chile", Flag: "🇨🇱"},
+	{Code: "ZA", Name: "South Africa", Flag: "🇿🇦"},
+	{Code: "EG", Name: "Egypt", Flag: "🇪🇬"},
+	{Code: "CI", Name: "Ivory Coast", Flag: "🇨🇮"},
+	{Code: "CM", Name: "Cameroon", Flag: "🇨🇲"},
+	{Code: "AE", Name: "United Arab Emirates", Flag: "🇦🇪"},
+	{Code: "SA", Name: "Saudi Arabia", Flag: "🇸🇦"},
+	{Code: "QA", Name: "Qatar", Flag: "🇶🇦"},
+	{Code: "TR", Name: "Turkey", Flag: "🇹🇷"},
+	{Code: "UA", Name: "Ukraine", Flag: "🇺🇦"},
+	{Code: "HU", Name: "Hungary", Flag: "🇭🇺"},
+	{Code: "SK", Name: "Slovakia", Flag: "🇸🇰"},
+	{Code: "BG", Name: "Bulgaria", Flag: "🇧🇬"},
+	{Code: "HR", Name: "Croatia", Flag: "🇭🇷"},
+	{Code: "RS", Name: "Serbia", Flag: "🇷🇸"},
+	{Code: "NZ", Name: "New Zealand", Flag: "🇳🇿"},
+	{Code: "KR", Name: "South Korea", Flag: "🇰🇷"},
+	{Code: "VN", Name: "Vietnam", Flag: "🇻🇳"},
+	{Code: "TH", Name: "Thailand", Flag: "🇹🇭"},
+	{Code: "ID", Name: "Indonesia", Flag: "🇮🇩"},
+	{Code: "PH", Name: "Philippines", Flag: "🇵🇭"},
+	{Code: "MY", Name: "Malaysia", Flag: "🇲🇾"},
+}
+
+// FindCountry returns the Country for a given ISO code, or a synthetic Country if not in the catalog.
+func FindCountry(code string) Country {
+	code = strings.ToUpper(strings.TrimSpace(code))
+	if code == "" {
+		return Country{}
+	}
+	for _, c := range AllCountries {
+		if c.Code == code {
+			return c
+		}
+	}
+	return Country{Code: code, Name: code, Flag: "🌐"}
+}
+
 // TeamMember is a User enriched with their departure date from a team.
 // LeftAt is nil when the member is currently active.
 type TeamMember struct {
@@ -134,7 +214,23 @@ type Team struct {
 	TimesheetsManagedManually bool      `json:"timesheets_managed_manually"`
 	RequireActivityComment    bool      `json:"require_activity_comment"`
 	DomainID                  int64     `json:"domain_id"`
+	CountryCodes              string    `json:"country_codes"` // comma-separated ISO codes e.g. "FR,MA,US"
 	CreatedAt                 time.Time `json:"created_at"`
+}
+
+// CountryList returns the list of uppercase country codes for the team.
+func (t *Team) CountryList() []string {
+	if t == nil || t.CountryCodes == "" {
+		return nil
+	}
+	var list []string
+	for _, c := range strings.Split(t.CountryCodes, ",") {
+		c = strings.ToUpper(strings.TrimSpace(c))
+		if c != "" {
+			list = append(list, c)
+		}
+	}
+	return list
 }
 
 // Domain groups several teams under one or more managers for aggregated
@@ -180,6 +276,7 @@ type DayInfo struct {
 	IsHoliday           bool
 	HolidayName         string
 	HolidayAllowImputed bool
+	HolidayCountryCode  string
 }
 
 // Holiday represents a public holiday.
@@ -188,6 +285,47 @@ type Holiday struct {
 	Date         string `json:"date"` // YYYY-MM-DD
 	Name         string `json:"name"`
 	AllowImputed bool   `json:"allow_imputed"` // allow presences to be set on this day
+	CountryCode  string `json:"country_code"`  // optional comma-separated country codes e.g. "FR", "FR, MA", or "" for global/all
+}
+
+// CountryList returns the list of uppercase country codes for the holiday.
+func (h Holiday) CountryList() []string {
+	if h.CountryCode == "" {
+		return nil
+	}
+	var list []string
+	for _, c := range strings.Split(h.CountryCode, ",") {
+		c = strings.ToUpper(strings.TrimSpace(c))
+		if c != "" {
+			list = append(list, c)
+		}
+	}
+	return list
+}
+
+// TeamMatchesHoliday returns true if a holiday applies to a team with the given country codes.
+//   - Global holidays (no country specified) apply to all teams.
+//   - If the team has no countries configured, only global holidays apply.
+//   - If the team has countries configured, a country-specific holiday applies if and only if
+//     ALL of the team's countries are included in the holiday's countries.
+func TeamMatchesHoliday(teamCountries []string, hol Holiday) bool {
+	hCountries := hol.CountryList()
+	if len(hCountries) == 0 {
+		return true
+	}
+	if len(teamCountries) == 0 {
+		return false
+	}
+	hMap := make(map[string]bool, len(hCountries))
+	for _, c := range hCountries {
+		hMap[c] = true
+	}
+	for _, tc := range teamCountries {
+		if !hMap[tc] {
+			return false
+		}
+	}
+	return true
 }
 
 // UserStats holds stats for a single user over a period.

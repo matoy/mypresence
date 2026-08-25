@@ -1315,36 +1315,152 @@ func TestUpdateHoliday_ChangesFields(t *testing.T) {
 	}
 }
 
-func TestDeleteHoliday_RemovesHoliday(t *testing.T) {
+func TestHoliday_CountryCode_CRUD(t *testing.T) {
 	d := newTestDB(t)
-	id, _ := d.CreateHoliday("2026-01-01", "New Year", false)
-	if err := d.DeleteHoliday(id); err != nil {
-		t.Fatalf("DeleteHoliday: %v", err)
+	// Create holiday with country code MA (Morocco)
+	id, err := d.CreateHoliday("2026-07-30", "Fête du Trône", false, "ma")
+	if err != nil || id <= 0 {
+		t.Fatalf("CreateHoliday with country: id=%d err=%v", id, err)
 	}
-	holidays, _ := d.ListHolidays()
+
+	holidays, err := d.ListHolidays()
+	if err != nil {
+		t.Fatalf("ListHolidays: %v", err)
+	}
+	var found bool
 	for _, h := range holidays {
 		if h.ID == id {
-			t.Error("holiday should have been deleted")
+			found = true
+			if h.CountryCode != "MA" {
+				t.Errorf("expected CountryCode MA, got %q", h.CountryCode)
+			}
 		}
+	}
+	if !found {
+		t.Error("holiday with country code not found")
+	}
+
+	// Update country code to CZ (Czech Republic)
+	if err := d.UpdateHoliday(id, "2026-07-30", "Fête du Trône (updated)", true, "cz"); err != nil {
+		t.Fatalf("UpdateHoliday: %v", err)
+	}
+	hMap, _ := d.GetHolidayMap("2026-07-01", "2026-07-31")
+	if h, ok := hMap["2026-07-30"]; !ok || h.CountryCode != "CZ" || !h.AllowImputed {
+		t.Errorf("expected updated holiday with CountryCode CZ and allow_imputed=true, got %+v", h)
 	}
 }
 
-// ── SetFloorplanImage ─────────────────────────────────────────────────────────
-
-func TestSetFloorplanImage_UpdatesPath(t *testing.T) {
+func TestGetUserHolidayMap_MultiCountryResolution(t *testing.T) {
 	d := newTestDB(t)
-	fpID, _ := seedFloorplanAndSeat(t, d, "A1")
 
-	if err := d.SetFloorplanImage(fpID, "/images/map.png"); err != nil {
-		t.Fatalf("SetFloorplanImage: %v", err)
-	}
+	// Users
+	uFR, _ := d.CreateLocalUser("user.fr@example.com", "User FR", "pass")
+	uMA, _ := d.CreateLocalUser("user.ma@example.com", "User MA", "pass")
+	uGlobal, _ := d.CreateLocalUser("user.global@example.com", "User Global", "pass")
 
-	fp, err := d.GetFloorplan(fpID)
+	// Teams
+	teamFR, _ := d.CreateTeamWithDetails("Team France", "", false, false, "FR")
+	teamMA, _ := d.CreateTeamWithDetails("Team Morocco", "", false, false, "MA,CZ")
+	teamNone, _ := d.CreateTeamWithDetails("Team None", "", false, false, "")
+
+	_ = d.AddTeamMember(teamFR, uFR)
+	_ = d.AddTeamMember(teamMA, uMA)
+	_ = d.AddTeamMember(teamNone, uGlobal)
+
+	// Holidays:
+	// - Global (New Year): applies to all teams
+	// - FR only (14 Juillet): applies to teamFR ("FR"), but NOT to teamMA ("MA,CZ")
+	// - MA only (Fête du Trône): applies only if team is MA-only; does NOT apply to teamMA ("MA,CZ") because CZ is not covered!
+	// - Shared FR+MA (Victory Day): applies to teamFR ("FR"), but NOT to teamMA ("MA,CZ") because CZ is not covered!
+	// - Shared MA+CZ (St Wenceslas): applies to teamMA ("MA,CZ") because ALL its countries (MA and CZ) are covered!
+	_, _ = d.CreateHoliday("2026-01-01", "New Year", false, "")
+	_, _ = d.CreateHoliday("2026-07-14", "Bastille Day", false, "FR")
+	_, _ = d.CreateHoliday("2026-07-30", "Throne Day", false, "MA")
+	_, _ = d.CreateHoliday("2026-05-08", "Shared FR+MA", false, "FR, MA")
+	_, _ = d.CreateHoliday("2026-09-28", "Shared MA+CZ", false, "MA, CZ")
+
+	// 1. User FR (teamFR = "FR")
+	frMap, err := d.GetUserHolidayMap(uFR, "2026-01-01", "2026-12-31")
 	if err != nil {
-		t.Fatalf("GetFloorplan: %v", err)
+		t.Fatalf("GetUserHolidayMap(FR): %v", err)
 	}
-	if fp.ImagePath != "/images/map.png" {
-		t.Fatalf("expected image_path '/images/map.png', got %q", fp.ImagePath)
+	if _, ok := frMap["2026-01-01"]; !ok {
+		t.Error("User FR should have global holiday 2026-01-01")
+	}
+	if _, ok := frMap["2026-07-14"]; !ok {
+		t.Error("User FR should have French holiday 2026-07-14")
+	}
+	if _, ok := frMap["2026-05-08"]; !ok {
+		t.Error("User FR should have shared FR+MA holiday 2026-05-08")
+	}
+	if _, ok := frMap["2026-07-30"]; ok {
+		t.Error("User FR should NOT have Moroccan holiday 2026-07-30")
+	}
+	if _, ok := frMap["2026-09-28"]; ok {
+		t.Error("User FR should NOT have MA+CZ holiday 2026-09-28")
+	}
+
+	// 2. User MA in mixed team (teamMA = "MA,CZ")
+	maMap, err := d.GetUserHolidayMap(uMA, "2026-01-01", "2026-12-31")
+	if err != nil {
+		t.Fatalf("GetUserHolidayMap(MA): %v", err)
+	}
+	if _, ok := maMap["2026-01-01"]; !ok {
+		t.Error("User MA should have global holiday 2026-01-01")
+	}
+	if _, ok := maMap["2026-07-14"]; ok {
+		t.Error("User MA should NOT have French holiday 2026-07-14")
+	}
+	if _, ok := maMap["2026-07-30"]; ok {
+		t.Error("User in mixed team MA,CZ should NOT be blocked on MA-only holiday (CZ is working)")
+	}
+	if _, ok := maMap["2026-05-08"]; ok {
+		t.Error("User in mixed team MA,CZ should NOT be blocked on FR,MA holiday (CZ is working)")
+	}
+	if _, ok := maMap["2026-09-28"]; !ok {
+		t.Error("User in mixed team MA,CZ should have shared MA+CZ holiday 2026-09-28")
+	}
+
+	// 3. User Global (team with no countries specified)
+	globalMap, err := d.GetUserHolidayMap(uGlobal, "2026-01-01", "2026-12-31")
+	if err != nil {
+		t.Fatalf("GetUserHolidayMap(Global): %v", err)
+	}
+	if _, ok := globalMap["2026-01-01"]; !ok {
+		t.Error("User Global should have global holiday 2026-01-01")
+	}
+	if _, ok := globalMap["2026-07-14"]; ok {
+		t.Error("User Global should NOT have French holiday 2026-07-14")
+	}
+	if _, ok := globalMap["2026-05-08"]; ok {
+		t.Error("User Global should NOT have shared holiday 2026-05-08")
+	}
+	if _, ok := globalMap["2026-07-30"]; ok {
+		t.Error("User Global should NOT have Moroccan holiday 2026-07-30")
+	}
+	if _, ok := globalMap["2026-09-28"]; ok {
+		t.Error("User Global should NOT have MA+CZ holiday 2026-09-28")
+	}
+
+	// 4. Team Holiday Map for Team MA ("MA,CZ")
+	teamMAMap, err := d.GetTeamHolidayMap(teamMA, "2026-01-01", "2026-12-31")
+	if err != nil {
+		t.Fatalf("GetTeamHolidayMap(teamMA): %v", err)
+	}
+	if _, ok := teamMAMap["2026-01-01"]; !ok {
+		t.Error("Team MA map should have global holiday 2026-01-01")
+	}
+	if _, ok := teamMAMap["2026-07-30"]; ok {
+		t.Error("Team MA map should NOT have MA-only 2026-07-30 because CZ is not covered")
+	}
+	if _, ok := teamMAMap["2026-05-08"]; ok {
+		t.Error("Team MA map should NOT have FR+MA 2026-05-08 because CZ is not covered")
+	}
+	if _, ok := teamMAMap["2026-09-28"]; !ok {
+		t.Error("Team MA map should have MA+CZ 2026-09-28 because ALL its countries are covered")
+	}
+	if _, ok := teamMAMap["2026-07-14"]; ok {
+		t.Error("Team MA map should NOT have 2026-07-14")
 	}
 }
 

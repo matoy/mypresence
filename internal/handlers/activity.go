@@ -99,9 +99,39 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 	totalBillable, totalSetDays, statusTotals := computeStatusTotals(stats)
 
 	// Build daily breakdown data
-	allHolidays, _ := h.DB.ListHolidays()
+	var holidays []models.Holiday
+	if teamID > 0 {
+		thm, _ := h.DB.GetTeamHolidayMap(teamID, startDate, endDate)
+		for _, hol := range thm {
+			holidays = append(holidays, hol)
+		}
+	} else if domainID > 0 {
+		allHols, _ := h.DB.ListHolidays()
+		for _, hol := range allHols {
+			for _, t := range domainTeams {
+				if models.TeamMatchesHoliday(t.CountryList(), hol) {
+					holidays = append(holidays, hol)
+					break
+				}
+			}
+		}
+	} else {
+		allHols, _ := h.DB.ListHolidays()
+		for _, hol := range allHols {
+			if len(allTeams) == 0 && len(hol.CountryList()) == 0 {
+				holidays = append(holidays, hol)
+			} else {
+				for _, t := range allTeams {
+					if models.TeamMatchesHoliday(t.CountryList(), hol) {
+						holidays = append(holidays, hol)
+						break
+					}
+				}
+			}
+		}
+	}
 	days := getDaysInMonth(year, month)
-	markHolidaysOnDays(days, allHolidays)
+	markHolidaysOnDays(days, holidays)
 	var members []models.User
 	var presenceMap map[int64]map[string]map[string]int64
 	if showDailyBreakdown {
@@ -111,7 +141,19 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Count working days in the month (Mon–Fri) and holidays on those days.
-	workingDays, holidayCount := computeWorkingDays(year, month, allHolidays)
+	var workingDays, holidayCount int
+	if teamID > 0 {
+		thm, _ := h.DB.GetTeamHolidayMap(teamID, startDate, endDate)
+		workingDays, holidayCount = computeWorkingDaysFromMap(year, month, thm)
+	} else {
+		holMap := make(map[string]models.Holiday)
+		for _, hol := range holidays {
+			if _, exists := holMap[hol.Date]; !exists || !hol.AllowImputed {
+				holMap[hol.Date] = hol
+			}
+		}
+		workingDays, holidayCount = computeWorkingDaysFromMap(year, month, holMap)
+	}
 	workingDaysExcluded := workingDays - holidayCount
 	totalOnSite := 0.0
 	for _, s := range stats {
@@ -129,7 +171,13 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	totalWorkingDays := float64(workingDaysExcluded) * float64(len(stats))
+	// Compute total expected working days summed accurately across each user's country holidays
+	totalWorkingDays := 0.0
+	for _, s := range stats {
+		uHolMap, _ := h.DB.GetUserHolidayMap(s.User.ID, startDate, endDate)
+		uWorkingDays, uHolCount := computeWorkingDaysFromMap(year, month, uHolMap)
+		totalWorkingDays += float64(uWorkingDays - uHolCount)
+	}
 	totalNotSet := totalWorkingDays - totalSetDays
 	if totalNotSet < 0 {
 		totalNotSet = 0
@@ -420,6 +468,22 @@ func computeWorkingDays(year, month int, holidays []models.Holiday) (workingDays
 	return
 }
 
+// computeWorkingDaysFromMap counts working days and non-imputable holidays using a map.
+func computeWorkingDaysFromMap(year, month int, holidayMap map[string]models.Holiday) (workingDays, holidayCount int) {
+	lastDay := time.Date(year, time.Month(month)+1, 0, 0, 0, 0, 0, time.UTC)
+	for d := 1; d <= lastDay.Day(); d++ {
+		t := time.Date(year, time.Month(month), d, 0, 0, 0, 0, time.UTC)
+		if t.Weekday() != time.Saturday && t.Weekday() != time.Sunday {
+			workingDays++
+			dateStr := t.Format("2006-01-02")
+			if hol, ok := holidayMap[dateStr]; ok && !hol.AllowImputed {
+				holidayCount++
+			}
+		}
+	}
+	return
+}
+
 // computeDayBillableOnSite aggregates per-date billable and on-site half-day
 // weights from the presence map for the activity daily breakdown footer.
 func computeDayBillableOnSite(presenceMap map[int64]map[string]map[string]int64, statuses []models.Status) (dayBillable, dayOnSite map[string]float64) {
@@ -490,7 +554,12 @@ func (h *ActivityHandler) computeExecSummary(
 			}
 		}
 	}
-	totalWorkingDays = float64(workingDaysExcl) * float64(userCount)
+	totalWorkingDays = 0.0
+	for uid := range seen {
+		uHolMap, _ := h.DB.GetUserHolidayMap(uid, startDate, endDate)
+		uWorkingDays, uHolCount := computeWorkingDaysFromMap(year, month, uHolMap)
+		totalWorkingDays += float64(uWorkingDays - uHolCount)
+	}
 	totalNotSet = totalWorkingDays - totalSetDays
 	if totalNotSet < 0 {
 		totalNotSet = 0
@@ -637,6 +706,8 @@ func markHolidaysOnDays(days []models.DayInfo, holidays []models.Holiday) {
 			if hol.Date == d.Date {
 				days[i].IsHoliday = true
 				days[i].HolidayName = hol.Name
+				days[i].HolidayAllowImputed = hol.AllowImputed
+				days[i].HolidayCountryCode = hol.CountryCode
 				break
 			}
 		}

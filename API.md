@@ -714,9 +714,10 @@ Create a new team. Requires `team_manager` or `global`.
 
 **Request**
 ```json
-{ "name": "Engineering", "jira_space_key": "", "timesheets_managed_manually": false, "domain_id": 0 }
+{ "name": "Engineering", "jira_space_key": "", "timesheets_managed_manually": false, "domain_id": 0, "country_codes": "FR, MA" }
 ```
-`domain_id` is optional; omit or set to `0` to leave the team unattached to a domain.
+`domain_id` is optional; omit or set to `0` to leave the team unattached to a domain.  
+`country_codes` is optional; comma-separated ISO country codes (e.g. `"FR, MA, CZ"`) whose holidays apply to members of this team.
 
 **Response 200**
 ```json
@@ -727,11 +728,11 @@ Create a new team. Requires `team_manager` or `global`.
 **Error 500** — name already exists (unique constraint)
 
 #### `PUT /admin/teams/{id}`
-Rename a team, and optionally change its properties, including its domain. Requires `team_manager` or `global`.
+Rename a team, and optionally change its properties, including its domain and country codes. Requires `team_manager` or `global`.
 
 **Request**
 ```json
-{ "name": "Platform Engineering", "jira_space_key": "", "timesheets_managed_manually": false, "domain_id": 2 }
+{ "name": "Platform Engineering", "jira_space_key": "", "timesheets_managed_manually": false, "domain_id": 2, "country_codes": "FR, MA" }
 ```
 
 **Response 200**
@@ -841,9 +842,10 @@ Create a public holiday.
 
 **Request**
 ```json
-{ "date": "2026-07-14", "name": "Bastille Day", "allow_imputed": false }
+{ "date": "2026-07-14", "name": "Bastille Day", "allow_imputed": false, "country_code": "FR, MA" }
 ```
-`allow_imputed` — when `true`, employees can log chargeable time on this day.
+`allow_imputed` — when `true`, employees can log chargeable time on this day.  
+`country_code` (or `country_codes`) — optional comma-separated ISO country codes (e.g. `"FR"`, `"FR, MA"`, `"CZ"`). If empty or omitted, the holiday is global and applies to all users regardless of team countries.
 
 **Response 200**
 ```json
@@ -857,7 +859,7 @@ Update an existing holiday.
 
 **Request**
 ```json
-{ "date": "2026-07-14", "name": "Bastille Day", "allow_imputed": false }
+{ "date": "2026-07-14", "name": "Bastille Day", "allow_imputed": false, "country_code": "FR, MA" }
 ```
 
 **Response 200**

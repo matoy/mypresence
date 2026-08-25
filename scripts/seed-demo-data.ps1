@@ -115,27 +115,37 @@ $U = @{
 }
 Write-Host "  User IDs: admin=$($U.admin), alice=$($U.alice), bob=$($U.bob) ..."
 
-# ── 2. Create holidays (French public holidays for current year) ─────────────
-Write-Host "`nCreating public holidays (France $CurYear)..."
+# ── 2. Create holidays (Global, France, Morocco, Czech Republic for current year) ─────────────
+Write-Host "`nCreating public holidays (Global, FR, MA, CZ $CurYear)..."
 # Fixed holidays (month-day never changes)
 $holidays = @(
-    @{ date="$CurYear-01-01"; name="New Year's Day";        allow_imputed=$false },
-    @{ date="$CurYear-05-01"; name="Labour Day";            allow_imputed=$false },
-    @{ date="$CurYear-05-08"; name="Victory in Europe Day"; allow_imputed=$false },
-    @{ date="$CurYear-07-14"; name="Bastille Day";          allow_imputed=$false },
-    @{ date="$CurYear-08-15"; name="Assumption Day";        allow_imputed=$false },
-    @{ date="$CurYear-11-01"; name="All Saints' Day";       allow_imputed=$false },
-    @{ date="$CurYear-11-11"; name="Armistice Day";         allow_imputed=$false },
-    @{ date="$CurYear-12-25"; name="Christmas Day";         allow_imputed=$false }
+    @{ date="$CurYear-01-01"; name="New Year's Day";              allow_imputed=$false; country_code="" },
+    @{ date="$CurYear-05-01"; name="Labour Day";                  allow_imputed=$false; country_code="" },
+    @{ date="$CurYear-05-08"; name="Victory in Europe Day";       allow_imputed=$false; country_code="FR, CZ" },
+    @{ date="$CurYear-07-14"; name="Bastille Day";                allow_imputed=$false; country_code="FR" },
+    @{ date="$CurYear-07-30"; name="Throne Day (Morocco)";        allow_imputed=$false; country_code="MA" },
+    @{ date="$CurYear-08-15"; name="Assumption Day";              allow_imputed=$false; country_code="FR" },
+    @{ date="$CurYear-09-28"; name="St Wenceslas Day (Czech)";    allow_imputed=$false; country_code="CZ" },
+    @{ date="$CurYear-10-28"; name="Independence Day (Czech)";    allow_imputed=$false; country_code="CZ" },
+    @{ date="$CurYear-11-01"; name="All Saints' Day";             allow_imputed=$false; country_code="FR" },
+    @{ date="$CurYear-11-06"; name="Green March (Morocco)";       allow_imputed=$false; country_code="MA" },
+    @{ date="$CurYear-11-11"; name="Armistice Day";               allow_imputed=$false; country_code="FR, BE" },
+    @{ date="$CurYear-11-18"; name="Independence Day (Morocco)";  allow_imputed=$false; country_code="MA" },
+    @{ date="$CurYear-12-25"; name="Christmas Day";               allow_imputed=$false; country_code="" }
 )
 foreach ($h in $holidays) {
     $r = PostJSON "$Base/admin/holidays" $h
-    if ($r -and $r.id) { Write-Host "  '$($h.name)' id=$($r.id)" }
+    if ($r -and $r.id) { Write-Host "  '$($h.name)' [$($h.country_code)] id=$($r.id)" }
     else                { Write-Warning "  '$($h.name)' may already exist" }
 }
-# Build lookup of non-imputable holiday dates for presence filtering
+# Build lookup of non-imputable global/FR holiday dates for seed presence filtering
 $nonImputedSet = @{}
-foreach ($h in $holidays) { if (-not $h.allow_imputed) { $nonImputedSet[$h.date] = $true } }
+foreach ($h in $holidays) {
+    $codes = @($h.country_code -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" })
+    if (-not $h.allow_imputed -and ($codes.Count -eq 0 -or $codes -contains "FR")) {
+        $nonImputedSet[$h.date] = $true
+    }
+}
 
 function Get-WorkingDays ($year, $month) {
     $d = [DateTime]::new($year, $month, 1); $days = @()
@@ -258,14 +268,20 @@ if ($fp -and $fp.id) {
 
 # ── 4. Create teams ───────────────────────────────────────────────────────────
 Write-Host "`nCreating teams..."
+$teamDefs = @(
+    @{ name="Engineering"; country_codes="FR, MA" },
+    @{ name="Marketing";   country_codes="FR" },
+    @{ name="Sales";       country_codes="FR, CZ" },
+    @{ name="HR";          country_codes="FR" }
+)
 $teamIDs = @{}
-foreach ($t in @("Engineering","Marketing","Sales","HR")) {
-    $r = PostJSON "$Base/admin/teams" @{name=$t}
+foreach ($t in $teamDefs) {
+    $r = PostJSON "$Base/admin/teams" @{ name=$t.name; country_codes=$t.country_codes }
     if ($r -and $r.id) {
-        $teamIDs[$t] = [int]$r.id
-        Write-Host "  '$t' id=$($r.id)"
+        $teamIDs[$t.name] = [int]$r.id
+        Write-Host "  '$($t.name)' [$($t.country_codes)] id=$($r.id)"
     } else {
-        Write-Warning "  Failed to create team '$t' (may already exist)"
+        Write-Warning "  Failed to create team '$($t.name)' (may already exist)"
     }
 }
 # Resolve IDs for any teams that already existed
@@ -285,14 +301,14 @@ if ($teamIDs.Count -lt 4) {
 # their members declare daily activities (Jira ticket / ServiceNow / other)
 # instead of monthly per-project day allocations.
 $manualTeams = @(
-    @{ name="Sales"; jiraKey="SCRM" },
-    @{ name="HR";    jiraKey="HRXP" }
+    @{ name="Sales"; jiraKey="SCRM"; country_codes="FR, CZ" },
+    @{ name="HR";    jiraKey="HRXP"; country_codes="FR" }
 )
 foreach ($mt in $manualTeams) {
     $tid = $teamIDs[$mt.name]
     if (-not $tid) { Write-Warning "  Team '$($mt.name)' not found, cannot enable manual timesheets"; continue }
-    PutJSON "$Base/admin/teams/$tid" @{ name=$mt.name; jira_space_key=$mt.jiraKey; timesheets_managed_manually=$true }
-    Write-Host "  '$($mt.name)' -> timesheets managed manually (Jira space: $($mt.jiraKey))"
+    PutJSON "$Base/admin/teams/$tid" @{ name=$mt.name; jira_space_key=$mt.jiraKey; timesheets_managed_manually=$true; country_codes=$mt.country_codes }
+    Write-Host "  '$($mt.name)' -> timesheets managed manually (Jira space: $($mt.jiraKey), countries: $($mt.country_codes))"
 }
 
 # ── 5. Team members ───────────────────────────────────────────────────────────

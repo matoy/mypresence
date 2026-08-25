@@ -865,14 +865,16 @@ function teamCalendarApp(statuses, currentUserId, canEdit, allPresences) {
 // ============================================================
 // Admin: Teams management
 // ============================================================
-function teamsAdmin(initialTeams) {
+function teamsAdmin(initialTeams, countriesCatalog) {
     return {
         teams: initialTeams || [],
+        countriesCatalog: countriesCatalog || [],
         newTeamName: '',
         newTeamJiraKey: '',
         newTeamManual: false,
         newTeamRequireComment: false,
         newTeamDomainId: 0,
+        newTeamCountryCodes: '',
         createError: '',
         showCreateModal: false,
         filterText: '',
@@ -902,6 +904,23 @@ function teamsAdmin(initialTeams) {
             return true;
         },
 
+        isCountryInList(listStr, code) {
+            if (!listStr) return false;
+            const codes = listStr.split(',').map(s => s.trim().toUpperCase());
+            return codes.includes(code.toUpperCase());
+        },
+
+        toggleCountryInList(currentStr, code) {
+            let codes = (currentStr || '').split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+            const target = code.toUpperCase();
+            if (codes.includes(target)) {
+                codes = codes.filter(c => c !== target);
+            } else {
+                codes.push(target);
+            }
+            return codes.join(', ');
+        },
+
         async createTeam() {
             this.createError = '';
             if (!this.newTeamName.trim()) {
@@ -916,7 +935,8 @@ function teamsAdmin(initialTeams) {
                     jira_space_key: this.newTeamJiraKey.trim(),
                     timesheets_managed_manually: this.newTeamManual,
                     require_activity_comment: this.newTeamRequireComment,
-                    domain_id: parseInt(this.newTeamDomainId) || 0
+                    domain_id: parseInt(this.newTeamDomainId) || 0,
+                    country_codes: this.newTeamCountryCodes.trim()
                 })
             });
             if (r.ok) {
@@ -932,7 +952,7 @@ function teamsAdmin(initialTeams) {
             }
         },
 
-        async saveTeamDetails(id, name, jiraSpaceKey, timesheetsManagedManually, requireActivityComment, domainId) {
+        async saveTeamDetails(id, name, jiraSpaceKey, timesheetsManagedManually, requireActivityComment, domainId, countryCodes) {
             await fetch(`/admin/teams/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
@@ -941,7 +961,8 @@ function teamsAdmin(initialTeams) {
                     jira_space_key: (jiraSpaceKey || '').trim(),
                     timesheets_managed_manually: !!timesheetsManagedManually,
                     require_activity_comment: !!requireActivityComment,
-                    domain_id: parseInt(domainId) || 0
+                    domain_id: parseInt(domainId) || 0,
+                    country_codes: (countryCodes || '').trim()
                 })
             });
             window.location.reload();

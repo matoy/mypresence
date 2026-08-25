@@ -464,6 +464,7 @@ FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	d.core.Exec(dl.rebind(dl.addColumnIfNotExists("teams", "timesheets_managed_manually", fmt.Sprintf("%s NOT NULL DEFAULT %s", bool_, dl.boolDefault(false))))) //nolint:errcheck
 	d.core.Exec(dl.rebind(dl.addColumnIfNotExists("teams", "require_activity_comment", fmt.Sprintf("%s NOT NULL DEFAULT %s", bool_, dl.boolDefault(false)))))    //nolint:errcheck
 	d.core.Exec(dl.rebind(dl.addColumnIfNotExists("teams", "domain_id", "BIGINT NOT NULL DEFAULT 0")))                                                           //nolint:errcheck
+	d.core.Exec(dl.rebind(dl.addColumnIfNotExists("teams", "country_codes", dl.varcharType(255)+" NOT NULL DEFAULT ''")))                                        //nolint:errcheck
 	return nil
 }
 
@@ -524,6 +525,7 @@ created_at %s DEFAULT CURRENT_TIMESTAMP
 	d.presence.Exec(dl.rebind(dl.addColumnIfNotExists("statuses", "on_site", fmt.Sprintf("%s NOT NULL DEFAULT %s", bool_, dl.boolDefault(false))))) //nolint:errcheck
 	d.presence.Exec(dl.rebind(dl.addColumnIfNotExists("statuses", "disabled", fmt.Sprintf("%s DEFAULT %s", bool_, dl.boolDefault(false)))))         //nolint:errcheck
 	d.presence.Exec(dl.rebind(dl.addColumnIfNotExists("presence_logs", "half", fmt.Sprintf("%s NOT NULL DEFAULT 'full'", dl.varcharType(4)))))      //nolint:errcheck
+	d.presence.Exec(dl.rebind(dl.addColumnIfNotExists("holidays", "country_code", dl.varcharType(10)+" NOT NULL DEFAULT ''")))                      //nolint:errcheck
 
 	// SQLite-only migration: recreate presences table if 'half' column is missing
 	// (Not needed for network databases which always get the full schema above)
@@ -1203,10 +1205,27 @@ func (d *DB) DeleteLocalUser(id int64) error {
 	return err
 }
 
+// sanitizeCountryCodes normalizes a comma-separated list of country codes (e.g. "fr, ma , US" -> "FR,MA,US").
+func sanitizeCountryCodes(codes string) string {
+	if strings.TrimSpace(codes) == "" {
+		return ""
+	}
+	var res []string
+	seen := make(map[string]bool)
+	for _, c := range strings.Split(codes, ",") {
+		c = strings.ToUpper(strings.TrimSpace(c))
+		if c != "" && !seen[c] {
+			seen[c] = true
+			res = append(res, c)
+		}
+	}
+	return strings.Join(res, ",")
+}
+
 // --- Team management ---
 
 func (d *DB) ListTeams() ([]models.Team, error) {
-	rows, err := d.core.Query("SELECT id, name, COALESCE(jira_space_key,''), timesheets_managed_manually, COALESCE(require_activity_comment, false), domain_id, created_at FROM teams ORDER BY name")
+	rows, err := d.core.Query("SELECT id, name, COALESCE(jira_space_key,''), timesheets_managed_manually, COALESCE(require_activity_comment, false), domain_id, COALESCE(country_codes, ''), created_at FROM teams ORDER BY name")
 	if err != nil {
 		return nil, err
 	}
@@ -1215,7 +1234,7 @@ func (d *DB) ListTeams() ([]models.Team, error) {
 	var teams []models.Team
 	for rows.Next() {
 		var t models.Team
-		if err := rows.Scan(&t.ID, &t.Name, &t.JiraSpaceKey, &t.TimesheetsManagedManually, &t.RequireActivityComment, &t.DomainID, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.Name, &t.JiraSpaceKey, &t.TimesheetsManagedManually, &t.RequireActivityComment, &t.DomainID, &t.CountryCodes, &t.CreatedAt); err != nil {
 			return nil, err
 		}
 		teams = append(teams, t)
@@ -1223,14 +1242,31 @@ func (d *DB) ListTeams() ([]models.Team, error) {
 	return teams, rows.Err()
 }
 
+// GetTeam returns a team by its ID.
+func (d *DB) GetTeam(id int64) (*models.Team, error) {
+	var t models.Team
+	err := d.core.QueryRow(
+		"SELECT id, name, COALESCE(jira_space_key,''), timesheets_managed_manually, COALESCE(require_activity_comment, false), domain_id, COALESCE(country_codes, ''), created_at FROM teams WHERE id = ?",
+		id,
+	).Scan(&t.ID, &t.Name, &t.JiraSpaceKey, &t.TimesheetsManagedManually, &t.RequireActivityComment, &t.DomainID, &t.CountryCodes, &t.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &t, nil
+}
+
 // CreateTeam creates a new team with just a name (jira_space_key empty, manual timesheets off, require comment off).
 func (d *DB) CreateTeam(name string) (int64, error) {
 	return d.CreateTeamWithDetails(name, "", false, false)
 }
 
-// CreateTeamWithDetails creates a new team with all its properties.
-func (d *DB) CreateTeamWithDetails(name, jiraSpaceKey string, timesheetsManagedManually, requireActivityComment bool) (int64, error) {
-	return d.core.InsertGetID("INSERT INTO teams (name, jira_space_key, timesheets_managed_manually, require_activity_comment) VALUES (?, ?, ?, ?)", name, jiraSpaceKey, timesheetsManagedManually, requireActivityComment)
+// CreateTeamWithDetails creates a new team with all its properties including optional country codes.
+func (d *DB) CreateTeamWithDetails(name, jiraSpaceKey string, timesheetsManagedManually, requireActivityComment bool, countryCodes ...string) (int64, error) {
+	cc := ""
+	if len(countryCodes) > 0 {
+		cc = sanitizeCountryCodes(countryCodes[0])
+	}
+	return d.core.InsertGetID("INSERT INTO teams (name, jira_space_key, timesheets_managed_manually, require_activity_comment, country_codes) VALUES (?, ?, ?, ?, ?)", name, jiraSpaceKey, timesheetsManagedManually, requireActivityComment, cc)
 }
 
 // UpdateTeam renames a team, leaving its other properties unchanged.
@@ -1239,8 +1275,13 @@ func (d *DB) UpdateTeam(id int64, name string) error {
 	return err
 }
 
-// UpdateTeamDetails updates a team's name and extra properties.
-func (d *DB) UpdateTeamDetails(id int64, name, jiraSpaceKey string, timesheetsManagedManually, requireActivityComment bool) error {
+// UpdateTeamDetails updates a team's name, extra properties, and optional country codes.
+func (d *DB) UpdateTeamDetails(id int64, name, jiraSpaceKey string, timesheetsManagedManually, requireActivityComment bool, countryCodes ...string) error {
+	if len(countryCodes) > 0 {
+		cc := sanitizeCountryCodes(countryCodes[0])
+		_, err := d.core.Exec("UPDATE teams SET name = ?, jira_space_key = ?, timesheets_managed_manually = ?, require_activity_comment = ?, country_codes = ? WHERE id = ?", name, jiraSpaceKey, timesheetsManagedManually, requireActivityComment, cc, id)
+		return err
+	}
 	_, err := d.core.Exec("UPDATE teams SET name = ?, jira_space_key = ?, timesheets_managed_manually = ?, require_activity_comment = ? WHERE id = ?", name, jiraSpaceKey, timesheetsManagedManually, requireActivityComment, id)
 	return err
 }
@@ -1360,7 +1401,7 @@ func (d *DB) RemoveTeamMember(teamID, userID int64) error {
 
 func (d *DB) GetUserTeams(userID int64) ([]models.Team, error) {
 	rows, err := d.core.Query(`
-SELECT t.id, t.name, COALESCE(t.jira_space_key,''), t.timesheets_managed_manually, COALESCE(t.require_activity_comment, false), t.domain_id, t.created_at
+SELECT t.id, t.name, COALESCE(t.jira_space_key,''), t.timesheets_managed_manually, COALESCE(t.require_activity_comment, false), t.domain_id, COALESCE(t.country_codes, ''), t.created_at
 FROM teams t
 JOIN user_teams ut ON t.id = ut.team_id
 WHERE ut.user_id = ? AND ut.left_at IS NULL
@@ -1374,7 +1415,7 @@ ORDER BY t.name
 	var teams []models.Team
 	for rows.Next() {
 		var t models.Team
-		if err := rows.Scan(&t.ID, &t.Name, &t.JiraSpaceKey, &t.TimesheetsManagedManually, &t.RequireActivityComment, &t.DomainID, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.Name, &t.JiraSpaceKey, &t.TimesheetsManagedManually, &t.RequireActivityComment, &t.DomainID, &t.CountryCodes, &t.CreatedAt); err != nil {
 			return nil, err
 		}
 		teams = append(teams, t)
@@ -1640,7 +1681,7 @@ func (d *DB) GetTeamStats(teamID int64, startDate, endDate string) ([]models.Use
 // --- Holiday management ---
 
 func (d *DB) ListHolidays() ([]models.Holiday, error) {
-	rows, err := d.presence.Query("SELECT id, date, name, allow_imputed FROM holidays ORDER BY date")
+	rows, err := d.presence.Query("SELECT id, date, name, allow_imputed, COALESCE(country_code, '') FROM holidays ORDER BY date")
 	if err != nil {
 		return nil, err
 	}
@@ -1649,7 +1690,7 @@ func (d *DB) ListHolidays() ([]models.Holiday, error) {
 	var holidays []models.Holiday
 	for rows.Next() {
 		var h models.Holiday
-		if err := rows.Scan(&h.ID, &h.Date, &h.Name, &h.AllowImputed); err != nil {
+		if err := rows.Scan(&h.ID, &h.Date, &h.Name, &h.AllowImputed, &h.CountryCode); err != nil {
 			return nil, err
 		}
 		holidays = append(holidays, h)
@@ -1659,7 +1700,7 @@ func (d *DB) ListHolidays() ([]models.Holiday, error) {
 
 func (d *DB) GetHolidayMap(startDate, endDate string) (map[string]models.Holiday, error) {
 	rows, err := d.presence.Query(
-		"SELECT id, date, name, allow_imputed FROM holidays WHERE date >= ? AND date <= ?",
+		"SELECT id, date, name, allow_imputed, COALESCE(country_code, '') FROM holidays WHERE date >= ? AND date <= ?",
 		startDate, endDate,
 	)
 	if err != nil {
@@ -1670,7 +1711,7 @@ func (d *DB) GetHolidayMap(startDate, endDate string) (map[string]models.Holiday
 	result := make(map[string]models.Holiday)
 	for rows.Next() {
 		var h models.Holiday
-		if err := rows.Scan(&h.ID, &h.Date, &h.Name, &h.AllowImputed); err != nil {
+		if err := rows.Scan(&h.ID, &h.Date, &h.Name, &h.AllowImputed, &h.CountryCode); err != nil {
 			return nil, err
 		}
 		result[h.Date] = h
@@ -1678,17 +1719,110 @@ func (d *DB) GetHolidayMap(startDate, endDate string) (map[string]models.Holiday
 	return result, rows.Err()
 }
 
-func (d *DB) CreateHoliday(date, name string, allowImputed bool) (int64, error) {
+// GetUserHolidayMap returns the map of holidays applicable to a given user based on their team country assignments.
+// Global holidays (CountryCode == "") apply to all users.
+// A country-specific holiday applies only if at least one of the user's active teams is fully covered by the holiday
+// (i.e. ALL countries of the team are included in the holiday's country list).
+func (d *DB) GetUserHolidayMap(userID int64, startDate, endDate string) (map[string]models.Holiday, error) {
+	userTeams, err := d.GetUserTeams(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := d.presence.Query(
+		"SELECT id, date, name, allow_imputed, COALESCE(country_code, '') FROM holidays WHERE date >= ? AND date <= ? ORDER BY date",
+		startDate, endDate,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() //nolint:errcheck
+
+	result := make(map[string]models.Holiday)
+	for rows.Next() {
+		var h models.Holiday
+		if err := rows.Scan(&h.ID, &h.Date, &h.Name, &h.AllowImputed, &h.CountryCode); err != nil {
+			return nil, err
+		}
+		applies := len(h.CountryList()) == 0
+		if !applies && len(userTeams) > 0 {
+			for _, t := range userTeams {
+				if models.TeamMatchesHoliday(t.CountryList(), h) {
+					applies = true
+					break
+				}
+			}
+		}
+		if applies {
+			if _, ok := result[h.Date]; ok {
+				if !h.AllowImputed {
+					result[h.Date] = h
+				}
+			} else {
+				result[h.Date] = h
+			}
+		}
+	}
+	return result, rows.Err()
+}
+
+// GetTeamHolidayMap returns the map of holidays applicable to a team based on its configured country codes.
+// A country-specific holiday applies to a team if and only if ALL of the team's countries are covered by the holiday.
+func (d *DB) GetTeamHolidayMap(teamID int64, startDate, endDate string) (map[string]models.Holiday, error) {
+	team, err := d.GetTeam(teamID)
+	if err != nil {
+		return d.GetHolidayMap(startDate, endDate)
+	}
+
+	teamCountries := team.CountryList()
+
+	rows, err := d.presence.Query(
+		"SELECT id, date, name, allow_imputed, COALESCE(country_code, '') FROM holidays WHERE date >= ? AND date <= ? ORDER BY date",
+		startDate, endDate,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() //nolint:errcheck
+
+	result := make(map[string]models.Holiday)
+	for rows.Next() {
+		var h models.Holiday
+		if err := rows.Scan(&h.ID, &h.Date, &h.Name, &h.AllowImputed, &h.CountryCode); err != nil {
+			return nil, err
+		}
+		if models.TeamMatchesHoliday(teamCountries, h) {
+			if _, ok := result[h.Date]; ok {
+				if !h.AllowImputed {
+					result[h.Date] = h
+				}
+			} else {
+				result[h.Date] = h
+			}
+		}
+	}
+	return result, rows.Err()
+}
+
+func (d *DB) CreateHoliday(date, name string, allowImputed bool, countryCode ...string) (int64, error) {
+	cc := ""
+	if len(countryCode) > 0 {
+		cc = sanitizeCountryCodes(countryCode[0])
+	}
 	return d.presence.InsertGetID(
-		"INSERT INTO holidays (date, name, allow_imputed) VALUES (?, ?, ?)",
-		date, name, allowImputed,
+		"INSERT INTO holidays (date, name, allow_imputed, country_code) VALUES (?, ?, ?, ?)",
+		date, name, allowImputed, cc,
 	)
 }
 
-func (d *DB) UpdateHoliday(id int64, date, name string, allowImputed bool) error {
+func (d *DB) UpdateHoliday(id int64, date, name string, allowImputed bool, countryCode ...string) error {
+	cc := ""
+	if len(countryCode) > 0 {
+		cc = sanitizeCountryCodes(countryCode[0])
+	}
 	_, err := d.presence.Exec(
-		"UPDATE holidays SET date = ?, name = ?, allow_imputed = ? WHERE id = ?",
-		date, name, allowImputed, id,
+		"UPDATE holidays SET date = ?, name = ?, allow_imputed = ?, country_code = ? WHERE id = ?",
+		date, name, allowImputed, cc, id,
 	)
 	return err
 }
