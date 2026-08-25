@@ -113,7 +113,7 @@
                         <template x-if="d.weight > 0">
                             <span class="text-xs font-semibold px-2 py-0.5 rounded-full"
                                   :class="isComplete(d) ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'"
-                                  x-text="dayTotal(d) + '% / ' + (d.weight*100) + '%'"></span>
+                                  x-text="d.savedTotal + '% / ' + (d.weight*100) + '%'"></span>
                         </template>
                     </div>
                 </div>
@@ -126,7 +126,10 @@
 
                     <template x-if="d.weight > 0">
                         <div>
-                            <div class="space-y-2">
+                            <template x-if="d.activities.length === 0">
+                                <p class="text-xs text-gray-400 italic py-1 mb-2">{{index $.T "projects.manual.no_activities_day"}}</p>
+                            </template>
+                            <div class="space-y-2" x-show="d.activities.length > 0">
                                 <template x-for="act in d.activities" :key="act._key">
                                     <div class="border border-gray-100 rounded-lg p-2.5 bg-gray-50/80">
                                         <div class="flex flex-wrap items-center gap-2">
@@ -479,10 +482,12 @@ function projectsManualApp(dates, weights, activitiesByDate, jiraEnabled, requir
         const weekday = isNaN(dObj.getDay()) ? 0 : dObj.getDay();
         const existing = (activitiesByDate || {})[date];
         let acts = [];
+        let savedTotal = 0;
+        let savedCount = 0;
         if (existing && existing.length > 0) {
             acts = existing.map(a => wrapActivity(a));
-        } else if (weight > 0) {
-            acts = [wrapActivity({}, weight * 100)];
+            savedTotal = existing.reduce((sum, a) => sum + (parseFloat(a.percentage) || 0), 0);
+            savedCount = existing.length;
         }
         return {
             date,
@@ -491,6 +496,8 @@ function projectsManualApp(dates, weights, activitiesByDate, jiraEnabled, requir
             collapsed: weight <= 0,
             _saving: false,
             _error: '',
+            savedTotal: savedTotal,
+            savedCount: savedCount,
             activities: acts
         };
     });
@@ -563,7 +570,7 @@ function projectsManualApp(dates, weights, activitiesByDate, jiraEnabled, requir
         },
 
         isComplete(d) {
-            return d.weight > 0 && this.dayTotal(d) >= (d.weight * 100 - 0.01);
+            return d.weight > 0 && d.savedCount > 0 && d.savedTotal >= (d.weight * 100 - 0.01);
         },
 
         get billable() {
@@ -581,7 +588,9 @@ function projectsManualApp(dates, weights, activitiesByDate, jiraEnabled, requir
 
         addActivity(d) {
             if (d.weight <= 0 || this.certified) return;
-            d.activities.push(wrapActivity({}));
+            const remaining = Math.max(0, (d.weight * 100) - this.dayTotal(d));
+            const defaultPct = remaining > 0 ? remaining : (d.weight * 100);
+            d.activities.push(wrapActivity({}, defaultPct));
             d.collapsed = false;
         },
 
@@ -652,6 +661,11 @@ function projectsManualApp(dates, weights, activitiesByDate, jiraEnabled, requir
                                 d.activities[idx].id = saved.id;
                             }
                         });
+                        d.savedTotal = data.activities.reduce((sum, a) => sum + (parseFloat(a.percentage) || 0), 0);
+                        d.savedCount = data.activities.length;
+                    } else {
+                        d.savedTotal = this.dayTotal(d);
+                        d.savedCount = d.activities.length;
                     }
                     this.toastError = false;
                     this.toast = (typeof _t !== 'undefined' && _t['projects.manual.day_saved']) || '✓';

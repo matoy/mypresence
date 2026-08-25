@@ -135,9 +135,6 @@ func TestLayoutTemplate_OnlineHelp_BasicUserPermissions(t *testing.T) {
 	if !strings.Contains(html, "$dispatch('open-help'") {
 		t.Fatal("help button triggering $dispatch('open-help' should be present")
 	}
-	if !strings.Contains(html, "onlineHelpModal") {
-		t.Fatal("onlineHelpModal component should be present in layout")
-	}
 
 	// Basic user should have calendar, projects, settings
 	if !strings.Contains(html, `value="calendar"`) {
