@@ -42,6 +42,32 @@ function darkModeToggle() {
 }
 
 // ============================================================
+// Online Help Modal (Alpine.js component)
+// ============================================================
+function onlineHelpModal(initialPage) {
+    return {
+        open: false,
+        topic: initialPage || 'calendar',
+        init() {
+            this.setTopic(initialPage);
+        },
+        setTopic(t) {
+            if (!t || t === '') t = 'calendar';
+            if (t === 'admin_user_logs') t = 'admin_users';
+            if (t === 'settings_change_password' || t === 'settings_passkeys' || t === 'pat') t = 'settings';
+            this.topic = t;
+        },
+        show(t) {
+            if (t) this.setTopic(t);
+            this.open = true;
+        },
+        close() {
+            this.open = false;
+        }
+    };
+}
+
+// ============================================================
 // Calendar Component (Alpine.js)
 // ============================================================
 function calendarApp(statuses, currentUserId, isAdmin, presences) {

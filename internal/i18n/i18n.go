@@ -582,7 +582,93 @@ var en = map[string]string{
 	"passkeys.error.unsupported": "Your browser does not support passkeys.",
 	"passkeys.error.register":    "Passkey registration failed. Please try again.",
 	"passkeys.error.login":       "Passkey authentication failed. Please try again.",
-	"passkeys.success.register":  "Passkey registered successfully.",
+	// Help & Documentation
+	"help.button_title":  "Online Help & Guide",
+	"help.title":         "Online Help",
+	"help.topic_select":  "Topic / Page:",
+	"help.close":         "Close",
+	"help.current_badge": "Current page",
+	"help.general_hint":  "Need more assistance? Contact your team manager or system administrator.",
+
+	"help.topic.calendar.title": "📅 Calendar & Presence Declaration",
+	"help.topic.calendar.desc":  "Declare your daily presences (office, remote, leave, illness...), view team schedules and certify your monthly presence sheet.",
+	"help.topic.calendar.item1": "🖱️ Left-Click & Drag Selection: Click any working day to open the status palette. Click and drag across multiple days to assign a status in bulk.",
+	"help.topic.calendar.item2": "🖱️ Right-Click (Context Menu): Right-click on a day to declare half-days (AM / PM) or export/add your declared presence to your external calendar (.ics / Outlook).",
+	"help.topic.calendar.item3": "🚀 Progress & Monthly Certification: The progress bar tracks declared days versus working days. Once 100% of working days are declared, click 'Certify' to confirm and lock your month.",
+	"help.topic.calendar.item4": "👥 Team Calendar: View real-time schedules and desk reservations of your team members directly below your calendar.",
+
+	"help.topic.floorplan.title": "🗺️ Floorplans & Desk Booking",
+	"help.topic.floorplan.desc":  "View office layouts and reserve physical desks when working on-site.",
+	"help.topic.floorplan.item1": "🖱️ Desk Reservation: Select a floorplan and date, then click any available desk on the map to book it.",
+	"help.topic.floorplan.item2": "📅 Multi-Day Booking: Select multiple dates to reserve the same desk across multiple days in one action.",
+	"help.topic.floorplan.item3": "👥 Colleague Search: Easily see where your team members are seated on any given day.",
+
+	"help.topic.projects.title": "📂 Projects & Tasks Timesheets",
+	"help.topic.projects.desc":  "Declare working time across projects or daily tasks, monitor declared days against billable capacity, and certify your month.",
+	"help.topic.projects.item1": "⚙️ Entry Modes: In standard mode, enter total monthly days per project. In daily tasks mode, record detailed day-by-day activities (Jira, ServiceNow, Other).",
+	"help.topic.projects.item2": "⚡ Percentage Presets & Batch Save: In tasks mode, use the 25%, 50%, and 100% buttons to fill activity time quickly, and save all activities of the day with a single button.",
+	"help.topic.projects.item3": "💬 Jira Tickets & Comments: Link tasks to Jira issues or add descriptive comments (mandatory if required by your team settings).",
+	"help.topic.projects.item4": "🚀 Project Certification: Once your total declared time equals your billable days cap, click 'Certify' to validate your project timesheet.",
+
+	"help.topic.admin_activity.title": "📋 Activity & Presence Report",
+	"help.topic.admin_activity.desc":  "Consult presence summaries, remote work rates, leaves, and billable days across teams and domains.",
+	"help.topic.admin_activity.item1": "🔍 Filtering & Date Range: Filter by team, domain, or date interval to inspect attendance and telemetry.",
+	"help.topic.admin_activity.item2": "📊 Executive Summary: View aggregated attendance breakdowns and billable capacity per collaborator.",
+	"help.topic.admin_activity.item3": "📥 Export & Insights: Export reporting data and check member status details.",
+
+	"help.topic.admin_projects_report.title": "📊 Projects & Tasks Report",
+	"help.topic.admin_projects_report.desc":  "Analyze project allocations, task details, and time distributions across all team members.",
+	"help.topic.admin_projects_report.item1": "🔍 Breakdown & Summary: View project time distribution by team member, project code, and activity category.",
+	"help.topic.admin_projects_report.item2": "🔓 Decertification: Authorized managers can decertify a validated month to allow users to correct time declarations.",
+
+	"help.topic.admin_teams.title": "👥 Teams Administration",
+	"help.topic.admin_teams.desc":  "Create and manage teams, assign memberships, and configure timesheet policies.",
+	"help.topic.admin_teams.item1": "⚙️ Timesheet & Jira Configuration: Toggle manual daily tasks mode, configure Jira Space Key, and enforce mandatory activity comments.",
+	"help.topic.admin_teams.item2": "👤 Managers & Departure Dates: Assign Team Managers and Team Leaders, and record departure dates when members leave.",
+
+	"help.topic.admin_statuses.title": "🏷️ Presence Statuses",
+	"help.topic.admin_statuses.desc":  "Manage presence categories available in the calendar (Office, Remote, Vacation, Illness...).",
+	"help.topic.admin_statuses.item1": "💶 Billable Statuses: Mark statuses as billable (€) so they count towards project working capacity.",
+	"help.topic.admin_statuses.item2": "🎨 Color & Visibility: Customize badge colors and disable obsolete statuses without impacting historical records.",
+
+	"help.topic.admin_floorplans.title": "🗺️ Floorplans Editor",
+	"help.topic.admin_floorplans.desc":  "Upload floorplan blueprint images and position interactive desks for seat reservations.",
+	"help.topic.admin_floorplans.item1": "🖱️ Desk Layout: Add desks, drag to position them on the map, resize, and assign desk identifiers.",
+
+	"help.topic.admin_projects.title": "📂 Projects Administration",
+	"help.topic.admin_projects.desc":  "Create project codes, manage project visibility, and assign allowed members.",
+	"help.topic.admin_projects.item1": "🔒 Project Access: Make projects global for all users or restrict access to designated members.",
+
+	"help.topic.admin_users.title": "👤 Users, Roles & Logs",
+	"help.topic.admin_users.desc":  "Manage user accounts, assign system roles, reset credentials, and review authentication audit logs.",
+	"help.topic.admin_users.item1": "🛡️ Roles & Permissions: Assign Global Admin, Floorplan Manager, Projects Manager, Status Manager, or Activity Viewer roles.",
+	"help.topic.admin_users.item2": "📋 Audit & Security: Inspect user login events, passkey operations, and reset passwords when needed.",
+
+	"help.topic.admin_domains.title": "🏢 Domains Administration",
+	"help.topic.admin_domains.desc":  "Group teams into organizational domains and designate Domain Managers with scoped reporting privileges.",
+	"help.topic.admin_domains.item1": "🏢 Domain Scoping: Domain managers can view activity reports and project metrics for all teams in their domain.",
+
+	"help.topic.admin_holidays.title": "🎌 Public Holidays",
+	"help.topic.admin_holidays.desc":  "Configure public holidays and define whether work can be exceptionally declared on those dates.",
+	"help.topic.admin_holidays.item1": "🎌 Holiday Rules: Set name, date, and toggle whether users are allowed to impute presence/projects on that day.",
+
+	"help.topic.admin_general_settings.title": "⚙️ General Settings & Branding",
+	"help.topic.admin_general_settings.desc":  "Configure application name, primary/secondary colors, custom logo, SMTP server, and SAML Single Sign-On.",
+	"help.topic.admin_general_settings.item1": "🎨 Customization: Upload company logo, customize UI colors, and manage environment configuration.",
+
+	"help.topic.admin_news.title": "📢 News & Announcements",
+	"help.topic.admin_news.desc":  "Publish scrolling announcement banners displayed to all active users.",
+	"help.topic.admin_news.item1": "📢 Message Scheduling: Create one-off or monthly recurring broadcast messages with custom links.",
+
+	"help.topic.settings.title": "🔐 User Settings & Security",
+	"help.topic.settings.desc":  "Manage your personal account credentials, biometric passkeys, and API access tokens.",
+	"help.topic.settings.item1": "🔑 Passwords & Passkeys: Update your local password or register biometric passkeys (Fingerprint, Face ID, Windows Hello).",
+	"help.topic.settings.item2": "🤖 Personal Access Tokens (PAT): Create API tokens with custom expiration to integrate with external tools.",
+	"help.topic.settings.item3": "📋 Personal Logs: Review your recent connection history and security actions.",
+
+	"help.topic.impersonate.title": "🎭 Impersonate User",
+	"help.topic.impersonate.desc":  "Temporarily assume the identity of another user for troubleshooting and support.",
+	"help.topic.impersonate.item1": "🎭 Impersonation Safety: Test features as another user with an active warning banner, and exit impersonation at any time.",
 }
 var fr = map[string]string{
 	"nav.calendar":           "📅 Calendrier",
@@ -1098,7 +1184,93 @@ var fr = map[string]string{
 	"passkeys.error.unsupported": "Votre navigateur ne prend pas en charge les passkeys.",
 	"passkeys.error.register":    "L'enregistrement du passkey a échoué. Veuillez réessayer.",
 	"passkeys.error.login":       "L'authentification par passkey a échoué. Veuillez réessayer.",
-	"passkeys.success.register":  "Passkey enregistré avec succès.",
+	// Help & Documentation
+	"help.button_title":  "Aide & Documentation en ligne",
+	"help.title":         "Aide en ligne",
+	"help.topic_select":  "Rubrique / Page :",
+	"help.close":         "Fermer",
+	"help.current_badge": "Page actuelle",
+	"help.general_hint":  "Besoin d'une aide supplémentaire ? Contactez votre responsable d'équipe ou l'administrateur.",
+
+	"help.topic.calendar.title": "📅 Calendrier & Déclaration de présence",
+	"help.topic.calendar.desc":  "Déclarez vos présences quotidiennes (bureau, télétravail, congés, maladie...), consultez les plannings d'équipe et certifiez votre feuille du mois.",
+	"help.topic.calendar.item1": "🖱️ Clic gauche & Sélection glissée : Cliquez sur un jour ouvré pour ouvrir la palette de statuts. Cliquez et glissez sur plusieurs jours pour attribuer un statut en masse.",
+	"help.topic.calendar.item2": "🖱️ Clic droit (Menu contextuel) : Faites un clic droit sur une journée pour déclarer une demi-journée (Matin AM / Après-midi PM) ou pour exporter/ajouter vos présences à votre calendrier externe (.ics / Outlook).",
+	"help.topic.calendar.item3": "🚀 Progression & Certification mensuelle : La barre de progression compare les jours déclarés aux jours ouvrés. Une fois tous les jours ouvrés renseignés, cliquez sur 'Certifier' pour valider et verrouiller votre mois.",
+	"help.topic.calendar.item4": "👥 Calendrier d'équipe : Visualisez en temps réel les présences et les bureaux réservés des membres de votre équipe sous votre calendrier.",
+
+	"help.topic.floorplan.title": "🗺️ Plans d'étage & Réservation de bureaux",
+	"help.topic.floorplan.desc":  "Consultez les plans des locaux et réservez votre poste de travail physique lorsque vous venez sur site.",
+	"help.topic.floorplan.item1": "🖱️ Réservation de bureau : Choisissez un plan et une date, puis cliquez sur un bureau disponible (vert) pour le réserver.",
+	"help.topic.floorplan.item2": "📅 Réservation multi-jours : Sélectionnez plusieurs dates pour réserver le même poste sur plusieurs journées en une seule action.",
+	"help.topic.floorplan.item3": "👥 Emplacement des collègues : Repérez facilement sur le plan où sont installés les membres de votre équipe le jour souhaité.",
+
+	"help.topic.projects.title": "📂 Déclaration des Projets & Tâches",
+	"help.topic.projects.desc":  "Déclarez votre temps de travail sur les projets ou tâches quotidiennes, suivez votre capacité facturable et certifiez votre récapitulatif mensuel.",
+	"help.topic.projects.item1": "⚙️ Modes de saisie : En mode classique, saisissez le total de jours par projet. En mode tâches manuelles, détaillez vos activités au jour le jour (Jira, ServiceNow, Autre).",
+	"help.topic.projects.item2": "⚡ Presets & Sauvegarde par jour : En mode tâches, utilisez les boutons 25%, 50% et 100% pour ajuster rapidement les pourcentages, et enregistrez l'ensemble des activités d'un jour en un clic.",
+	"help.topic.projects.item3": "💬 Tickets Jira & Commentaires : Associez vos tâches à un ticket Jira ou saisissez un commentaire (obligatoire selon la configuration de votre équipe).",
+	"help.topic.projects.item4": "🚀 Certification projet : Lorsque votre temps déclaré atteint 100% de vos jours ouvrés/facturables, cliquez sur 'Certifier' pour valider la feuille de projets.",
+
+	"help.topic.admin_activity.title": "📋 Rapport d'activité & Présences",
+	"help.topic.admin_activity.desc":  "Consultez les synthèses de présence, taux de télétravail, congés et jours facturables par équipe et domaine.",
+	"help.topic.admin_activity.item1": "🔍 Filtres & Période : Filtrez par équipe, domaine ou plage de dates pour analyser les présences et les statistiques.",
+	"help.topic.admin_activity.item2": "📊 Synthèse exécutive : Obtenez la répartition globale des présences et la capacité facturable par collaborateur.",
+	"help.topic.admin_activity.item3": "📥 Export & Suivi : Exportez les données de présence et contrôlez les états individuels des collaborateurs.",
+
+	"help.topic.admin_projects_report.title": "📊 Rapport Projets & Tâches",
+	"help.topic.admin_projects_report.desc":  "Analysez les imputations projets, les détails d'activités et la ventilation du temps pour l'ensemble des collaborateurs.",
+	"help.topic.admin_projects_report.item1": "🔍 Ventilation détaillée : Consultez le temps passé par projet, par collaborateur et par type d'activité.",
+	"help.topic.admin_projects_report.item2": "🔓 Décertification : Les managers autorisés peuvent déverrouiller un mois certifié afin de permettre à un utilisateur de corriger une erreur.",
+
+	"help.topic.admin_teams.title": "👥 Administration des Équipes",
+	"help.topic.admin_teams.desc":  "Créez et configurez les équipes, gérez les membres et définissez les règles de gestion des temps.",
+	"help.topic.admin_teams.item1": "⚙️ Paramètres Timesheet & Jira : Activez la saisie manuelle des tâches, configurez la clé d'espace Jira et rendez les commentaires obligatoires.",
+	"help.topic.admin_teams.item2": "👤 Managers & Dates de départ : Nommez les Team Managers / Team Leaders et renseignez la date de départ lorsqu'un membre quitte l'équipe.",
+
+	"help.topic.admin_statuses.title": "🏷️ Statuts de présence",
+	"help.topic.admin_statuses.desc":  "Gérez les catégories de présence proposées dans le calendrier (Bureau, Télétravail, Congés, Maladie...).",
+	"help.topic.admin_statuses.item1": "💶 Statuts Facturables : Définissez les statuts billable (€) qui comptent dans la capacité de travail sur projet.",
+	"help.topic.admin_statuses.item2": "🎨 Couleurs & Désactivation : Personnalisez les couleurs et désactivez les statuts obsolètes sans altérer l'historique.",
+
+	"help.topic.admin_floorplans.title": "🗺️ Éditeur de Plans d'étage",
+	"help.topic.admin_floorplans.desc":  "Importez l'image du plan de masse et positionnez les bureaux interactifs disponibles à la réservation.",
+	"help.topic.admin_floorplans.item1": "🖱️ Placement des postes : Ajoutez des bureaux, déplacez-les sur le plan, ajustez leur taille et attribuez un numéro.",
+
+	"help.topic.admin_projects.title": "📂 Administration des Projets",
+	"help.topic.admin_projects.desc":  "Créez les codes projets, gérez leur visibilité et assignez des membres autorisés.",
+	"help.topic.admin_projects.item1": "🔒 Accès aux projets : Rendez un projet global (ouvert à tous) ou restreint aux seuls membres assignés.",
+
+	"help.topic.admin_users.title": "👤 Utilisateurs, Rôles & Logs",
+	"help.topic.admin_users.desc":  "Gérez les comptes utilisateurs, attribuez les rôles, réinitialisez les mots de passe et inspectez les journaux de connexion.",
+	"help.topic.admin_users.item1": "🛡️ Rôles & Droits : Attribuez les rôles Global Admin, Floorplan Manager, Projects Manager, Status Manager ou Activity Viewer.",
+	"help.topic.admin_users.item2": "📋 Audit & Sécurité : Consultez les logs de connexion, l'usage des passkeys et réinitialisez les accès en cas de besoin.",
+
+	"help.topic.admin_domains.title": "🏢 Administration des Domaines",
+	"help.topic.admin_domains.desc":  "Regroupez les équipes par domaine organisationnel et nommez des Domain Managers avec accès rapport étendu.",
+	"help.topic.admin_domains.item1": "🏢 Périmètre domaine : Les domain managers accèdent aux rapports d'activité et projets de toutes les équipes de leur domaine.",
+
+	"help.topic.admin_holidays.title": "🎌 Jours fériés",
+	"help.topic.admin_holidays.desc":  "Configurez les jours fériés et définissez si des imputations exceptionnelles y sont autorisées.",
+	"help.topic.admin_holidays.item1": "🎌 Règles fériés : Définissez le libellé, la date et l'autorisation d'imputer du temps ouvré/projet ce jour-là.",
+
+	"help.topic.admin_general_settings.title": "⚙️ Paramètres généraux & Personnalisation",
+	"help.topic.admin_general_settings.desc":  "Personnalisez le nom de l'application, les couleurs du thème, le logo, le serveur SMTP et l'authentification SAML SSO.",
+	"help.topic.admin_general_settings.item1": "🎨 Personnalisation : Téléversez le logo de l'entreprise, personnalisez la charte graphique et ajustez les variables d'environnement.",
+
+	"help.topic.admin_news.title": "📢 Actualités & Annonces",
+	"help.topic.admin_news.desc":  "Diffusez des messages défilants d'information visibles en haut de l'écran pour tous les utilisateurs.",
+	"help.topic.admin_news.item1": "📢 Programmation : Créez des annonces ponctuelles ou récurrentes chaque mois avec liens cliquables.",
+
+	"help.topic.settings.title": "🔐 Paramètres utilisateur & Sécurité",
+	"help.topic.settings.desc":  "Gérez la sécurité de votre compte personnel, vos identifiants biométriques et vos jetons d'accès API.",
+	"help.topic.settings.item1": "🔑 Mots de passe & Passkeys : Modifiez votre mot de passe local ou enregistrez des passkeys biométriques (Empreinte, Face ID, Windows Hello).",
+	"help.topic.settings.item2": "🤖 Jetons d'API (PAT) : Créez des Personal Access Tokens avec date d'expiration pour automatiser des intégrations avec l'API.",
+	"help.topic.settings.item3": "📋 Journaux personnels : Consultez l'historique récent de vos connexions et actions de sécurité.",
+
+	"help.topic.impersonate.title": "🎭 Usurpation d'identité (Impersonate)",
+	"help.topic.impersonate.desc":  "Prenez temporairement l'identité d'un autre utilisateur pour diagnostiquer un problème ou vérifier ses accès.",
+	"help.topic.impersonate.item1": "🎭 Sécurité & Bandeau : Naviguez sous l'identité cible avec un bandeau d'avertissement permanent, et quittez le mode à tout moment.",
 }
 var de = map[string]string{
 	"nav.calendar":           "📅 Kalender",
@@ -1615,6 +1787,93 @@ var de = map[string]string{
 	"passkeys.error.register":    "Passkey-Registrierung fehlgeschlagen. Bitte erneut versuchen.",
 	"passkeys.error.login":       "Passkey-Authentifizierung fehlgeschlagen. Bitte erneut versuchen.",
 	"passkeys.success.register":  "Passkey erfolgreich registriert.",
+	// Help & Documentation
+	"help.button_title":  "Online-Hilfe & Anleitung",
+	"help.title":         "Online-Hilfe",
+	"help.topic_select":  "Thema / Seite:",
+	"help.close":         "Schließen",
+	"help.current_badge": "Aktuelle Seite",
+	"help.general_hint":  "Benötigen Sie weitere Unterstützung? Wenden Sie sich an Ihren Teamleiter oder Administrator.",
+
+	"help.topic.calendar.title": "📅 Kalender & Anwesenheitserfassung",
+	"help.topic.calendar.desc":  "Erfassen Sie Ihre täglichen Anwesenheiten (Büro, Homeoffice, Urlaub, Krankheit...), sehen Sie Teampläne ein und zertifizieren Sie Ihren Monatsnachweis.",
+	"help.topic.calendar.item1": "🖱️ Linksklick & Ziehauswahl: Klicken Sie auf einen Arbeitstag, um die Statusauswahl zu öffnen. Klicken und ziehen Sie über mehrere Tage, um den Status gesammelt zuzuweisen.",
+	"help.topic.calendar.item2": "🖱️ Rechtsklick (Kontextmenü): Rechtsklicken Sie auf einen Tag, um Halbtage (Vormittag AM / Nachmittag PM) zu erfassen oder den Eintrag in Ihren externen Kalender (.ics / Outlook) zu exportieren.",
+	"help.topic.calendar.item3": "🚀 Fortschritt & Monatszertifizierung: Der Fortschrittsbalken vergleicht erfasste mit regulären Arbeitstagen. Sobald alle Tage erfasst sind, klicken Sie auf 'Zertifizieren', um den Monat abzuschließen.",
+	"help.topic.calendar.item4": "👥 Team-Kalender: Sehen Sie die Anwesenheiten und reservierten Arbeitsplätze Ihrer Teamkollegen direkt unter Ihrem Kalender.",
+
+	"help.topic.floorplan.title": "🗺️ Grundrisse & Schreibtischbuchung",
+	"help.topic.floorplan.desc":  "Sehen Sie Büropläne ein und buchen Sie physische Arbeitsplätze für Ihre Anwesenheit vor Ort.",
+	"help.topic.floorplan.item1": "🖱️ Schreibtisch reservieren: Wählen Sie einen Grundriss und ein Datum aus und klicken Sie auf einen freien (grünen) Platz.",
+	"help.topic.floorplan.item2": "📅 Mehrtägige Buchung: Wählen Sie mehrere Daten aus, um denselben Platz für mehrere Tage auf einmal zu buchen.",
+	"help.topic.floorplan.item3": "👥 Kollegen finden: Sehen Sie ganz einfach, wo Ihre Teammitglieder an einem bestimmten Tag sitzen.",
+
+	"help.topic.projects.title": "📂 Projekte & Aufgaben Zeiterfassung",
+	"help.topic.projects.desc":  "Erfassen Sie Ihre Arbeitszeiten auf Projekten oder täglichen Aufgaben, überwachen Sie Ihr Projektkontingent und zertifizieren Sie den Monat.",
+	"help.topic.projects.item1": "⚙️ Erfassungsmodi: Im Standardmodus erfassen Sie Monatstage pro Projekt. Im Aufgabenmodus erfassen Sie detaillierte tägliche Aktivitäten (Jira, ServiceNow, Sonstige).",
+	"help.topic.projects.item2": "⚡ Prozent-Voreinstellungen & Tagesspeicherung: Nutzen Sie im Aufgabenmodus die Tasten 25%, 50% und 100% und speichern Sie alle Aktivitäten eines Tages mit einem Klick.",
+	"help.topic.projects.item3": "💬 Jira-Tickets & Kommentare: Verknüpfen Sie Aufgaben mit Jira-Tickets oder ergänzen Sie Kommentare (verpflichtend je nach Teameinstellung).",
+	"help.topic.projects.item4": "🚀 Projektzertifizierung: Sobald Ihre erfasste Zeit 100% Ihrer verrechenbaren Tage entspricht, klicken Sie auf 'Zertifizieren'.",
+
+	"help.topic.admin_activity.title": "📋 Aktivitäts- & Anwesenheitsbericht",
+	"help.topic.admin_activity.desc":  "Sehen Sie Anwesenheitsübersichten, Homeoffice-Quoten, Abwesenheiten und verrechenbare Tage nach Team und Bereich ein.",
+	"help.topic.admin_activity.item1": "🔍 Filter & Zeitraum: Filtern Sie nach Team, Bereich oder Datumsbereich für detaillierte Auswertungen.",
+	"help.topic.admin_activity.item2": "📊 Zusammenfassung: Erhalten Sie eine Gesamtaufstellung der Anwesenheitsquoten und verrechenbaren Tage pro Mitarbeiter.",
+	"help.topic.admin_activity.item3": "📥 Export: Exportieren Sie Daten für Analysen und das Berichtswesen.",
+
+	"help.topic.admin_projects_report.title": "📊 Projekt- & Aufgabenbericht",
+	"help.topic.admin_projects_report.desc":  "Analysieren Sie Projektzuordnungen, Aufgabenaufwände und Zeitverteilungen aller Mitarbeiter.",
+	"help.topic.admin_projects_report.item1": "🔍 Detaillierte Aufschlüsselung: Sehen Sie Aufwände nach Projekt, Mitarbeiter und Aktivitätsart.",
+	"help.topic.admin_projects_report.item2": "🔓 Entzertifizierung: Autorisierte Manager können einen zertifizierten Monat entsperren, um Korrekturen zu ermöglichen.",
+
+	"help.topic.admin_teams.title": "👥 Teamverwaltung",
+	"help.topic.admin_teams.desc":  "Erstellen und konfigurieren Sie Teams, verwalten Sie Mitglieder und legen Sie Zeiterfassungsregeln fest.",
+	"help.topic.admin_teams.item1": "⚙️ Einstellungen: Aktivieren Sie manuelle Aufgaben, vergeben Sie Jira-Schlüssel und erzwingen Sie Kommentare.",
+	"help.topic.admin_teams.item2": "👤 Leiter & Austrittsdaten: Weisen Sie Teamleiter zu und hinterlegen Sie Austrittsdaten.",
+
+	"help.topic.admin_statuses.title": "🏷️ Anwesenheitsstatus",
+	"help.topic.admin_statuses.desc":  "Verwalten Sie Statuskategorien im Kalender (Büro, Homeoffice, Urlaub, Krankheit...).",
+	"help.topic.admin_statuses.item1": "💶 Verrechenbar: Markieren Sie Status als verrechenbar (€) für die Projektzeiterfassung.",
+	"help.topic.admin_statuses.item2": "🎨 Farben & Deaktivierung: Passen Sie Abzeichenfarben an und deaktivieren Sie veraltete Status.",
+
+	"help.topic.admin_floorplans.title": "🗺️ Grundriss-Editor",
+	"help.topic.admin_floorplans.desc":  "Laden Sie Raumpläne hoch und positionieren Sie interaktive Schreibtische.",
+	"help.topic.admin_floorplans.item1": "🖱️ Schreibtischplatzierung: Fügen Sie Plätze hinzu, verschieben und skalieren Sie diese auf dem Plan.",
+
+	"help.topic.admin_projects.title": "📂 Projektverwaltung",
+	"help.topic.admin_projects.desc":  "Verwalten Sie Projektcodes, Sichtbarkeit und berechtigte Mitglieder.",
+	"help.topic.admin_projects.item1": "🔒 Zugriffskontrolle: Schalten Sie Projekte global oder nur für zugewiesene Mitglieder frei.",
+
+	"help.topic.admin_users.title": "👤 Benutzer, Rollen & Protokolle",
+	"help.topic.admin_users.desc":  "Verwalten Sie Benutzerkonten, Rollen, Passwörter und prüfen Sie Authentifizierungsprotokolle.",
+	"help.topic.admin_users.item1": "🛡️ Rollen: Vergeben Sie Administrator-, Plan-, Projekt-, Status- oder Berichtsrollen.",
+	"help.topic.admin_users.item2": "📋 Sicherheit: Prüfen Sie Anmeldeereignisse und verwalten Sie Passwörter.",
+
+	"help.topic.admin_domains.title": "🏢 Bereichsverwaltung (Domains)",
+	"help.topic.admin_domains.desc":  "Gruppieren Sie Teams in Bereiche und weisen Sie Bereichsleiter zu.",
+	"help.topic.admin_domains.item1": "🏢 Bereichsübersicht: Bereichsleiter erhalten aggregierte Berichte über alle zugehörigen Teams.",
+
+	"help.topic.admin_holidays.title": "🎌 Feiertage",
+	"help.topic.admin_holidays.desc":  "Verwalten Sie gesetzliche Feiertage und erlauben Sie bei Bedarf Ausnahmen.",
+	"help.topic.admin_holidays.item1": "🎌 Feiertagsregeln: Definieren Sie Datum, Name und Ausnahmeerfassungen.",
+
+	"help.topic.admin_general_settings.title": "⚙️ Allgemeine Einstellungen & Design",
+	"help.topic.admin_general_settings.desc":  "Passen Sie Anwendungsname, Designfarben, Firmenlogo, SMTP und SAML SSO an.",
+	"help.topic.admin_general_settings.item1": "🎨 Personalisierung: Laden Sie ein Logo hoch und konfigurieren Sie Systemparameter.",
+
+	"help.topic.admin_news.title": "📢 Neuigkeiten & Ankündigungen",
+	"help.topic.admin_news.desc":  "Veröffentlichen Sie Lauftext-Meldungen für alle Benutzer.",
+	"help.topic.admin_news.item1": "📢 Planung: Erstellen Sie einmalige oder monatlich wiederkehrende Ankündigungen.",
+
+	"help.topic.settings.title": "🔐 Benutzereinstellungen & Sicherheit",
+	"help.topic.settings.desc":  "Verwalten Sie Ihre persönlichen Zugangsdaten, biometrischen Passkeys und API-Token.",
+	"help.topic.settings.item1": "🔑 Passwörter & Passkeys: Ändern Sie Ihr Passwort oder registrieren Sie Passkeys (Fingerabdruck, Face ID).",
+	"help.topic.settings.item2": "🤖 API-Token (PAT): Erstellen Sie persönliche Zugriffstoken für Schnittstellen.",
+	"help.topic.settings.item3": "📋 Eigene Protokolle: Sehen Sie Ihre letzten Anmeldeaktivitäten ein.",
+
+	"help.topic.impersonate.title": "🎭 Benutzeridentität annehmen",
+	"help.topic.impersonate.desc":  "Wechseln Sie temporär in das Benutzerkonto eines anderen Anwenders zur Fehleranalyse.",
+	"help.topic.impersonate.item1": "🎭 Sicherheit: Nutzen Sie das System als dieser Benutzer und beenden Sie die Sitzung jederzeit.",
 }
 var es = map[string]string{
 	"nav.calendar":           "📅 Calendario",
@@ -2125,6 +2384,93 @@ var es = map[string]string{
 	"passkeys.error.register":    "El registro del passkey ha fallado. Inténtelo de nuevo.",
 	"passkeys.error.login":       "La autenticación por passkey ha fallado. Inténtelo de nuevo.",
 	"passkeys.success.register":  "Passkey registrado correctamente.",
+	// Help & Documentation
+	"help.button_title":  "Ayuda y guía en línea",
+	"help.title":         "Ayuda en línea",
+	"help.topic_select":  "Tema / Página:",
+	"help.close":         "Cerrar",
+	"help.current_badge": "Página actual",
+	"help.general_hint":  "¿Necesita más ayuda? Póngase en contacto con su responsable de equipo o el administrador.",
+
+	"help.topic.calendar.title": "📅 Calendario y declaración de presencia",
+	"help.topic.calendar.desc":  "Declare sus presencias diarias (oficina, teletrabajo, vacaciones, enfermedad...), consulte los horarios del equipo y certifique su hoja mensual.",
+	"help.topic.calendar.item1": "🖱️ Clic izquierdo y arrastrar: Haga clic en un día laborable para abrir la paleta de estados. Arrastre por varios días para asignar un estado en lote.",
+	"help.topic.calendar.item2": "🖱️ Clic derecho (Menú contextual): Haga clic derecho en un día para registrar medios días (Mañana AM / Tarde PM) o exportar/añadir sus presencias a su calendario externo (.ics / Outlook).",
+	"help.topic.calendar.item3": "🚀 Progreso y certificación mensual: La barra de progreso compara los días declarados con los días laborables. Cuando todos los días estén completos, pulse 'Certificar' para validar el mes.",
+	"help.topic.calendar.item4": "👥 Calendario de equipo: Vea en tiempo real las presencias y los puestos reservados por sus compañeros debajo de su calendario.",
+
+	"help.topic.floorplan.title": "🗺️ Planos y reserva de escritorios",
+	"help.topic.floorplan.desc":  "Consulte la distribución de las oficinas y reserve escritorios físicos para sus jornadas presenciales.",
+	"help.topic.floorplan.item1": "🖱️ Reserva de escritorio: Seleccione un plano y una fecha, y haga clic en un escritorio libre (verde) para reservarlo.",
+	"help.topic.floorplan.item2": "📅 Reserva para varios días: Seleccione varias fechas para reservar el mismo escritorio para varios días de una sola vez.",
+	"help.topic.floorplan.item3": "👥 Localizar compañeros: Vea fácilmente dónde están sentados los miembros de su equipo en una fecha determinada.",
+
+	"help.topic.projects.title": "📂 Imputación de proyectos y tareas",
+	"help.topic.projects.desc":  "Declare su tiempo de trabajo en proyectos o tareas diarias, controle sus días imputables y certifique el mes.",
+	"help.topic.projects.item1": "⚙️ Modos de entrada: En el modo estándar, introduzca el total de días por proyecto. En el modo de tareas diarias, desglose sus actividades día a día (Jira, ServiceNow, Otro).",
+	"help.topic.projects.item2": "⚡ Ajustes rápidos y guardado diario: En el modo de tareas, utilice los botones de 25%, 50% y 100% para asignar porcentajes rápidamente y guarde el día con un solo clic.",
+	"help.topic.projects.item3": "💬 Tickets de Jira y comentarios: Vincule tareas a incidencias de Jira o añada comentarios (obligatorio según la configuración de su equipo).",
+	"help.topic.projects.item4": "🚀 Certificación de proyectos: Cuando el tiempo declarado iguale su total de días laborables/facturables, pulse 'Certificar'.",
+
+	"help.topic.admin_activity.title": "📋 Informe de actividad y presencias",
+	"help.topic.admin_activity.desc":  "Consulte resúmenes de presencia, índices de teletrabajo, permisos y días facturables por equipo y dominio.",
+	"help.topic.admin_activity.item1": "🔍 Filtros y rango de fechas: Filtre por equipo, dominio o intervalo de fechas para analizar la asistencia.",
+	"help.topic.admin_activity.item2": "📊 Resumen ejecutivo: Obtenga la distribución global de presencias y la capacidad facturable por colaborador.",
+	"help.topic.admin_activity.item3": "📥 Exportación: Exporte los datos para su seguimiento y análisis.",
+
+	"help.topic.admin_projects_report.title": "📊 Informe de proyectos y tareas",
+	"help.topic.admin_projects_report.desc":  "Analice las asignaciones de proyectos, el detalle de tareas y la distribución de tiempo de todos los miembros.",
+	"help.topic.admin_projects_report.item1": "🔍 Desglose detallado: Consulte el tiempo por proyecto, colaborador y tipo de actividad.",
+	"help.topic.admin_projects_report.item2": "🔓 Descertificación: Los responsables autorizados pueden descertificar un mes para permitir correcciones.",
+
+	"help.topic.admin_teams.title": "👥 Administración de equipos",
+	"help.topic.admin_teams.desc":  "Cree y configure equipos, gestione miembros y establezca las normas de imputación de tiempo.",
+	"help.topic.admin_teams.item1": "⚙️ Configuración de tareas y Jira: Active las tareas diarias manuales, configure la clave de espacio Jira y exija comentarios obligatorios.",
+	"help.topic.admin_teams.item2": "👤 Responsables y fechas de salida: Asigne Team Managers / Team Leaders e introduzca la fecha de salida de un miembro.",
+
+	"help.topic.admin_statuses.title": "🏷️ Estados de presencia",
+	"help.topic.admin_statuses.desc":  "Gestione las categorías de presencia disponibles en el calendario (Oficina, Teletrabajo, Vacaciones, Enfermedad...).",
+	"help.topic.admin_statuses.item1": "💶 Estados facturables: Marque los estados facturables (€) que cuentan para la capacidad de proyectos.",
+	"help.topic.admin_statuses.item2": "🎨 Colores y visibilidad: Personalice los colores de las etiquetas y desactive estados obsoletos.",
+
+	"help.topic.admin_floorplans.title": "🗺️ Editor de planos",
+	"help.topic.admin_floorplans.desc":  "Suba planos de planta y posicione los escritorios interactivos para su reserva.",
+	"help.topic.admin_floorplans.item1": "🖱️ Distribución de puestos: Añada puestos, muévalos en el plano, ajuste su tamaño y asigne identificadores.",
+
+	"help.topic.admin_projects.title": "📂 Administración de proyectos",
+	"help.topic.admin_projects.desc":  "Cree códigos de proyecto, gestione la visibilidad y asigne los miembros autorizados.",
+	"help.topic.admin_projects.item1": "🔒 Control de acceso: Haga que los proyectos sean globales o restrínjalos únicamente a los miembros asignados.",
+
+	"help.topic.admin_users.title": "👤 Usuarios, roles y registros",
+	"help.topic.admin_users.desc":  "Gestione cuentas de usuario, asigne roles, restablezca contraseñas y revise los registros de auditoría.",
+	"help.topic.admin_users.item1": "🛡️ Roles: Asigne permisos de Global Admin, Floorplan Manager, Projects Manager, Status Manager o Activity Viewer.",
+	"help.topic.admin_users.item2": "📋 Auditoría: Inspeccione los inicios de sesión, el uso de passkeys y restablezca contraseñas.",
+
+	"help.topic.admin_domains.title": "🏢 Administración de dominios",
+	"help.topic.admin_domains.desc":  "Agrupe equipos por dominio organizativo y nombre Domain Managers con acceso ampliado a informes.",
+	"help.topic.admin_domains.item1": "🏢 Ámbito de dominio: Los responsables de dominio acceden a los informes de todos los equipos de su dominio.",
+
+	"help.topic.admin_holidays.title": "🎌 Días festivos",
+	"help.topic.admin_holidays.desc":  "Configure los días festivos y defina si se permiten imputaciones de trabajo excepcionales.",
+	"help.topic.admin_holidays.item1": "🎌 Reglas de festivos: Establezca el nombre, la fecha y si se autoriza la imputación de tiempo en ese día.",
+
+	"help.topic.admin_general_settings.title": "⚙️ Configuración general y personalización",
+	"help.topic.admin_general_settings.desc":  "Personalice el nombre de la aplicación, los colores corporativos, el logotipo, el servidor SMTP y SAML SSO.",
+	"help.topic.admin_general_settings.item1": "🎨 Personalización: Suba el logotipo de la empresa y configure los parámetros del entorno.",
+
+	"help.topic.admin_news.title": "📢 Noticias y anuncios",
+	"help.topic.admin_news.desc":  "Publique mensajes informativos en marquesina visibles para todos los usuarios activos.",
+	"help.topic.admin_news.item1": "📢 Programación: Cree anuncios puntuales o recurrentes cada mes con enlaces interactivos.",
+
+	"help.topic.settings.title": "🔐 Configuración de usuario y seguridad",
+	"help.topic.settings.desc":  "Gestione sus credenciales personales, passkeys biométricos y tokens de acceso a la API.",
+	"help.topic.settings.item1": "🔑 Contraseñas y passkeys: Actualice su contraseña local o registre passkeys biométricos (Huella, Face ID, Windows Hello).",
+	"help.topic.settings.item2": "🤖 Tokens de API (PAT): Cree Personal Access Tokens con fecha de caducidad para automatizar integraciones.",
+	"help.topic.settings.item3": "📋 Registros personales: Consulte su historial reciente de conexiones y acciones de seguridad.",
+
+	"help.topic.impersonate.title": "🎭 Suplantar usuario (Impersonate)",
+	"help.topic.impersonate.desc":  "Asuma temporalmente la identidad de otro usuario para diagnosticar incidencias o comprobar accesos.",
+	"help.topic.impersonate.item1": "🎭 Seguridad: Navegue con un banner de advertencia activo y salga del modo en cualquier momento.",
 }
 var it = map[string]string{
 	// Nav
@@ -2646,4 +2992,91 @@ var it = map[string]string{
 	"passkeys.error.register":    "Registrazione passkey fallita. Riprova.",
 	"passkeys.error.login":       "Autenticazione passkey fallita. Riprova.",
 	"passkeys.success.register":  "Passkey registrato con successo.",
+	// Help & Documentation
+	"help.button_title":  "Guida e documentazione in linea",
+	"help.title":         "Guida in linea",
+	"help.topic_select":  "Argomento / Pagina:",
+	"help.close":         "Chiudi",
+	"help.current_badge": "Pagina corrente",
+	"help.general_hint":  "Hai bisogno di ulteriore assistenza? Contatta il tuo responsabile di team o l'amministratore.",
+
+	"help.topic.calendar.title": "📅 Calendario e dichiarazione presenze",
+	"help.topic.calendar.desc":  "Dichiara le tue presenze giornaliere (ufficio, smart working, ferie, malattia...), visualizza i calendari del team e certifica il foglio mensile.",
+	"help.topic.calendar.item1": "🖱️ Clic sinistro e trascinamento: Clicca su un giorno lavorativo per aprire la tavolozza degli stati. Trascina su più giorni per assegnare uno stato in blocco.",
+	"help.topic.calendar.item2": "🖱️ Clic destro (Menu contestuale): Fai clic destro su un giorno per registrare mezze giornate (Mattina AM / Pomeriggio PM) o esportare/aggiungere la presenza al tuo calendario esterno (.ics / Outlook).",
+	"help.topic.calendar.item3": "🚀 Progresso e certificazione mensile: La barra di avanzamento confronta i giorni dichiarati con quelli lavorativi. Quando tutti i giorni sono compilati, clicca su 'Certifica' per convalidare il mese.",
+	"help.topic.calendar.item4": "👥 Calendario del team: Visualizza in tempo reale le presenze e le scrivanie prenotate dai tuoi colleghi sotto il tuo calendario.",
+
+	"help.topic.floorplan.title": "🗺️ Planimetrie e prenotazione postazioni",
+	"help.topic.floorplan.desc":  "Consulta le planimetrie degli uffici e prenota postazioni fisiche quando lavori in sede.",
+	"help.topic.floorplan.item1": "🖱️ Prenotazione scrivania: Seleziona una planimetria e una data, quindi clicca su una scrivania libera (verde) per prenotarla.",
+	"help.topic.floorplan.item2": "📅 Prenotazione multi-giorno: Seleziona più date per prenotare la stessa scrivania per più giorni in un'unica azione.",
+	"help.topic.floorplan.item3": "👥 Trova colleghi: Verifica dove sono seduti i membri del tuo team in qualsiasi data.",
+
+	"help.topic.projects.title": "📂 Dichiarazione progetti e attività",
+	"help.topic.projects.desc":  "Dichiara il tempo di lavoro sui progetti o sulle attività giornaliere, monitora la quota fatturabile e certifica il mese.",
+	"help.topic.projects.item1": "⚙️ Modalità di inserimento: In modalità standard, inserisci i giorni totali per progetto. In modalità attività giornaliere, dettaglia le attività giorno per giorno (Jira, ServiceNow, Altro).",
+	"help.topic.projects.item2": "⚡ Preset e salvataggio giornaliero: Nella modalità attività, usa i pulsanti 25%, 50% e 100% per impostare rapidamente le percentuali e salva l'intera giornata con un solo clic.",
+	"help.topic.projects.item3": "💬 Ticket Jira e commenti: Collega le attività ai ticket Jira o inserisci commenti (obbligatorio a seconda delle impostazioni del team).",
+	"help.topic.projects.item4": "🚀 Certificazione progetti: Quando il tempo dichiarato eguaglia i tuoi giorni lavorativi/fatturabili, clicca su 'Certifica'.",
+
+	"help.topic.admin_activity.title": "📋 Rapporto attività e presenze",
+	"help.topic.admin_activity.desc":  "Consulta i riepiloghi di presenza, percentuali di smart working, ferie e giorni fatturabili per team e dominio.",
+	"help.topic.admin_activity.item1": "🔍 Filtri e periodo: Filtra per team, dominio o intervallo di date per analizzare presenze e statistiche.",
+	"help.topic.admin_activity.item2": "📊 Riepilogo esecutivo: Visualizza la distribuzione complessiva delle presenze e la capacità fatturabile per collaboratore.",
+	"help.topic.admin_activity.item3": "📥 Esportazione: Esporta i dati per analisi e rendicontazione.",
+
+	"help.topic.admin_projects_report.title": "📊 Report progetti e attività",
+	"help.topic.admin_projects_report.desc":  "Analizza le allocazioni di progetto, il dettaglio delle attività e la distribuzione del tempo di tutti i membri.",
+	"help.topic.admin_projects_report.item1": "🔍 Dettaglio per progetto: Visualizza il tempo per progetto, per collaboratore e per tipologia di attività.",
+	"help.topic.admin_projects_report.item2": "🔓 Decertificazione: I manager autorizzati possono decertificare un mese per consentire correzioni.",
+
+	"help.topic.admin_teams.title": "👥 Amministrazione team",
+	"help.topic.admin_teams.desc":  "Crea e configura i team, gestisci i membri e definisci le regole di gestione dei fogli ore.",
+	"help.topic.admin_teams.item1": "⚙️ Impostazioni attività e Jira: Attiva la gestione manuale delle attività, configura la chiave Jira e richiedi commenti obbligatori.",
+	"help.topic.admin_teams.item2": "👤 Manager e date di uscita: Assegna Team Manager / Team Leader e registra le date di uscita.",
+
+	"help.topic.admin_statuses.title": "🏷️ Stati di presenza",
+	"help.topic.admin_statuses.desc":  "Gestisci le categorie di presenza disponibili nel calendario (Ufficio, Smart working, Ferie, Malattia...).",
+	"help.topic.admin_statuses.item1": "💶 Stati fatturabili: Imposta gli stati fatturabili (€) che concorrono alla capacità di progetto.",
+	"help.topic.admin_statuses.item2": "🎨 Colori e visibilità: Personalizza i colori e disattiva gli stati obsoleti mantenendo lo storico.",
+
+	"help.topic.admin_floorplans.title": "🗺️ Editor planimetrie",
+	"help.topic.admin_floorplans.desc":  "Carica le immagini delle planimetrie e posiziona le scrivanie interattive per la prenotazione.",
+	"help.topic.admin_floorplans.item1": "🖱️ Posizionamento postazioni: Aggiungi scrivanie, spostale sulla mappa, ridimensionalo e assegna identificatori.",
+
+	"help.topic.admin_projects.title": "📂 Amministrazione progetti",
+	"help.topic.admin_projects.desc":  "Crea codici progetto, gestisci la visibilità e assegna i membri abilitati.",
+	"help.topic.admin_projects.item1": "🔒 Controllo accessi: Rendi i progetti globali per tutti gli utenti o riservati ai soli membri assegnati.",
+
+	"help.topic.admin_users.title": "👤 Utenti, ruoli e log",
+	"help.topic.admin_users.desc":  "Gestisci gli account utente, assegna ruoli, reimposta le password e consulta i log di controllo.",
+	"help.topic.admin_users.item1": "🛡️ Ruoli: Assegna permessi di Global Admin, Floorplan Manager, Projects Manager, Status Manager o Activity Viewer.",
+	"help.topic.admin_users.item2": "📋 Controllo e sicurezza: Ispeziona gli accessi, l'utilizzo dei passkey e reimposta le credenziali.",
+
+	"help.topic.admin_domains.title": "🏢 Amministrazione domini",
+	"help.topic.admin_domains.desc":  "Raggruppa i team in domini aziendali e nomina Domain Manager con accesso esteso ai report.",
+	"help.topic.admin_domains.item1": "🏢 Ambito del dominio: I responsabili di dominio accedono ai report di tutti i team del proprio dominio.",
+
+	"help.topic.admin_holidays.title": "🎌 Giorni festivi",
+	"help.topic.admin_holidays.desc":  "Configura i giorni festivi e stabilisci se sono consentite imputazioni lavorative straordinarie.",
+	"help.topic.admin_holidays.item1": "🎌 Regole festività: Imposta nome, data e l'eventuale permesso di imputare tempo in quel giorno.",
+
+	"help.topic.admin_general_settings.title": "⚙️ Impostazioni generali e personalizzazione",
+	"help.topic.admin_general_settings.desc":  "Personalizza il nome dell'applicazione, i colori, il logo, il server SMTP e l'accesso SAML SSO.",
+	"help.topic.admin_general_settings.item1": "🎨 Personalizzazione: Carica il logo aziendale e configura i parametri di ambiente.",
+
+	"help.topic.admin_news.title": "📢 Novità e annunci",
+	"help.topic.admin_news.desc":  "Pubblica messaggi scorrevoli informativi visibili a tutti gli utenti attivi.",
+	"help.topic.admin_news.item1": "📢 Programmazione: Crea annunci singoli o ricorrenti mensilmente con link interattivi.",
+
+	"help.topic.settings.title": "🔐 Impostazioni utente e sicurezza",
+	"help.topic.settings.desc":  "Gestisci le credenziali del tuo account, i passkey biometrici e i token di accesso API.",
+	"help.topic.settings.item1": "🔑 Password e passkey: Aggiorna la password locale o registra passkey biometrici (Impronta, Face ID, Windows Hello).",
+	"help.topic.settings.item2": "🤖 Token API (PAT): Genera Personal Access Token con scadenza per automatizzare integrazioni.",
+	"help.topic.settings.item3": "📋 Log personali: Consulta la cronologia recente dei tuoi accessi e delle azioni di sicurezza.",
+
+	"help.topic.impersonate.title": "🎭 Impersona utente (Impersonate)",
+	"help.topic.impersonate.desc":  "Assumi temporaneamente l'identità di un altro utente per diagnostica o supporto.",
+	"help.topic.impersonate.item1": "🎭 Sicurezza: Naviga con un banner di avviso permanente ed esci dalla modalità in qualsiasi momento.",
 }

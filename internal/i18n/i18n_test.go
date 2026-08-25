@@ -90,3 +90,42 @@ func TestLangFromRequest_AllSupportedLangs(t *testing.T) {
 		}
 	}
 }
+
+func TestHelpKeys_AllLanguages(t *testing.T) {
+	requiredKeys := []string{
+		"help.button_title",
+		"help.title",
+		"help.topic_select",
+		"help.close",
+		"help.general_hint",
+		"help.topic.calendar.title",
+		"help.topic.calendar.desc",
+		"help.topic.calendar.item1",
+		"help.topic.floorplan.title",
+		"help.topic.projects.title",
+		"help.topic.admin_activity.title",
+		"help.topic.admin_projects_report.title",
+		"help.topic.admin_teams.title",
+		"help.topic.admin_statuses.title",
+		"help.topic.admin_floorplans.title",
+		"help.topic.admin_projects.title",
+		"help.topic.admin_users.title",
+		"help.topic.admin_domains.title",
+		"help.topic.admin_holidays.title",
+		"help.topic.admin_general_settings.title",
+		"help.topic.admin_news.title",
+		"help.topic.settings.title",
+		"help.topic.impersonate.title",
+	}
+
+	langs := []string{"en", "fr", "de", "es", "it"}
+	for _, lang := range langs {
+		m := T(lang)
+		for _, key := range requiredKeys {
+			val, ok := m[key]
+			if !ok || val == "" {
+				t.Errorf("lang %q is missing required help key %q", lang, key)
+			}
+		}
+	}
+}

@@ -127,3 +127,67 @@ func TestLayoutTemplate_AdminMenu_NewsAppearsBeforeFloorplans(t *testing.T) {
 		t.Fatal("news link should appear before floorplans link in the admin menu")
 	}
 }
+
+func TestLayoutTemplate_OnlineHelp_BasicUserPermissions(t *testing.T) {
+	html := renderLayoutForUser(t, &models.User{ID: 1, Name: "Basic", Roles: models.RoleBasic}, false)
+
+	// Help button & modal should be present
+	if !strings.Contains(html, "$dispatch('open-help'") {
+		t.Fatal("help button triggering $dispatch('open-help' should be present")
+	}
+	if !strings.Contains(html, "onlineHelpModal") {
+		t.Fatal("onlineHelpModal component should be present in layout")
+	}
+
+	// Basic user should have calendar, projects, settings
+	if !strings.Contains(html, `value="calendar"`) {
+		t.Fatal("help option 'calendar' should be available for basic user")
+	}
+	if !strings.Contains(html, `value="projects"`) {
+		t.Fatal("help option 'projects' should be available for basic user")
+	}
+	if !strings.Contains(html, `value="settings"`) {
+		t.Fatal("help option 'settings' should be available for basic user")
+	}
+
+	// Admin topics must NOT be present for basic user
+	adminTopics := []string{
+		`value="admin_users"`,
+		`value="admin_domains"`,
+		`value="admin_statuses"`,
+		`value="admin_floorplans"`,
+		`value="admin_projects"`,
+		`value="admin_general_settings"`,
+		`value="impersonate"`,
+	}
+	for _, topic := range adminTopics {
+		if strings.Contains(html, topic) {
+			t.Fatalf("help option %s must NOT be present for basic user", topic)
+		}
+	}
+}
+
+func TestLayoutTemplate_OnlineHelp_GlobalAdminPermissions(t *testing.T) {
+	html := renderLayoutForUser(t, &models.User{ID: 1, Name: "Global", Roles: models.RoleGlobal}, false)
+
+	globalTopics := []string{
+		`value="admin_users"`,
+		`value="admin_domains"`,
+		`value="admin_holidays"`,
+		`value="admin_general_settings"`,
+		`value="impersonate"`,
+	}
+	for _, topic := range globalTopics {
+		if !strings.Contains(html, topic) {
+			t.Fatalf("help option %s should be present for global admin", topic)
+		}
+	}
+}
+
+func TestLayoutTemplate_OnlineHelp_DisabledProjects(t *testing.T) {
+	html := renderLayoutForUser(t, &models.User{ID: 1, Name: "Basic", Roles: models.RoleBasic}, true)
+
+	if strings.Contains(html, `value="projects"`) {
+		t.Fatal("help option 'projects' should NOT be present when projects are disabled")
+	}
+}
