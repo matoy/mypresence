@@ -22,7 +22,7 @@ func TestAdminDomains_DomainsPage_Render(t *testing.T) {
 
 	domID, _ := d.CreateDomain("Digital")
 	_ = d.SetDomainManagers(domID, []int64{adminID})
-	tID, _ := d.CreateTeamWithDetails("Digital Team", "", false)
+	tID, _ := d.CreateTeamWithDetails("Digital Team", "", false, false)
 	_ = d.UpdateTeamDomain(tID, domID)
 
 	renderedPage := ""

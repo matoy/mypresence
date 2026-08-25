@@ -7,7 +7,7 @@ import (
 )
 
 // Version is the application version, updated manually for each release.
-const Version = "0.6.5"
+const Version = "0.6.6"
 
 // Config holds all application configuration loaded from environment variables.
 //

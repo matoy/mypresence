@@ -92,7 +92,7 @@ func TestActivityPage_ManualTeam_UsesManualFormula(t *testing.T) {
 
 	statusID, _ := d.CreateStatus(models.Status{Name: "Billable", Color: "#22c55e", Billable: true, SortOrder: 1})
 	memberID, _ := d.CreateLocalUser("manualteammember@test.com", "ManualTeamMember", "password1")
-	teamID, _ := d.CreateTeamWithDetails("Manual Activity Team", "MAT", true)
+	teamID, _ := d.CreateTeamWithDetails("Manual Activity Team", "MAT", true, false)
 	d.AddTeamMember(teamID, memberID) //nolint:errcheck
 
 	// Two billable days: one fully declared via activities, one not declared at all.

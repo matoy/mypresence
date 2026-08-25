@@ -871,6 +871,7 @@ function teamsAdmin(initialTeams) {
         newTeamName: '',
         newTeamJiraKey: '',
         newTeamManual: false,
+        newTeamRequireComment: false,
         newTeamDomainId: 0,
         createError: '',
         showCreateModal: false,
@@ -914,6 +915,7 @@ function teamsAdmin(initialTeams) {
                     name: this.newTeamName.trim(),
                     jira_space_key: this.newTeamJiraKey.trim(),
                     timesheets_managed_manually: this.newTeamManual,
+                    require_activity_comment: this.newTeamRequireComment,
                     domain_id: parseInt(this.newTeamDomainId) || 0
                 })
             });
@@ -930,7 +932,7 @@ function teamsAdmin(initialTeams) {
             }
         },
 
-        async saveTeamDetails(id, name, jiraSpaceKey, timesheetsManagedManually, domainId) {
+        async saveTeamDetails(id, name, jiraSpaceKey, timesheetsManagedManually, requireActivityComment, domainId) {
             await fetch(`/admin/teams/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
@@ -938,6 +940,7 @@ function teamsAdmin(initialTeams) {
                     name,
                     jira_space_key: (jiraSpaceKey || '').trim(),
                     timesheets_managed_manually: !!timesheetsManagedManually,
+                    require_activity_comment: !!requireActivityComment,
                     domain_id: parseInt(domainId) || 0
                 })
             });

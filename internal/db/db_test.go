@@ -1146,7 +1146,7 @@ func TestCreateTeam_And_UpdateTeam(t *testing.T) {
 
 func TestCreateTeamWithDetails_And_UpdateTeamDetails(t *testing.T) {
 	d := newTestDB(t)
-	id, err := d.CreateTeamWithDetails("Jira Team", "PROJ", true)
+	id, err := d.CreateTeamWithDetails("Jira Team", "PROJ", true, true)
 	if err != nil || id <= 0 {
 		t.Fatalf("CreateTeamWithDetails: id=%d err=%v", id, err)
 	}
@@ -1169,8 +1169,11 @@ func TestCreateTeamWithDetails_And_UpdateTeamDetails(t *testing.T) {
 	if !tm.TimesheetsManagedManually {
 		t.Error("TimesheetsManagedManually: want true")
 	}
+	if !tm.RequireActivityComment {
+		t.Error("RequireActivityComment: want true")
+	}
 
-	if err := d.UpdateTeamDetails(id, "Jira Team Renamed", "OTHER", false); err != nil {
+	if err := d.UpdateTeamDetails(id, "Jira Team Renamed", "OTHER", false, false); err != nil {
 		t.Fatalf("UpdateTeamDetails: %v", err)
 	}
 	teams, _ = d.ListTeams()
@@ -1186,6 +1189,9 @@ func TestCreateTeamWithDetails_And_UpdateTeamDetails(t *testing.T) {
 			}
 			if t2.TimesheetsManagedManually {
 				t.Error("TimesheetsManagedManually: want false after update")
+			}
+			if t2.RequireActivityComment {
+				t.Error("RequireActivityComment: want false after update")
 			}
 		}
 	}

@@ -18,7 +18,7 @@ func TestAdminDomains_CreateUpdateDelete(t *testing.T) {
 
 	u1, _ := d.CreateLocalUser("dm1@example.com", "DM One", "password1")
 	u2, _ := d.CreateLocalUser("dm2@example.com", "DM Two", "password1")
-	teamID, err := d.CreateTeamWithDetails("Team A", "", false)
+	teamID, err := d.CreateTeamWithDetails("Team A", "", false, false)
 	if err != nil {
 		t.Fatalf("CreateTeamWithDetails: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestAdminDomains_TeamsPage_ShowsDomains(t *testing.T) {
 	h := &AdminHandler{DB: d}
 
 	domainID, _ := d.CreateDomain("Ops")
-	teamID, _ := d.CreateTeamWithDetails("Ops Team", "", false)
+	teamID, _ := d.CreateTeamWithDetails("Ops Team", "", false, false)
 	if err := d.UpdateTeamDomain(teamID, domainID); err != nil {
 		t.Fatalf("UpdateTeamDomain: %v", err)
 	}

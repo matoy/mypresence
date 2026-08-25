@@ -352,7 +352,7 @@ func TestNewRenderPage(t *testing.T) {
 	_ = database.UpdateUserRoles(uID, models.RoleGlobal)
 	user, _ := database.GetUserByID(uID)
 
-	teamID, _ := database.CreateTeamWithDetails("Manual Team", "", true)
+	teamID, _ := database.CreateTeamWithDetails("Manual Team", "", true, false)
 	_ = database.AddTeamMember(teamID, uID)
 
 	domID, _ := database.CreateDomain("Tech")

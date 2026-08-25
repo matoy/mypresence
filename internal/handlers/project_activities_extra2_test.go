@@ -23,7 +23,7 @@ func TestProjectActivities_CRUD_And_Validation(t *testing.T) {
 	u2ID, _ := d.CreateLocalUser("pa_user2@example.com", "PA User 2", "pass")
 	user2, _ := d.GetUserByID(u2ID)
 
-	teamID, _ := d.CreateTeamWithDetails("Manual Dev Team", "", true)
+	teamID, _ := d.CreateTeamWithDetails("Manual Dev Team", "", true, false)
 	_ = d.AddTeamMember(teamID, u1ID)
 	_ = d.AddTeamMember(teamID, u2ID)
 
@@ -48,22 +48,22 @@ func TestProjectActivities_CRUD_And_Validation(t *testing.T) {
 	}
 
 	// 3. validateActivityRequest checks
-	if err := h.validateActivityRequest(u1ID, "", models.ActivityTypeOther, "", 50, 0); err == nil || !strings.Contains(err.Error(), "date is required") {
+	if err := h.validateActivityRequest(u1ID, "", models.ActivityTypeOther, "", "", 50, 0); err == nil || !strings.Contains(err.Error(), "date is required") {
 		t.Errorf("expected date is required error, got %v", err)
 	}
-	if err := h.validateActivityRequest(u1ID, date, "invalid_type", "", 50, 0); err == nil || !strings.Contains(err.Error(), "invalid activity type") {
+	if err := h.validateActivityRequest(u1ID, date, "invalid_type", "", "", 50, 0); err == nil || !strings.Contains(err.Error(), "invalid activity type") {
 		t.Errorf("expected invalid activity type error, got %v", err)
 	}
-	if err := h.validateActivityRequest(u1ID, date, models.ActivityTypeJira, "", 50, 0); err == nil || !strings.Contains(err.Error(), "Jira ticket is required") {
+	if err := h.validateActivityRequest(u1ID, date, models.ActivityTypeJira, "", "", 50, 0); err == nil || !strings.Contains(err.Error(), "Jira ticket is required") {
 		t.Errorf("expected Jira ticket required error, got %v", err)
 	}
-	if err := h.validateActivityRequest(u1ID, date, models.ActivityTypeOther, "", 0, 0); err == nil || !strings.Contains(err.Error(), "percentage") {
+	if err := h.validateActivityRequest(u1ID, date, models.ActivityTypeOther, "", "", 0, 0); err == nil || !strings.Contains(err.Error(), "percentage") {
 		t.Errorf("expected percentage error for 0, got %v", err)
 	}
-	if err := h.validateActivityRequest(u1ID, date, models.ActivityTypeOther, "", 150, 0); err == nil || !strings.Contains(err.Error(), "percentage") {
+	if err := h.validateActivityRequest(u1ID, date, models.ActivityTypeOther, "", "", 150, 0); err == nil || !strings.Contains(err.Error(), "percentage") {
 		t.Errorf("expected percentage error for 150, got %v", err)
 	}
-	if err := h.validateActivityRequest(u1ID, "2026-08-16", models.ActivityTypeOther, "", 50, 0); err == nil || !strings.Contains(err.Error(), "not a billable day") {
+	if err := h.validateActivityRequest(u1ID, "2026-08-16", models.ActivityTypeOther, "", "", 50, 0); err == nil || !strings.Contains(err.Error(), "not a billable day") {
 		t.Errorf("expected not a billable day error, got %v", err)
 	}
 
@@ -226,7 +226,7 @@ func TestProjectActivities_Helpers_And_Reports(t *testing.T) {
 	_ = d.UpdateUserRoles(uID, models.RoleGlobal)
 	user, _ := d.GetUserByID(uID)
 
-	teamID, _ := d.CreateTeamWithDetails("Manual Team A", "DEV", true)
+	teamID, _ := d.CreateTeamWithDetails("Manual Team A", "DEV", true, false)
 	_ = d.AddTeamMember(teamID, uID)
 
 	domID, _ := d.CreateDomain("Core Dev")

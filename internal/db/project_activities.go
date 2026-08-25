@@ -170,3 +170,25 @@ func (d *DB) DeleteProjectActivity(id int64) error {
 	_, err := d.projects.Exec(`DELETE FROM project_activities WHERE id = ?`, id)
 	return err
 }
+
+// SetUserDayActivities replaces all project activities declared by a user for a given date.
+// It deletes existing entries for (userID, date) and inserts the provided activities.
+func (d *DB) SetUserDayActivities(userID int64, date string, activities []models.ProjectActivity) ([]models.ProjectActivity, error) {
+	if _, err := d.projects.Exec("DELETE FROM project_activities WHERE user_id = ? AND date = ?", userID, date); err != nil {
+		return nil, err
+	}
+	var created []models.ProjectActivity
+	for _, a := range activities {
+		id, err := d.projects.InsertGetID(`
+INSERT INTO project_activities (user_id, date, activity_type, jira_key, jira_title, comment, percentage)
+VALUES (?, ?, ?, ?, ?, ?, ?)`, userID, date, a.ActivityType, a.JiraKey, a.JiraTitle, a.Comment, a.Percentage)
+		if err != nil {
+			return nil, err
+		}
+		a.ID = id
+		a.UserID = userID
+		a.Date = date
+		created = append(created, a)
+	}
+	return created, nil
+}

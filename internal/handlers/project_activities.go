@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/matoy/mypresence/internal/jira"
@@ -57,8 +58,8 @@ func (h *ProjectsHandler) resolveManualTeam(userID int64) *models.Team {
 }
 
 // renderManualProjectsPage renders /projects in "Timesheets managed manually"
-// mode: a vertical list of billable days, each requiring one or more
-// activities whose percentages sum to the day's billable weight.
+// mode: a vertical list of days for the month in reverse chronological order,
+// where billable days allow declaring activities whose percentages sum to the day's billable weight.
 func (h *ProjectsHandler) renderManualProjectsPage(w http.ResponseWriter, r *http.Request, user *models.User, team *models.Team, year, month int) {
 	weights, err := h.DB.GetUserBillableDatesForMonth(user.ID, year, month)
 	if err != nil {
@@ -71,18 +72,22 @@ func (h *ProjectsHandler) renderManualProjectsPage(w http.ResponseWriter, r *htt
 		activitiesByDate[a.Date] = append(activitiesByDate[a.Date], a)
 	}
 
-	dates := make([]string, 0, len(weights))
-	for d := range weights {
-		dates = append(dates, d)
-	}
-	sort.Strings(dates)
-
+	daysInMonth := getDaysInMonth(year, month)
+	dates := make([]string, 0, len(daysInMonth))
 	var billable, declared float64
-	for _, date := range dates {
-		weight := weights[date]
+	for i := len(daysInMonth) - 1; i >= 0; i-- {
+		d := daysInMonth[i].Date
+		dates = append(dates, d)
+		weight, ok := weights[d]
+		if !ok {
+			weights[d] = 0
+		}
+		if weight <= 0 {
+			continue
+		}
 		billable += weight
-		sum := 0.0
-		for _, a := range activitiesByDate[date] {
+		var sum float64
+		for _, a := range activitiesByDate[d] {
 			sum += a.Percentage
 		}
 		if isDateComplete(sum, weight) {
@@ -91,6 +96,7 @@ func (h *ProjectsHandler) renderManualProjectsPage(w http.ResponseWriter, r *htt
 	}
 
 	jiraEnabled := h.Config != nil && h.Config.JiraEnabled && team.JiraSpaceKey != ""
+	requireComment := team.RequireActivityComment
 
 	certified, _ := h.DB.IsProjectMonthCertified(user.ID, year, month)
 
@@ -100,6 +106,7 @@ func (h *ProjectsHandler) renderManualProjectsPage(w http.ResponseWriter, r *htt
 		"ManualWeights":    weights,
 		"ManualActivities": activitiesByDate,
 		"JiraEnabled":      jiraEnabled,
+		"RequireComment":   requireComment,
 		"BillableDays":     billable,
 		"TotalDeclared":    declared,
 		"Certified":        certified,
@@ -135,7 +142,7 @@ func (h *ProjectsHandler) ListProjectActivitiesAPI(w http.ResponseWriter, r *htt
 
 // validateActivityRequest checks that an activity declaration is well-formed
 // and does not exceed the day's billable allocation.
-func (h *ProjectsHandler) validateActivityRequest(userID int64, date, activityType, jiraKey string, percentage float64, excludeID int64) error {
+func (h *ProjectsHandler) validateActivityRequest(userID int64, date, activityType, jiraKey, comment string, percentage float64, excludeID int64) error {
 	if date == "" {
 		return fmt.Errorf("date is required")
 	}
@@ -144,8 +151,13 @@ func (h *ProjectsHandler) validateActivityRequest(userID int64, date, activityTy
 	default:
 		return fmt.Errorf("invalid activity type")
 	}
-	if activityType == models.ActivityTypeJira && jiraKey == "" {
+	if activityType == models.ActivityTypeJira && strings.TrimSpace(jiraKey) == "" {
 		return fmt.Errorf("a Jira ticket is required")
+	}
+	if team := h.resolveManualTeam(userID); team != nil && team.RequireActivityComment {
+		if strings.TrimSpace(comment) == "" {
+			return fmt.Errorf("comment is required")
+		}
 	}
 	if percentage <= 0 || percentage > 100 {
 		return fmt.Errorf("percentage must be between 0 and 100")
@@ -186,14 +198,13 @@ func (h *ProjectsHandler) CreateProjectActivity(w http.ResponseWriter, r *http.R
 		jsonError(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
-	if err := h.validateActivityRequest(user.ID, req.Date, req.ActivityType, req.JiraKey, req.Percentage, 0); err != nil {
+	if err := h.validateActivityRequest(user.ID, req.Date, req.ActivityType, req.JiraKey, req.Comment, req.Percentage, 0); err != nil {
 		metrics.ProjectOpsTotal.WithLabelValues("activity_create", "failure").Inc()
 		jsonError(w, err.Error(), http.StatusUnprocessableEntity)
 		return
 	}
 	if year, month, err := yearMonthFromDate(req.Date); err == nil && rejectIfProjectMonthCertified(w, h, user.ID, year, month) {
 		metrics.ProjectOpsTotal.WithLabelValues("activity_create", "failure").Inc()
-		return
 	}
 
 	id, err := h.DB.CreateProjectActivity(user.ID, req.Date, req.ActivityType, req.JiraKey, req.JiraTitle, req.Comment, req.Percentage)
@@ -233,7 +244,7 @@ func (h *ProjectsHandler) UpdateProjectActivity(w http.ResponseWriter, r *http.R
 		jsonError(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
-	if err := h.validateActivityRequest(user.ID, existing.Date, req.ActivityType, req.JiraKey, req.Percentage, id); err != nil {
+	if err := h.validateActivityRequest(user.ID, existing.Date, req.ActivityType, req.JiraKey, req.Comment, req.Percentage, id); err != nil {
 		metrics.ProjectOpsTotal.WithLabelValues("activity_update", "failure").Inc()
 		jsonError(w, err.Error(), http.StatusUnprocessableEntity)
 		return
@@ -252,6 +263,110 @@ func (h *ProjectsHandler) UpdateProjectActivity(w http.ResponseWriter, r *http.R
 	metrics.ProjectOpsTotal.WithLabelValues("activity_update", "success").Inc()
 	slog.Info("project.activity.update", "user", user.Email, "activity_id", id)
 	jsonOK(w, map[string]string{"status": "ok"})
+}
+
+type dayActivitiesRequestBody struct {
+	Date       string                `json:"date"`
+	Activities []activityRequestBody `json:"activities"`
+}
+
+// SetDayActivities handles POST /api/project-activities/day.
+func (h *ProjectsHandler) SetDayActivities(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r)
+
+	var req dayActivitiesRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		metrics.ProjectOpsTotal.WithLabelValues("activity_day_save", "failure").Inc()
+		jsonError(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+	if req.Date == "" {
+		metrics.ProjectOpsTotal.WithLabelValues("activity_day_save", "failure").Inc()
+		jsonError(w, "date is required", http.StatusUnprocessableEntity)
+		return
+	}
+	if year, month, err := yearMonthFromDate(req.Date); err == nil && rejectIfProjectMonthCertified(w, h, user.ID, year, month) {
+		metrics.ProjectOpsTotal.WithLabelValues("activity_day_save", "failure").Inc()
+		return
+	}
+
+	weight, err := h.DB.GetUserBillableWeightForDate(user.ID, req.Date)
+	if err != nil {
+		metrics.ProjectOpsTotal.WithLabelValues("activity_day_save", "failure").Inc()
+		jsonError(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	if weight <= 0 && len(req.Activities) > 0 {
+		metrics.ProjectOpsTotal.WithLabelValues("activity_day_save", "failure").Inc()
+		jsonError(w, "this date is not a billable day", http.StatusUnprocessableEntity)
+		return
+	}
+
+	team := h.resolveManualTeam(user.ID)
+
+	var totalPct float64
+	var toCreate []models.ProjectActivity
+	for _, a := range req.Activities {
+		switch a.ActivityType {
+		case models.ActivityTypeJira, models.ActivityTypeServiceNow, models.ActivityTypeOther:
+		default:
+			metrics.ProjectOpsTotal.WithLabelValues("activity_day_save", "failure").Inc()
+			jsonError(w, "invalid activity type", http.StatusUnprocessableEntity)
+			return
+		}
+		if a.ActivityType == models.ActivityTypeJira && strings.TrimSpace(a.JiraKey) == "" {
+			metrics.ProjectOpsTotal.WithLabelValues("activity_day_save", "failure").Inc()
+			jsonError(w, "a Jira ticket is required", http.StatusUnprocessableEntity)
+			return
+		}
+		if team != nil && team.RequireActivityComment && strings.TrimSpace(a.Comment) == "" {
+			metrics.ProjectOpsTotal.WithLabelValues("activity_day_save", "failure").Inc()
+			jsonError(w, "comment is required", http.StatusUnprocessableEntity)
+			return
+		}
+		if a.Percentage <= 0 || a.Percentage > 100 {
+			metrics.ProjectOpsTotal.WithLabelValues("activity_day_save", "failure").Inc()
+			jsonError(w, "percentage must be between 0 and 100", http.StatusUnprocessableEntity)
+			return
+		}
+		totalPct += a.Percentage
+		jiraKey := a.JiraKey
+		jiraTitle := a.JiraTitle
+		if a.ActivityType != models.ActivityTypeJira {
+			jiraKey = ""
+			jiraTitle = ""
+		}
+		toCreate = append(toCreate, models.ProjectActivity{
+			UserID:       user.ID,
+			Date:         req.Date,
+			ActivityType: a.ActivityType,
+			JiraKey:      jiraKey,
+			JiraTitle:    jiraTitle,
+			Comment:      a.Comment,
+			Percentage:   a.Percentage,
+		})
+	}
+
+	if weight > 0 && totalPct > dayThreshold(weight)+activityTolerance {
+		metrics.ProjectOpsTotal.WithLabelValues("activity_day_save", "failure").Inc()
+		jsonError(w, fmt.Sprintf("exceeds this day's allocation (max %.0f%%)", dayThreshold(weight)), http.StatusUnprocessableEntity)
+		return
+	}
+
+	created, err := h.DB.SetUserDayActivities(user.ID, req.Date, toCreate)
+	if err != nil {
+		slog.Error("project.activity.day_save", "error", err)
+		metrics.ProjectOpsTotal.WithLabelValues("activity_day_save", "failure").Inc()
+		jsonError(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	if created == nil {
+		created = []models.ProjectActivity{}
+	}
+
+	metrics.ProjectOpsTotal.WithLabelValues("activity_day_save", "success").Inc()
+	slog.Info("project.activity.day_save", "user", user.Email, "date", req.Date, "count", len(created))
+	jsonOK(w, map[string]interface{}{"status": "ok", "activities": created})
 }
 
 // DeleteProjectActivity handles DELETE /api/project-activities/{id}.

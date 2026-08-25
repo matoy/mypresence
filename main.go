@@ -416,6 +416,7 @@ func registerOptionalAdminRoutes(mux, authMux *http.ServeMux, cfg *config.Config
 		authMux.HandleFunc("POST /api/project-favorite/{id}", projectsHandler.ToggleProjectFavoriteAPI)
 		authMux.HandleFunc("GET /api/project-activities", projectsHandler.ListProjectActivitiesAPI)
 		authMux.HandleFunc("POST /api/project-activities", projectsHandler.CreateProjectActivity)
+		authMux.HandleFunc("POST /api/project-activities/day", projectsHandler.SetDayActivities)
 		authMux.HandleFunc("PUT /api/project-activities/{id}", projectsHandler.UpdateProjectActivity)
 		authMux.HandleFunc("DELETE /api/project-activities/{id}", projectsHandler.DeleteProjectActivity)
 		authMux.HandleFunc("GET /api/project-activities/jira-tickets", projectsHandler.ListJiraTicketsAPI)

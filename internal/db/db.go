@@ -462,6 +462,7 @@ FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	d.core.Exec(dl.rebind(dl.addColumnIfNotExists("user_teams", "left_at", dl.varcharType(10)+" DEFAULT NULL")))                                                 //nolint:errcheck
 	d.core.Exec(dl.rebind(dl.addColumnIfNotExists("teams", "jira_space_key", nameType+" DEFAULT ''")))                                                           //nolint:errcheck
 	d.core.Exec(dl.rebind(dl.addColumnIfNotExists("teams", "timesheets_managed_manually", fmt.Sprintf("%s NOT NULL DEFAULT %s", bool_, dl.boolDefault(false))))) //nolint:errcheck
+	d.core.Exec(dl.rebind(dl.addColumnIfNotExists("teams", "require_activity_comment", fmt.Sprintf("%s NOT NULL DEFAULT %s", bool_, dl.boolDefault(false)))))    //nolint:errcheck
 	d.core.Exec(dl.rebind(dl.addColumnIfNotExists("teams", "domain_id", "BIGINT NOT NULL DEFAULT 0")))                                                           //nolint:errcheck
 	return nil
 }
@@ -1205,7 +1206,7 @@ func (d *DB) DeleteLocalUser(id int64) error {
 // --- Team management ---
 
 func (d *DB) ListTeams() ([]models.Team, error) {
-	rows, err := d.core.Query("SELECT id, name, COALESCE(jira_space_key,''), timesheets_managed_manually, domain_id, created_at FROM teams ORDER BY name")
+	rows, err := d.core.Query("SELECT id, name, COALESCE(jira_space_key,''), timesheets_managed_manually, COALESCE(require_activity_comment, false), domain_id, created_at FROM teams ORDER BY name")
 	if err != nil {
 		return nil, err
 	}
@@ -1214,7 +1215,7 @@ func (d *DB) ListTeams() ([]models.Team, error) {
 	var teams []models.Team
 	for rows.Next() {
 		var t models.Team
-		if err := rows.Scan(&t.ID, &t.Name, &t.JiraSpaceKey, &t.TimesheetsManagedManually, &t.DomainID, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.Name, &t.JiraSpaceKey, &t.TimesheetsManagedManually, &t.RequireActivityComment, &t.DomainID, &t.CreatedAt); err != nil {
 			return nil, err
 		}
 		teams = append(teams, t)
@@ -1222,14 +1223,14 @@ func (d *DB) ListTeams() ([]models.Team, error) {
 	return teams, rows.Err()
 }
 
-// CreateTeam creates a new team with just a name (jira_space_key empty, manual timesheets off).
+// CreateTeam creates a new team with just a name (jira_space_key empty, manual timesheets off, require comment off).
 func (d *DB) CreateTeam(name string) (int64, error) {
-	return d.CreateTeamWithDetails(name, "", false)
+	return d.CreateTeamWithDetails(name, "", false, false)
 }
 
 // CreateTeamWithDetails creates a new team with all its properties.
-func (d *DB) CreateTeamWithDetails(name, jiraSpaceKey string, timesheetsManagedManually bool) (int64, error) {
-	return d.core.InsertGetID("INSERT INTO teams (name, jira_space_key, timesheets_managed_manually) VALUES (?, ?, ?)", name, jiraSpaceKey, timesheetsManagedManually)
+func (d *DB) CreateTeamWithDetails(name, jiraSpaceKey string, timesheetsManagedManually, requireActivityComment bool) (int64, error) {
+	return d.core.InsertGetID("INSERT INTO teams (name, jira_space_key, timesheets_managed_manually, require_activity_comment) VALUES (?, ?, ?, ?)", name, jiraSpaceKey, timesheetsManagedManually, requireActivityComment)
 }
 
 // UpdateTeam renames a team, leaving its other properties unchanged.
@@ -1239,8 +1240,8 @@ func (d *DB) UpdateTeam(id int64, name string) error {
 }
 
 // UpdateTeamDetails updates a team's name and extra properties.
-func (d *DB) UpdateTeamDetails(id int64, name, jiraSpaceKey string, timesheetsManagedManually bool) error {
-	_, err := d.core.Exec("UPDATE teams SET name = ?, jira_space_key = ?, timesheets_managed_manually = ? WHERE id = ?", name, jiraSpaceKey, timesheetsManagedManually, id)
+func (d *DB) UpdateTeamDetails(id int64, name, jiraSpaceKey string, timesheetsManagedManually, requireActivityComment bool) error {
+	_, err := d.core.Exec("UPDATE teams SET name = ?, jira_space_key = ?, timesheets_managed_manually = ?, require_activity_comment = ? WHERE id = ?", name, jiraSpaceKey, timesheetsManagedManually, requireActivityComment, id)
 	return err
 }
 
@@ -1359,7 +1360,7 @@ func (d *DB) RemoveTeamMember(teamID, userID int64) error {
 
 func (d *DB) GetUserTeams(userID int64) ([]models.Team, error) {
 	rows, err := d.core.Query(`
-SELECT t.id, t.name, COALESCE(t.jira_space_key,''), t.timesheets_managed_manually, t.domain_id, t.created_at
+SELECT t.id, t.name, COALESCE(t.jira_space_key,''), t.timesheets_managed_manually, COALESCE(t.require_activity_comment, false), t.domain_id, t.created_at
 FROM teams t
 JOIN user_teams ut ON t.id = ut.team_id
 WHERE ut.user_id = ? AND ut.left_at IS NULL
@@ -1373,7 +1374,7 @@ ORDER BY t.name
 	var teams []models.Team
 	for rows.Next() {
 		var t models.Team
-		if err := rows.Scan(&t.ID, &t.Name, &t.JiraSpaceKey, &t.TimesheetsManagedManually, &t.DomainID, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.Name, &t.JiraSpaceKey, &t.TimesheetsManagedManually, &t.RequireActivityComment, &t.DomainID, &t.CreatedAt); err != nil {
 			return nil, err
 		}
 		teams = append(teams, t)

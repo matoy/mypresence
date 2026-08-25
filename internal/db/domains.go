@@ -111,7 +111,7 @@ func (d *DB) SetDomainManagers(domainID int64, userIDs []int64) error {
 
 // ListTeamsForDomain returns the teams currently attached to a domain.
 func (d *DB) ListTeamsForDomain(domainID int64) ([]models.Team, error) {
-	rows, err := d.core.Query("SELECT id, name, COALESCE(jira_space_key,''), timesheets_managed_manually, domain_id, created_at FROM teams WHERE domain_id = ? ORDER BY name", domainID)
+	rows, err := d.core.Query("SELECT id, name, COALESCE(jira_space_key,''), timesheets_managed_manually, COALESCE(require_activity_comment, false), domain_id, created_at FROM teams WHERE domain_id = ? ORDER BY name", domainID)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +120,7 @@ func (d *DB) ListTeamsForDomain(domainID int64) ([]models.Team, error) {
 	var teams []models.Team
 	for rows.Next() {
 		var t models.Team
-		if err := rows.Scan(&t.ID, &t.Name, &t.JiraSpaceKey, &t.TimesheetsManagedManually, &t.DomainID, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.Name, &t.JiraSpaceKey, &t.TimesheetsManagedManually, &t.RequireActivityComment, &t.DomainID, &t.CreatedAt); err != nil {
 			return nil, err
 		}
 		teams = append(teams, t)

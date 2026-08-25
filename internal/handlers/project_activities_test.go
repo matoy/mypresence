@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/matoy/mypresence/internal/config"
@@ -36,11 +37,11 @@ func TestResolveManualTeam_NonManualTeam(t *testing.T) {
 	}
 }
 
-func TestResolveManualTeam_SingleManualTeam(t *testing.T) {
+func TestResolveManualTeam_ReturnsManualTeam(t *testing.T) {
 	d := newExtraTestDB(t)
 	h := &ProjectsHandler{DB: d}
 	uid, _ := d.CreateLocalUser("manual@test.com", "Manual", "password1")
-	tid, _ := d.CreateTeamWithDetails("Manual Team", "PROJ", true)
+	tid, _ := d.CreateTeamWithDetails("Manual Team", "PROJ", true, false)
 	d.AddTeamMember(tid, uid) //nolint:errcheck
 
 	got := h.resolveManualTeam(uid)
@@ -56,8 +57,8 @@ func TestResolveManualTeam_MultipleManualTeams_PicksFirstByName(t *testing.T) {
 	d := newExtraTestDB(t)
 	h := &ProjectsHandler{DB: d}
 	uid, _ := d.CreateLocalUser("multi@test.com", "Multi", "password1")
-	tidB, _ := d.CreateTeamWithDetails("Bravo Team", "BRV", true)
-	tidA, _ := d.CreateTeamWithDetails("Alpha Team", "ALP", true)
+	tidB, _ := d.CreateTeamWithDetails("Bravo Team", "BRV", true, false)
+	tidA, _ := d.CreateTeamWithDetails("Alpha Team", "ALP", true, false)
 	d.AddTeamMember(tidB, uid) //nolint:errcheck
 	d.AddTeamMember(tidA, uid) //nolint:errcheck
 
@@ -74,7 +75,7 @@ func TestValidateActivityRequest_InvalidType(t *testing.T) {
 	h := &ProjectsHandler{DB: d}
 	uid, _ := d.CreateLocalUser("valid1@test.com", "Valid1", "password1")
 
-	if err := h.validateActivityRequest(uid, "2026-05-04", "bogus", "", 50, 0); err == nil {
+	if err := h.validateActivityRequest(uid, "2026-05-04", "bogus", "", "", 50, 0); err == nil {
 		t.Error("expected error for invalid activity type")
 	}
 }
@@ -84,7 +85,7 @@ func TestValidateActivityRequest_JiraWithoutKey(t *testing.T) {
 	h := &ProjectsHandler{DB: d}
 	uid, _ := d.CreateLocalUser("valid2@test.com", "Valid2", "password1")
 
-	if err := h.validateActivityRequest(uid, "2026-05-04", models.ActivityTypeJira, "", 50, 0); err == nil {
+	if err := h.validateActivityRequest(uid, "2026-05-04", models.ActivityTypeJira, "", "", 50, 0); err == nil {
 		t.Error("expected error when jira type has no key")
 	}
 }
@@ -94,10 +95,10 @@ func TestValidateActivityRequest_PercentageOutOfRange(t *testing.T) {
 	h := &ProjectsHandler{DB: d}
 	uid, _ := d.CreateLocalUser("valid3@test.com", "Valid3", "password1")
 
-	if err := h.validateActivityRequest(uid, "2026-05-04", models.ActivityTypeOther, "", 0, 0); err == nil {
+	if err := h.validateActivityRequest(uid, "2026-05-04", models.ActivityTypeOther, "", "", 0, 0); err == nil {
 		t.Error("expected error for percentage <= 0")
 	}
-	if err := h.validateActivityRequest(uid, "2026-05-04", models.ActivityTypeOther, "", 101, 0); err == nil {
+	if err := h.validateActivityRequest(uid, "2026-05-04", models.ActivityTypeOther, "", "", 101, 0); err == nil {
 		t.Error("expected error for percentage > 100")
 	}
 }
@@ -107,7 +108,7 @@ func TestValidateActivityRequest_NonBillableDate(t *testing.T) {
 	h := &ProjectsHandler{DB: d}
 	uid, _ := d.CreateLocalUser("valid4@test.com", "Valid4", "password1")
 
-	if err := h.validateActivityRequest(uid, "2026-05-04", models.ActivityTypeOther, "", 50, 0); err == nil {
+	if err := h.validateActivityRequest(uid, "2026-05-04", models.ActivityTypeOther, "", "", 50, 0); err == nil {
 		t.Error("expected error for a date with no billable presence")
 	}
 }
@@ -119,12 +120,12 @@ func TestValidateActivityRequest_ExceedsDayAllocation(t *testing.T) {
 	statusID, _ := d.CreateStatus(models.Status{Name: "Billable", Color: "#22c55e", Billable: true, SortOrder: 1})
 	d.SetPresences(uid, []string{"2026-05-04"}, statusID, "full") //nolint:errcheck
 
-	if err := h.validateActivityRequest(uid, "2026-05-04", models.ActivityTypeOther, "", 60, 0); err != nil {
+	if err := h.validateActivityRequest(uid, "2026-05-04", models.ActivityTypeOther, "", "", 60, 0); err != nil {
 		t.Fatalf("expected first 60%% to be valid: %v", err)
 	}
 	d.CreateProjectActivity(uid, "2026-05-04", models.ActivityTypeOther, "", "", "", 60) //nolint:errcheck
 
-	if err := h.validateActivityRequest(uid, "2026-05-04", models.ActivityTypeOther, "", 60, 0); err == nil {
+	if err := h.validateActivityRequest(uid, "2026-05-04", models.ActivityTypeOther, "", "", 60, 0); err == nil {
 		t.Error("expected error when total would exceed 100%")
 	}
 }
@@ -136,11 +137,31 @@ func TestValidateActivityRequest_HalfDayCapsAt50(t *testing.T) {
 	statusID, _ := d.CreateStatus(models.Status{Name: "Billable", Color: "#22c55e", Billable: true, SortOrder: 1})
 	d.SetPresences(uid, []string{"2026-05-04"}, statusID, "AM") //nolint:errcheck
 
-	if err := h.validateActivityRequest(uid, "2026-05-04", models.ActivityTypeOther, "", 50, 0); err != nil {
+	if err := h.validateActivityRequest(uid, "2026-05-04", models.ActivityTypeOther, "", "", 50, 0); err != nil {
 		t.Fatalf("expected 50%% to be valid on a half day: %v", err)
 	}
-	if err := h.validateActivityRequest(uid, "2026-05-04", models.ActivityTypeOther, "", 51, 0); err == nil {
+	if err := h.validateActivityRequest(uid, "2026-05-04", models.ActivityTypeOther, "", "", 51, 0); err == nil {
 		t.Error("expected error exceeding the 50% cap on a half day")
+	}
+}
+
+func TestValidateActivityRequest_RequireComment(t *testing.T) {
+	d := newExtraTestDB(t)
+	h := &ProjectsHandler{DB: d}
+	uid, _ := d.CreateLocalUser("reqcomm@test.com", "Req Comm", "password1")
+	tid, _ := d.CreateTeamWithDetails("Req Comm Team", "", true, true)
+	d.AddTeamMember(tid, uid) //nolint:errcheck
+	statusID, _ := d.CreateStatus(models.Status{Name: "Billable", Color: "#22c55e", Billable: true, SortOrder: 1})
+	d.SetPresences(uid, []string{"2026-05-04"}, statusID, "full") //nolint:errcheck
+
+	if err := h.validateActivityRequest(uid, "2026-05-04", models.ActivityTypeOther, "", "", 50, 0); err == nil || !strings.Contains(err.Error(), "comment is required") {
+		t.Errorf("expected comment required error, got %v", err)
+	}
+	if err := h.validateActivityRequest(uid, "2026-05-04", models.ActivityTypeOther, "", "  ", 50, 0); err == nil || !strings.Contains(err.Error(), "comment is required") {
+		t.Errorf("expected comment required error on whitespace, got %v", err)
+	}
+	if err := h.validateActivityRequest(uid, "2026-05-04", models.ActivityTypeOther, "", "Done some work", 50, 0); err != nil {
+		t.Errorf("expected success with comment, got %v", err)
 	}
 }
 
@@ -396,7 +417,7 @@ func TestProjectsPage_ManualMode_RendersManualData(t *testing.T) {
 		rendered = data.(map[string]interface{})
 	}}
 	uid, tok := createActivityTestUser(t, d, "manualpage1@test.com")
-	tid, _ := d.CreateTeamWithDetails("Manual Team", "PROJ", true)
+	tid, _ := d.CreateTeamWithDetails("Manual Team", "PROJ", true, false)
 	d.AddTeamMember(tid, uid) //nolint:errcheck
 	statusID, _ := d.CreateStatus(models.Status{Name: "Billable", Color: "#22c55e", Billable: true, SortOrder: 1})
 	d.SetPresences(uid, []string{"2026-05-04"}, statusID, "full") //nolint:errcheck
@@ -412,8 +433,15 @@ func TestProjectsPage_ManualMode_RendersManualData(t *testing.T) {
 		t.Fatalf("expected ManualMode=true, got %+v", rendered["ManualMode"])
 	}
 	dates := rendered["ManualDates"].([]string)
-	if len(dates) != 1 || dates[0] != "2026-05-04" {
-		t.Errorf("unexpected ManualDates: %+v", dates)
+	if len(dates) != 31 || dates[0] != "2026-05-31" || dates[len(dates)-1] != "2026-05-01" {
+		t.Errorf("unexpected ManualDates order/length: len=%d first=%s last=%s", len(dates), dates[0], dates[len(dates)-1])
+	}
+	weights := rendered["ManualWeights"].(map[string]float64)
+	if weights["2026-05-04"] != 1.0 {
+		t.Errorf("expected weight 1.0 for 2026-05-04, got %v", weights["2026-05-04"])
+	}
+	if weights["2026-05-01"] != 0.0 {
+		t.Errorf("expected weight 0.0 for non-billable 2026-05-01, got %v", weights["2026-05-01"])
 	}
 }
 
@@ -445,9 +473,9 @@ func TestProjectsPage_NormalMode_WhenNoManualTeam(t *testing.T) {
 func TestAccessibleManualTeams_ProjectsAdmin_SeesAll(t *testing.T) {
 	d := newExtraTestDB(t)
 	h := &ProjectsHandler{DB: d}
-	tid1, _ := d.CreateTeamWithDetails("Alpha", "ALP", true)
-	d.CreateTeamWithDetails("Beta", "BET", false) //nolint:errcheck
-	tid3, _ := d.CreateTeamWithDetails("Gamma", "GAM", true)
+	tid1, _ := d.CreateTeamWithDetails("Alpha", "ALP", true, false)
+	d.CreateTeamWithDetails("Beta", "BET", false, false) //nolint:errcheck
+	tid3, _ := d.CreateTeamWithDetails("Gamma", "GAM", true, false)
 
 	admin := &models.User{Roles: models.RoleProjectsManager}
 	teams := h.accessibleManualTeams(admin)
@@ -463,9 +491,9 @@ func TestAccessibleManualTeams_TeamLeader_SeesOwnOnly(t *testing.T) {
 	d := newExtraTestDB(t)
 	h := &ProjectsHandler{DB: d}
 	uid, _ := d.CreateLocalUser("tlmanual@test.com", "TL Manual", "password1")
-	myTeam, _ := d.CreateTeamWithDetails("My Manual Team", "MYT", true)
-	d.CreateTeamWithDetails("Other Manual Team", "OTH", true) //nolint:errcheck
-	d.AddTeamMember(myTeam, uid)                              //nolint:errcheck
+	myTeam, _ := d.CreateTeamWithDetails("My Manual Team", "MYT", true, false)
+	d.CreateTeamWithDetails("Other Manual Team", "OTH", true, false) //nolint:errcheck
+	d.AddTeamMember(myTeam, uid)                                     //nolint:errcheck
 
 	leader := &models.User{ID: uid, Roles: models.RoleTeamLeader}
 	teams := h.accessibleManualTeams(leader)
@@ -477,7 +505,7 @@ func TestAccessibleManualTeams_TeamLeader_SeesOwnOnly(t *testing.T) {
 func TestTeamActivitiesForMonth_EnrichesUserNames(t *testing.T) {
 	d := newExtraTestDB(t)
 	h := &ProjectsHandler{DB: d}
-	tid, _ := d.CreateTeamWithDetails("Reporting Team", "REP", true)
+	tid, _ := d.CreateTeamWithDetails("Reporting Team", "REP", true, false)
 	uid, _ := d.CreateLocalUser("reportmember@test.com", "Report Member", "password1")
 	d.AddTeamMember(tid, uid)                                                            //nolint:errcheck
 	d.CreateProjectActivity(uid, "2026-05-04", models.ActivityTypeOther, "", "", "", 40) //nolint:errcheck
@@ -494,7 +522,7 @@ func TestTeamActivitiesForMonth_EnrichesUserNames(t *testing.T) {
 func TestProjectsReportPage_ActivitiesView_Renders(t *testing.T) {
 	d := newExtraTestDB(t)
 	h := &ProjectsHandler{DB: d, Render: noRender}
-	tid, _ := d.CreateTeamWithDetails("View Team", "VWT", true)
+	tid, _ := d.CreateTeamWithDetails("View Team", "VWT", true, false)
 	uid, _ := d.CreateLocalUser("viewmember@test.com", "View Member", "password1")
 	d.AddTeamMember(tid, uid) //nolint:errcheck
 
@@ -517,7 +545,7 @@ func TestProjectsReportPage_ActivitiesView_PassesJiraBaseURL(t *testing.T) {
 			gotJiraBaseURL = m["JiraBaseURL"]
 		},
 	}
-	tid, _ := d.CreateTeamWithDetails("Jira URL Team", "JUT", true)
+	tid, _ := d.CreateTeamWithDetails("Jira URL Team", "JUT", true, false)
 	uid, _ := d.CreateLocalUser("jiraurlmember@test.com", "Jira URL Member", "password1")
 	d.AddTeamMember(tid, uid) //nolint:errcheck
 
@@ -548,7 +576,7 @@ func TestProjectsReportPage_ActivitiesView_JiraBaseURLEmptyWhenNoConfig(t *testi
 func TestProjectsReportAPI_ActivitiesView_ReturnsJSON(t *testing.T) {
 	d := newExtraTestDB(t)
 	h := &ProjectsHandler{DB: d, Render: noRender}
-	tid, _ := d.CreateTeamWithDetails("API View Team", "AVT", true)
+	tid, _ := d.CreateTeamWithDetails("API View Team", "AVT", true, false)
 	uid, _ := d.CreateLocalUser("apiviewmember@test.com", "API View Member", "password1")
 	d.AddTeamMember(tid, uid)                                                            //nolint:errcheck
 	d.CreateProjectActivity(uid, "2026-05-04", models.ActivityTypeOther, "", "", "", 40) //nolint:errcheck
@@ -566,5 +594,96 @@ func TestProjectsReportAPI_ActivitiesView_ReturnsJSON(t *testing.T) {
 	activities := out["activities"].([]interface{})
 	if len(activities) != 1 {
 		t.Errorf("expected 1 activity, got %d", len(activities))
+	}
+}
+
+// ─── SetDayActivities ───────────────────────────────────────────────────────────
+
+func TestSetDayActivities_SuccessAndReplace(t *testing.T) {
+	d := newExtraTestDB(t)
+	h := &ProjectsHandler{DB: d}
+	uid, tok := createActivityTestUser(t, d, "dayacts@test.com")
+	tid, _ := d.CreateTeamWithDetails("Day Acts Team", "DAT", true, false)
+	d.AddTeamMember(tid, uid) //nolint:errcheck
+	statusID, _ := d.CreateStatus(models.Status{Name: "Billable", Color: "#22c55e", Billable: true, SortOrder: 1})
+	d.SetPresences(uid, []string{"2026-05-04"}, statusID, "full") //nolint:errcheck
+
+	// Initial single activity
+	d.CreateProjectActivity(uid, "2026-05-04", models.ActivityTypeOther, "", "", "old", 50) //nolint:errcheck
+
+	// Save batch of two new activities for the day
+	body := map[string]interface{}{
+		"date": "2026-05-04",
+		"activities": []map[string]interface{}{
+			{"activity_type": models.ActivityTypeOther, "comment": "Act 1", "percentage": 25.0},
+			{"activity_type": models.ActivityTypeServiceNow, "comment": "Act 2", "percentage": 75.0},
+		},
+	}
+	bodyBytes, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/api/project-activities/day", bytes.NewReader(bodyBytes))
+	req.AddCookie(&http.Cookie{Name: "session", Value: tok})
+	w := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.SetDayActivities)).ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	acts, _ := d.ListUserActivitiesForMonth(uid, 2026, 5)
+	if len(acts) != 2 {
+		t.Fatalf("expected 2 activities, got %d", len(acts))
+	}
+	if acts[0].Percentage != 25 || acts[1].Percentage != 75 {
+		t.Errorf("unexpected percentages: %+v", acts)
+	}
+}
+
+func TestSetDayActivities_ExceedAllocation(t *testing.T) {
+	d := newExtraTestDB(t)
+	h := &ProjectsHandler{DB: d}
+	uid, tok := createActivityTestUser(t, d, "dayactsexceed@test.com")
+	tid, _ := d.CreateTeamWithDetails("Exceed Team", "EXT", true, false)
+	d.AddTeamMember(tid, uid) //nolint:errcheck
+	statusID, _ := d.CreateStatus(models.Status{Name: "Billable", Color: "#22c55e", Billable: true, SortOrder: 1})
+	d.SetPresences(uid, []string{"2026-05-04"}, statusID, "full") //nolint:errcheck
+
+	body := map[string]interface{}{
+		"date": "2026-05-04",
+		"activities": []map[string]interface{}{
+			{"activity_type": models.ActivityTypeOther, "comment": "Act 1", "percentage": 60.0},
+			{"activity_type": models.ActivityTypeOther, "comment": "Act 2", "percentage": 50.0},
+		},
+	}
+	bodyBytes, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/api/project-activities/day", bytes.NewReader(bodyBytes))
+	req.AddCookie(&http.Cookie{Name: "session", Value: tok})
+	w := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.SetDayActivities)).ServeHTTP(w, req)
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d", w.Code)
+	}
+}
+
+func TestSetDayActivities_RequireCommentValidation(t *testing.T) {
+	d := newExtraTestDB(t)
+	h := &ProjectsHandler{DB: d}
+	uid, tok := createActivityTestUser(t, d, "dayactsreqcomm@test.com")
+	tid, _ := d.CreateTeamWithDetails("Req Comm Team", "RCT", true, true)
+	d.AddTeamMember(tid, uid) //nolint:errcheck
+	statusID, _ := d.CreateStatus(models.Status{Name: "Billable", Color: "#22c55e", Billable: true, SortOrder: 1})
+	d.SetPresences(uid, []string{"2026-05-04"}, statusID, "full") //nolint:errcheck
+
+	body := map[string]interface{}{
+		"date": "2026-05-04",
+		"activities": []map[string]interface{}{
+			{"activity_type": models.ActivityTypeOther, "comment": "", "percentage": 50.0},
+		},
+	}
+	bodyBytes, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/api/project-activities/day", bytes.NewReader(bodyBytes))
+	req.AddCookie(&http.Cookie{Name: "session", Value: tok})
+	w := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.SetDayActivities)).ServeHTTP(w, req)
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422 for missing required comment, got %d", w.Code)
 	}
 }

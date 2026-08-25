@@ -132,6 +132,7 @@ type Team struct {
 	Name                      string    `json:"name"`
 	JiraSpaceKey              string    `json:"jira_space_key"`
 	TimesheetsManagedManually bool      `json:"timesheets_managed_manually"`
+	RequireActivityComment    bool      `json:"require_activity_comment"`
 	DomainID                  int64     `json:"domain_id"`
 	CreatedAt                 time.Time `json:"created_at"`
 }

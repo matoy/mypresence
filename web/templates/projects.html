@@ -2,8 +2,7 @@
 {{with .Data}}
 {{if .ManualMode}}
 <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8"
-     x-data="projectsManualApp({{json .ManualDates}}, {{json .ManualWeights}}, {{json .ManualActivities}}, {{.JiraEnabled}}, {{.Year}}, {{.Month}}, {{if .Certified}}true{{else}}false{{end}})">
-
+     x-data="projectsManualApp({{json .ManualDates}}, {{json .ManualWeights}}, {{json .ManualActivities}}, {{if .JiraEnabled}}true{{else}}false{{end}}, {{if .RequireComment}}true{{else}}false{{end}}, {{.Year}}, {{.Month}}, {{if .Certified}}true{{else}}false{{end}})">
     <!-- Header + month nav -->
     <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
         <h1 class="text-2xl font-bold text-gray-900">{{index $.T "projects.title_tasks"}}</h1>
@@ -81,94 +80,145 @@
          :class="toastError ? 'bg-red-50 border-red-200 text-red-700' : 'bg-green-50 border-green-200 text-green-700'"
          class="border rounded-xl px-4 py-3 mb-4 text-sm" x-text="toast"></div>
 
-    <!-- Billable days list -->
+    <!-- Days list (ordered reverse: latest first) -->
     <div x-show="days.length === 0" x-cloak
          class="bg-white rounded-xl shadow-sm border border-gray-100 px-6 py-10 text-center text-gray-400">
         {{index $.T "projects.manual.none"}}
     </div>
     <div class="space-y-4">
         <template x-for="d in days" :key="d.date">
-            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-                <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-                    <div class="flex items-center gap-2">
-                        <span class="font-semibold text-gray-800" x-text="d.date"></span>
-                        <span class="text-xs text-gray-400" x-show="d.weight < 1" x-text="'(' + (d.weight*100) + '%)'"></span>
-                        <span x-show="isComplete(d)" x-cloak class="text-green-500" title="{{index $.T "projects.manual.complete"}}">✓</span>
+            <div class="rounded-xl shadow-sm border transition p-4"
+                 :class="d.weight <= 0 ? 'bg-gray-100/70 border-gray-200 text-gray-500' : 'bg-white border-gray-100'">
+                <!-- Day Header with accordion toggle, date, day of week, status -->
+                <div class="flex flex-wrap items-center justify-between gap-2 cursor-pointer select-none"
+                     @click="d.collapsed = !d.collapsed">
+                    <div class="flex items-center gap-2.5">
+                        <button type="button" class="p-1 text-gray-400 hover:text-gray-600 rounded-md transition focus:outline-none"
+                                :title="d.collapsed ? 'Expand' : 'Collapse'">
+                            <svg class="h-4 w-4 transform transition-transform" :class="{'rotate-180': !d.collapsed}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+                        <span class="font-semibold text-gray-800" :class="{'text-gray-500': d.weight <= 0}" x-text="d.date"></span>
+                        <span class="text-xs font-medium text-gray-500 capitalize" x-text="getDayName(d)"></span>
+                        <template x-if="d.weight <= 0">
+                            <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-200 text-gray-600">{{index $.T "projects.manual.non_billable"}}</span>
+                        </template>
+                        <template x-if="d.weight > 0 && d.weight < 1">
+                            <span class="text-xs text-gray-400" x-text="'(' + (d.weight*100) + '%)'"></span>
+                        </template>
+                        <span x-show="d.weight > 0 && isComplete(d)" x-cloak class="text-green-500 font-bold" title="{{index $.T "projects.manual.complete"}}">✓</span>
                     </div>
-                    <span class="text-xs font-semibold px-2 py-0.5 rounded-full"
-                          :class="isComplete(d) ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'"
-                          x-text="dayTotal(d) + '% / ' + (d.weight*100) + '%'"></span>
+                    <div class="flex items-center gap-2">
+                        <template x-if="d.weight > 0">
+                            <span class="text-xs font-semibold px-2 py-0.5 rounded-full"
+                                  :class="isComplete(d) ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'"
+                                  x-text="dayTotal(d) + '% / ' + (d.weight*100) + '%'"></span>
+                        </template>
+                    </div>
                 </div>
 
-                <div class="space-y-2">
-                    <template x-for="act in d.activities" :key="act._key">
-                        <div class="border border-gray-100 rounded-lg p-2 bg-gray-50">
-                            <div class="flex flex-wrap items-center gap-2">
-                                <select x-model="act.activity_type" @change="act.jira_key='';act.jira_title='';act._jiraSearch=''"
-                                        :disabled="certified"
-                                        class="px-2 py-1.5 border border-gray-300 rounded-lg text-xs bg-white"
-                                        :class="{'opacity-50 cursor-not-allowed': certified}">
-                                    <option value="jira" x-show="jiraEnabled">{{index $.T "projects.manual.type_jira"}}</option>
-                                    <option value="servicenow">{{index $.T "projects.manual.type_servicenow"}}</option>
-                                    <option value="other">{{index $.T "projects.manual.type_other"}}</option>
-                                </select>
+                <!-- Collapsible body -->
+                <div x-show="!d.collapsed" x-transition class="mt-3 pt-3 border-t border-gray-100" @click.stop>
+                    <template x-if="d.weight <= 0">
+                        <p class="text-xs text-gray-400 italic py-1">{{index $.T "projects.manual.non_billable"}}</p>
+                    </template>
 
-                                <div x-show="act.activity_type === 'jira'" class="relative flex-1 min-w-[220px]">
-                                    <input type="text" x-model="act._jiraSearch"
-                                           @focus="act._showJiraList = true" @input="act._showJiraList = true"
-                                           @blur="setTimeout(() => act._showJiraList = false, 150)"
-                                           :placeholder="act.jira_key ? act.jira_key + ' - ' + act.jira_title : '{{index $.T "projects.manual.jira_placeholder"}}'"
-                                           :disabled="certified"
-                                           class="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-xs"
-                                           :class="{'opacity-50 cursor-not-allowed': certified}">
-                                    <div x-show="act._showJiraList" x-cloak
-                                         class="absolute z-10 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto w-full">
-                                        <template x-for="tk in filteredJiraTickets(act._jiraSearch)" :key="tk.key">
-                                            <div @mousedown.prevent="selectJiraTicket(act, tk)"
-                                                 class="px-2 py-1.5 hover:bg-gray-100 cursor-pointer text-xs"
-                                                 x-text="tk.key + ' - ' + tk.title"></div>
-                                        </template>
-                                        <div x-show="filteredJiraTickets(act._jiraSearch).length === 0" class="px-2 py-2 text-xs text-gray-400 text-center">
-                                            {{index $.T "projects.manual.no_tickets"}}
+                    <template x-if="d.weight > 0">
+                        <div>
+                            <div class="space-y-2">
+                                <template x-for="act in d.activities" :key="act._key">
+                                    <div class="border border-gray-100 rounded-lg p-2.5 bg-gray-50/80">
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <select x-model="act.activity_type" @change="act.jira_key='';act.jira_title='';act._jiraSearch=''"
+                                                    :disabled="certified"
+                                                    class="px-2 py-1.5 border border-gray-300 rounded-lg text-xs bg-white"
+                                                    :class="{'opacity-50 cursor-not-allowed': certified}">
+                                                <option value="jira" x-show="jiraEnabled">{{index $.T "projects.manual.type_jira"}}</option>
+                                                <option value="servicenow">{{index $.T "projects.manual.type_servicenow"}}</option>
+                                                <option value="other">{{index $.T "projects.manual.type_other"}}</option>
+                                            </select>
+
+                                            <div x-show="act.activity_type === 'jira'" class="relative flex-1 min-w-[200px]">
+                                                <input type="text" x-model="act._jiraSearch"
+                                                       @focus="act._showJiraList = true" @input="act._showJiraList = true"
+                                                       @blur="setTimeout(() => act._showJiraList = false, 150)"
+                                                       :placeholder="act.jira_key ? act.jira_key + ' - ' + act.jira_title : '{{index $.T "projects.manual.jira_placeholder"}}'"
+                                                       :disabled="certified"
+                                                       class="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-xs"
+                                                       :class="{'opacity-50 cursor-not-allowed': certified}">
+                                                <div x-show="act._showJiraList" x-cloak
+                                                     class="absolute z-10 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto w-full">
+                                                    <template x-for="tk in filteredJiraTickets(act._jiraSearch)" :key="tk.key">
+                                                        <div @mousedown.prevent="selectJiraTicket(act, tk)"
+                                                             class="px-2 py-1.5 hover:bg-gray-100 cursor-pointer text-xs"
+                                                             x-text="tk.key + ' - ' + tk.title"></div>
+                                                    </template>
+                                                    <div x-show="filteredJiraTickets(act._jiraSearch).length === 0" class="px-2 py-2 text-xs text-gray-400 text-center">
+                                                        {{index $.T "projects.manual.no_tickets"}}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <input type="text" x-model="act.comment"
+                                                   :placeholder="requireComment ? '{{index $.T "projects.manual.comments_mandatory"}}' : '{{index $.T "projects.manual.comments"}}'"
+                                                   :disabled="certified"
+                                                   class="flex-1 min-w-[160px] px-2 py-1.5 border border-gray-300 rounded-lg text-xs"
+                                                   :class="{'opacity-50 cursor-not-allowed': certified, 'border-amber-400': requireComment && !act.comment.trim()}">
+
+                                            <div class="flex items-center gap-1.5">
+                                                <input type="number" min="1" max="100" step="1" x-model.number="act.percentage"
+                                                       :disabled="certified"
+                                                       class="w-16 text-right px-2 py-1.5 border border-gray-300 rounded-lg text-xs"
+                                                       :class="{'opacity-50 cursor-not-allowed': certified}">
+                                                <span class="text-xs text-gray-400 mr-1">%</span>
+                                                <!-- Presets 25, 50, 100 -->
+                                                <div class="inline-flex rounded-lg border border-gray-200 bg-white overflow-hidden shadow-xs">
+                                                    <button type="button" @click="act.percentage = 25" :disabled="certified"
+                                                            class="px-1.5 py-1 text-[11px] font-medium text-gray-600 hover:bg-gray-100 border-r border-gray-200 transition"
+                                                            :class="{'bg-primary/10 text-primary font-bold': act.percentage === 25, 'opacity-50 cursor-not-allowed': certified}">25</button>
+                                                    <button type="button" @click="act.percentage = 50" :disabled="certified"
+                                                            class="px-1.5 py-1 text-[11px] font-medium text-gray-600 hover:bg-gray-100 border-r border-gray-200 transition"
+                                                            :class="{'bg-primary/10 text-primary font-bold': act.percentage === 50, 'opacity-50 cursor-not-allowed': certified}">50</button>
+                                                    <button type="button" @click="act.percentage = 100" :disabled="certified"
+                                                            class="px-1.5 py-1 text-[11px] font-medium text-gray-600 hover:bg-gray-100 transition"
+                                                            :class="{'bg-primary/10 text-primary font-bold': act.percentage === 100, 'opacity-50 cursor-not-allowed': certified}">100</button>
+                                                </div>
+                                            </div>
+
+                                            <button type="button" @click="removeActivity(d, act)" :disabled="certified"
+                                                    class="text-red-400 hover:text-red-600 transition p-1.5" title="{{index $.T "admin.reset"}}"
+                                                    :class="{'opacity-50 cursor-not-allowed': certified}">
+                                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                                </svg>
+                                            </button>
                                         </div>
+                                        <p x-show="act._error" x-text="act._error" class="mt-1 text-xs text-red-600"></p>
                                     </div>
-                                </div>
-
-                                <input type="text" x-model="act.comment" placeholder="{{index $.T "projects.manual.comments"}}"
-                                       :disabled="certified"
-                                       class="flex-1 min-w-[160px] px-2 py-1.5 border border-gray-300 rounded-lg text-xs"
-                                       :class="{'opacity-50 cursor-not-allowed': certified}">
-
-                                <div class="flex items-center gap-1">
-                                    <input type="number" min="1" max="100" step="1" x-model.number="act.percentage"
-                                           :disabled="certified"
-                                           class="w-16 text-right px-2 py-1.5 border border-gray-300 rounded-lg text-xs"
-                                           :class="{'opacity-50 cursor-not-allowed': certified}">
-                                    <span class="text-xs text-gray-400">%</span>
-                                </div>
-
-                                <button @click="saveActivity(d, act)" :disabled="act._saving || certified"
-                                        class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium"
-                                        :class="{'opacity-50 cursor-wait': act._saving, 'opacity-50 cursor-not-allowed': certified}">
-                                    {{index $.T "admin.save"}}
-                                </button>
-                                <button @click="deleteActivity(d, act)" :disabled="certified"
-                                        class="text-red-400 hover:text-red-600 transition p-1.5" title="{{index $.T "admin.reset"}}"
-                                        :class="{'opacity-50 cursor-not-allowed': certified}">
-                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                                    </svg>
-                                </button>
+                                </template>
                             </div>
-                            <p x-show="act._error" x-text="act._error" class="mt-1 text-xs text-red-600"></p>
+
+                            <!-- Day action footer: Add activity + single Save button per day -->
+                            <div class="flex flex-wrap items-center justify-between gap-3 mt-3 pt-2">
+                                <button type="button" @click="addActivity(d)" :disabled="certified"
+                                        class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium"
+                                        :class="{'opacity-50 cursor-not-allowed': certified}">
+                                    + {{index $.T "projects.manual.add_activity"}}
+                                </button>
+                                <div class="flex items-center gap-2">
+                                    <span x-show="d._error" x-text="d._error" class="text-xs text-red-600 font-medium"></span>
+                                    <button type="button" @click="saveDay(d)" :disabled="d._saving || certified"
+                                            class="text-xs px-3 py-1.5 bg-primary text-white hover:opacity-90 rounded-lg transition font-medium shadow-sm flex items-center gap-1.5"
+                                            :class="{'opacity-50 cursor-wait': d._saving, 'opacity-50 cursor-not-allowed': certified}">
+                                        <span x-show="!d._saving">{{index $.T "admin.save"}}</span>
+                                        <span x-show="d._saving" x-cloak class="inline-block animate-spin">⏳</span>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </template>
                 </div>
-                <button @click="addActivity(d)" :disabled="certified"
-                        class="mt-3 text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium"
-                        :class="{'opacity-50 cursor-not-allowed': certified}">
-                    + {{index $.T "projects.manual.add_activity"}}
-                </button>
             </div>
         </template>
     </div>
@@ -406,9 +456,9 @@ function projectsApp(billable, totalDeclared, initialEntries, favoriteIDs, allPr
     };
 }
 
-function projectsManualApp(dates, weights, activitiesByDate, jiraEnabled, year, month, certified) {
+function projectsManualApp(dates, weights, activitiesByDate, jiraEnabled, requireComment, year, month, certified) {
     let uid = 0;
-    function wrapActivity(a) {
+    function wrapActivity(a, defaultPct) {
         a = a || {};
         return {
             id: a.id || null,
@@ -416,30 +466,54 @@ function projectsManualApp(dates, weights, activitiesByDate, jiraEnabled, year, 
             jira_key: a.jira_key || '',
             jira_title: a.jira_title || '',
             comment: a.comment || '',
-            percentage: a.percentage || 0,
+            percentage: a.percentage !== undefined ? a.percentage : (defaultPct || 0),
             _key: 'k' + (uid++),
             _jiraSearch: '',
             _showJiraList: false,
-            _saving: false,
             _error: ''
         };
     }
-    const days = (dates || []).map(date => ({
-        date,
-        weight: (weights || {})[date] || 1,
-        activities: ((activitiesByDate || {})[date] || []).map(wrapActivity)
-    }));
+    const days = (dates || []).map(date => {
+        const weight = (weights && weights[date] !== undefined) ? weights[date] : 0;
+        const dObj = new Date(date + 'T00:00:00');
+        const weekday = isNaN(dObj.getDay()) ? 0 : dObj.getDay();
+        const existing = (activitiesByDate || {})[date];
+        let acts = [];
+        if (existing && existing.length > 0) {
+            acts = existing.map(a => wrapActivity(a));
+        } else if (weight > 0) {
+            acts = [wrapActivity({}, weight * 100)];
+        }
+        return {
+            date,
+            weight: weight,
+            weekday: weekday,
+            collapsed: weight <= 0,
+            _saving: false,
+            _error: '',
+            activities: acts
+        };
+    });
 
     return {
         year: year,
         month: month,
         jiraEnabled: !!jiraEnabled,
+        requireComment: !!requireComment,
         jiraTickets: [],
         days: days,
         toast: '',
         toastError: false,
         certified: certified,
         confirmShow: false,
+
+        getDayName(d) {
+            if (typeof _t !== 'undefined' && _t['cal.day_full.' + d.weekday]) {
+                return _t['cal.day_full.' + d.weekday];
+            }
+            const fallback = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            return fallback[d.weekday] || '';
+        },
 
         async certify() {
             const resp = await fetch('/api/certify-project', {
@@ -489,7 +563,7 @@ function projectsManualApp(dates, weights, activitiesByDate, jiraEnabled, year, 
         },
 
         isComplete(d) {
-            return this.dayTotal(d) >= (d.weight * 100 - 0.01);
+            return d.weight > 0 && this.dayTotal(d) >= (d.weight * 100 - 0.01);
         },
 
         get billable() {
@@ -506,52 +580,87 @@ function projectsManualApp(dates, weights, activitiesByDate, jiraEnabled, year, 
         },
 
         addActivity(d) {
+            if (d.weight <= 0 || this.certified) return;
             d.activities.push(wrapActivity({}));
+            d.collapsed = false;
         },
 
-        removeLocalActivity(d, act) {
+        removeActivity(d, act) {
             const idx = d.activities.indexOf(act);
             if (idx >= 0) d.activities.splice(idx, 1);
         },
 
-        async saveActivity(d, act) {
-            act._error = '';
-            act._saving = true;
-            const body = {
+        async saveDay(d) {
+            if (this.certified || d.weight <= 0) return;
+            d._error = '';
+            let hasError = false;
+
+            // Validate activities
+            const total = this.dayTotal(d);
+            const maxPct = d.weight * 100;
+            if (total > maxPct + 0.01) {
+                d._error = `Max ${maxPct}%`;
+                hasError = true;
+            }
+
+            d.activities.forEach(act => {
+                act._error = '';
+                if (act.activity_type === 'jira' && !act.jira_key) {
+                    act._error = (typeof _t !== 'undefined' && _t['projects.manual.jira_required']) || 'A Jira ticket is required';
+                    hasError = true;
+                }
+                if (this.requireComment && !act.comment.trim()) {
+                    act._error = (typeof _t !== 'undefined' && _t['projects.manual.comment_required']) || 'Comment is required';
+                    hasError = true;
+                }
+                const pct = parseFloat(act.percentage) || 0;
+                if (pct <= 0 || pct > 100) {
+                    act._error = 'Percentage must be between 1 and 100';
+                    hasError = true;
+                }
+            });
+
+            if (hasError) return;
+
+            d._saving = true;
+            const payload = {
                 date: d.date,
-                activity_type: act.activity_type,
-                jira_key: act.activity_type === 'jira' ? act.jira_key : '',
-                jira_title: act.activity_type === 'jira' ? act.jira_title : '',
-                comment: act.comment,
-                percentage: parseFloat(act.percentage) || 0
+                activities: d.activities.map(act => ({
+                    activity_type: act.activity_type,
+                    jira_key: act.activity_type === 'jira' ? act.jira_key : '',
+                    jira_title: act.activity_type === 'jira' ? act.jira_title : '',
+                    comment: act.comment,
+                    percentage: parseFloat(act.percentage) || 0
+                }))
             };
-            const url = act.id ? `/api/project-activities/${act.id}` : '/api/project-activities';
-            const method = act.id ? 'PUT' : 'POST';
+
             try {
-                const resp = await fetch(url, { method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
+                const resp = await fetch('/api/project-activities/day', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
                 const data = await resp.json();
                 if (!resp.ok) {
-                    act._error = data.error || 'Error';
+                    d._error = data.error || 'Error';
                     this.toastError = true;
-                    this.toast = act._error;
+                    this.toast = d._error;
                 } else {
-                    if (!act.id) act.id = data.id;
+                    if (data.activities && Array.isArray(data.activities)) {
+                        data.activities.forEach((saved, idx) => {
+                            if (d.activities[idx]) {
+                                d.activities[idx].id = saved.id;
+                            }
+                        });
+                    }
                     this.toastError = false;
-                    this.toast = '✓';
-                    setTimeout(() => { this.toast = ''; }, 1500);
+                    this.toast = (typeof _t !== 'undefined' && _t['projects.manual.day_saved']) || '✓';
+                    setTimeout(() => { this.toast = ''; }, 2000);
                 }
             } catch(e) {
-                act._error = 'Network error';
+                d._error = 'Network error';
             }
-            act._saving = false;
-        },
-
-        async deleteActivity(d, act) {
-            if (!act.id) { this.removeLocalActivity(d, act); return; }
-            try {
-                const resp = await fetch(`/api/project-activities/${act.id}`, { method: 'DELETE' });
-                if (resp.ok) this.removeLocalActivity(d, act);
-            } catch(e) { /* ignore */ }
+            d._saving = false;
         }
     };
 }

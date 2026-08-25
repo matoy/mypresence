@@ -74,7 +74,7 @@ func TestUserProjectDeclaration_ManualAndStandard(t *testing.T) {
 	}
 
 	// Add manual team
-	tID, _ := d.CreateTeamWithDetails("Manual Team X", "", true)
+	tID, _ := d.CreateTeamWithDetails("Manual Team X", "", true, false)
 	_ = d.AddTeamMember(tID, uID)
 
 	// Add status and presence for a date
@@ -106,7 +106,7 @@ func TestCertifyAndDecertifyProjectMonth(t *testing.T) {
 	_ = d.UpdateUserRoles(adminID, models.RoleGlobal)
 	adminUser, _ := d.GetUserByID(adminID)
 
-	teamID, _ := d.CreateTeamWithDetails("Dev Team", "", false)
+	teamID, _ := d.CreateTeamWithDetails("Dev Team", "", false, false)
 	_ = d.AddTeamMember(teamID, uID)
 	_ = d.AddTeamMember(teamID, tlID)
 

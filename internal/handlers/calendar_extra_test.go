@@ -30,7 +30,7 @@ func TestCalendar_DecertifyMonth_AccessControl(t *testing.T) {
 	_ = d.UpdateUserRoles(otherID, models.RoleTeamLeader)
 	otherUser, _ := d.GetUserByID(otherID)
 
-	teamID, _ := d.CreateTeamWithDetails("Dev Team", "", false)
+	teamID, _ := d.CreateTeamWithDetails("Dev Team", "", false, false)
 	_ = d.AddTeamMember(teamID, uID)
 	_ = d.AddTeamMember(teamID, tlID)
 

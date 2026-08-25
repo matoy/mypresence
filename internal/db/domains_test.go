@@ -92,7 +92,7 @@ func TestDomainTeamsAndDeletion(t *testing.T) {
 	d := newDomainsTestDB(t)
 
 	domainID, _ := d.CreateDomain("Ops")
-	teamID, err := d.CreateTeamWithDetails("Ops Team", "", false)
+	teamID, err := d.CreateTeamWithDetails("Ops Team", "", false, false)
 	if err != nil {
 		t.Fatalf("CreateTeamWithDetails: %v", err)
 	}

@@ -16,8 +16,8 @@ func TestProjectsReportPage_ActivitiesView_DomainAggregation(t *testing.T) {
 	d := newExtraTestDB(t)
 	h := &ProjectsHandler{DB: d, Render: noRender}
 
-	teamA, _ := d.CreateTeamWithDetails("Domain Team A", "", true)
-	teamB, _ := d.CreateTeamWithDetails("Domain Team B", "", true)
+	teamA, _ := d.CreateTeamWithDetails("Domain Team A", "", true, false)
+	teamB, _ := d.CreateTeamWithDetails("Domain Team B", "", true, false)
 	memberA, _ := d.CreateLocalUser("domactA@test.com", "Dom Act A", "password1")
 	memberB, _ := d.CreateLocalUser("domactB@test.com", "Dom Act B", "password1")
 	d.AddTeamMember(teamA, memberA)                                                          //nolint:errcheck

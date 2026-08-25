@@ -19,10 +19,10 @@ func TestActivity_DomainManager_ActivityAPI(t *testing.T) {
 	domID, _ := d.CreateDomain("Finance")
 	_ = d.SetDomainManagers(domID, []int64{mgrID})
 
-	teamInDom, _ := d.CreateTeamWithDetails("Finance Team", "", false)
+	teamInDom, _ := d.CreateTeamWithDetails("Finance Team", "", false, false)
 	_ = d.UpdateTeamDomain(teamInDom, domID)
 
-	teamOther, _ := d.CreateTeamWithDetails("Marketing Team", "", false)
+	teamOther, _ := d.CreateTeamWithDetails("Marketing Team", "", false, false)
 
 	// 1. Missing parameters -> 400
 	rec := httptest.NewRecorder()

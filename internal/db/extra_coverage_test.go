@@ -58,7 +58,7 @@ func TestExtraDB_Domains_Coverage(t *testing.T) {
 	}
 
 	// Create Team & Assign to domain
-	tID, err := d.CreateTeamWithDetails("Web Team", "", false)
+	tID, err := d.CreateTeamWithDetails("Web Team", "", false, false)
 	if err != nil {
 		t.Fatalf("CreateTeamWithDetails: %v", err)
 	}
