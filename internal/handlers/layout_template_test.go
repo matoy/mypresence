@@ -188,3 +188,57 @@ func TestLayoutTemplate_OnlineHelp_DisabledProjects(t *testing.T) {
 		t.Fatal("help option 'projects' should NOT be present when projects are disabled")
 	}
 }
+
+func TestLayoutTemplate_ActiveNewsBanner_RendersTrack(t *testing.T) {
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	layoutPath := filepath.Clean(filepath.Join(filepath.Dir(thisFile), "../../web/templates/layout.html"))
+	layoutBytes, err := os.ReadFile(layoutPath)
+	if err != nil {
+		t.Fatalf("read layout template: %v", err)
+	}
+
+	funcMap := template.FuncMap{
+		"json": func(v interface{}) template.JS {
+			b, _ := json.Marshal(v)
+			return template.JS(b)
+		},
+		"safeNewsContent": func(s string) template.HTML {
+			return template.HTML(template.HTMLEscapeString(s))
+		},
+	}
+	base := string(layoutBytes) + `{{define "content"}}content{{end}}`
+	tmpl, err := template.New("layout.html").Funcs(funcMap).Parse(base)
+	if err != nil {
+		t.Fatalf("parse layout template: %v", err)
+	}
+
+	data := models.PageData{
+		Config: map[string]interface{}{"AppName": "myPresence"},
+		User:   &models.User{ID: 1, Name: "Basic", Roles: models.RoleBasic},
+		Page:   "calendar",
+		T:      map[string]string{},
+		Lang:   "en",
+		ActiveNewsMessages: []models.NewsMessage{
+			{ID: 1, Title: "Maintenance", Content: "Scheduled maintenance at 22:00", BgColor: "#dc2626"},
+		},
+	}
+
+	var out bytes.Buffer
+	if err := tmpl.ExecuteTemplate(&out, "layout", data); err != nil {
+		t.Fatalf("execute layout template: %v", err)
+	}
+	html := out.String()
+
+	if !strings.Contains(html, "news-banner-container") {
+		t.Fatal("expected news-banner-container in output")
+	}
+	if !strings.Contains(html, "news-banner-track") {
+		t.Fatal("expected news-banner-track in output")
+	}
+	if !strings.Contains(html, "Scheduled maintenance at 22:00") {
+		t.Fatal("expected news content in output")
+	}
+}
