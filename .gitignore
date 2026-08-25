@@ -1,4 +1,3 @@
 docker-compose.yml
 Dockerfile
 mypresence-data/*
-docker-compose.yml
