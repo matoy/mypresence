@@ -125,7 +125,9 @@ func TestCreateHoliday_WithCountryCode(t *testing.T) {
 	var resp struct {
 		ID int64 `json:"id"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("json.Unmarshal: %v", err)
+	}
 	if resp.ID == 0 {
 		t.Fatalf("expected holiday id > 0")
 	}

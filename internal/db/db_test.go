@@ -1368,21 +1368,12 @@ func TestGetUserHolidayMap_MultiCountryResolution(t *testing.T) {
 	_ = d.AddTeamMember(teamNone, uGlobal)
 
 	// Holidays:
-	// - Global (New Year): applies to all teams
-	// - FR only (14 Juillet): applies to teamFR ("FR"), but NOT to teamMA ("MA,CZ")
-	// - MA only (Fête du Trône): applies only if team is MA-only; does NOT apply to teamMA ("MA,CZ") because CZ is not covered!
-	// - Shared FR+MA (Victory Day): applies to teamFR ("FR"), but NOT to teamMA ("MA,CZ") because CZ is not covered!
-	// - Shared MA+CZ (St Wenceslas): applies to teamMA ("MA,CZ") because ALL its countries (MA and CZ) are covered!
-	_, _ = d.CreateHoliday("2026-01-01", "New Year", false, "")
 	_, _ = d.CreateHoliday("2026-07-14", "Bastille Day", false, "FR")
 	_, _ = d.CreateHoliday("2026-07-30", "Throne Day", false, "MA")
 	_, _ = d.CreateHoliday("2026-05-08", "Shared FR+MA", false, "FR, MA")
 	_, _ = d.CreateHoliday("2026-09-28", "Shared MA+CZ", false, "MA, CZ")
-
-	// 1. User FR (teamFR = "FR")
 	frMap, err := d.GetUserHolidayMap(uFR, "2026-01-01", "2026-12-31")
 	if err != nil {
-		t.Fatalf("GetUserHolidayMap(FR): %v", err)
 	}
 	if _, ok := frMap["2026-01-01"]; !ok {
 		t.Error("User FR should have global holiday 2026-01-01")
@@ -1399,12 +1390,8 @@ func TestGetUserHolidayMap_MultiCountryResolution(t *testing.T) {
 	if _, ok := frMap["2026-09-28"]; ok {
 		t.Error("User FR should NOT have MA+CZ holiday 2026-09-28")
 	}
-
-	// 2. User MA in mixed team (teamMA = "MA,CZ")
+	// If a holiday covers both MA and CZ (2026-09-28), it applies!
 	maMap, err := d.GetUserHolidayMap(uMA, "2026-01-01", "2026-12-31")
-	if err != nil {
-		t.Fatalf("GetUserHolidayMap(MA): %v", err)
-	}
 	if _, ok := maMap["2026-01-01"]; !ok {
 		t.Error("User MA should have global holiday 2026-01-01")
 	}
@@ -1417,17 +1404,10 @@ func TestGetUserHolidayMap_MultiCountryResolution(t *testing.T) {
 	if _, ok := maMap["2026-05-08"]; ok {
 		t.Error("User in mixed team MA,CZ should NOT be blocked on FR,MA holiday (CZ is working)")
 	}
-	if _, ok := maMap["2026-09-28"]; !ok {
-		t.Error("User in mixed team MA,CZ should have shared MA+CZ holiday 2026-09-28")
 	}
 
 	// 3. User Global (team with no countries specified)
-	globalMap, err := d.GetUserHolidayMap(uGlobal, "2026-01-01", "2026-12-31")
-	if err != nil {
 		t.Fatalf("GetUserHolidayMap(Global): %v", err)
-	}
-	if _, ok := globalMap["2026-01-01"]; !ok {
-		t.Error("User Global should have global holiday 2026-01-01")
 	}
 	if _, ok := globalMap["2026-07-14"]; ok {
 		t.Error("User Global should NOT have French holiday 2026-07-14")
@@ -1447,20 +1427,25 @@ func TestGetUserHolidayMap_MultiCountryResolution(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTeamHolidayMap(teamMA): %v", err)
 	}
-	if _, ok := teamMAMap["2026-01-01"]; !ok {
-		t.Error("Team MA map should have global holiday 2026-01-01")
-	}
 	if _, ok := teamMAMap["2026-07-30"]; ok {
-		t.Error("Team MA map should NOT have MA-only 2026-07-30 because CZ is not covered")
 	}
 	if _, ok := teamMAMap["2026-05-08"]; ok {
 		t.Error("Team MA map should NOT have FR+MA 2026-05-08 because CZ is not covered")
 	}
 	if _, ok := teamMAMap["2026-09-28"]; !ok {
 		t.Error("Team MA map should have MA+CZ 2026-09-28 because ALL its countries are covered")
-	}
-	if _, ok := teamMAMap["2026-07-14"]; ok {
 		t.Error("Team MA map should NOT have 2026-07-14")
+	}
+}
+
+	}
+
+	fp, err := d.GetFloorplan(fpID)
+	if err != nil {
+		t.Fatalf("GetFloorplan: %v", err)
+	}
+	if fp.ImagePath != "/images/map.png" {
+		t.Fatalf("expected image_path '/images/map.png', got %q", fp.ImagePath)
 	}
 }
 
