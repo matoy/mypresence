@@ -583,6 +583,13 @@ created_at %s DEFAULT CURRENT_TIMESTAMP,
 UNIQUE(seat_id, date, half),
 FOREIGN KEY (seat_id) REFERENCES seats(id) ON DELETE CASCADE
 `, ai, dl.varcharType(10), dl.varcharType(4), dt)),
+
+		dl.createTableIfNotExists("floorplan_favorites", `
+floorplan_id BIGINT NOT NULL,
+user_id      BIGINT NOT NULL,
+UNIQUE(floorplan_id, user_id),
+FOREIGN KEY (floorplan_id) REFERENCES floorplans(id) ON DELETE CASCADE
+`),
 	}
 
 	for _, stmt := range stmts {
@@ -2200,8 +2207,44 @@ func (d *DB) SetFloorplanImage(id int64, imagePath string) error {
 }
 
 func (d *DB) DeleteFloorplan(id int64) error {
+	_, _ = d.floorplan.Exec("DELETE FROM floorplan_favorites WHERE floorplan_id = ?", id)
 	_, err := d.floorplan.Exec("DELETE FROM floorplans WHERE id = ?", id)
 	return err
+}
+
+// GetUserFavoriteFloorplanIDs returns all floorplan IDs favorited by the given user.
+func (d *DB) GetUserFavoriteFloorplanIDs(userID int64) ([]int64, error) {
+	rows, err := d.floorplan.Query(
+		`SELECT floorplan_id FROM floorplan_favorites WHERE user_id = ? ORDER BY floorplan_id`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() //nolint:errcheck
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// ToggleFloorplanFavorite flips the favorite state for (userID, floorplanID).
+// Returns true when the floorplan is now a favorite, false when it was removed.
+func (d *DB) ToggleFloorplanFavorite(userID, floorplanID int64) (bool, error) {
+	res, err := d.floorplan.Exec(
+		`DELETE FROM floorplan_favorites WHERE user_id = ? AND floorplan_id = ?`, userID, floorplanID)
+	if err != nil {
+		return false, err
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		return false, nil
+	}
+	_, err = d.floorplan.Exec(
+		`INSERT INTO floorplan_favorites (user_id, floorplan_id) VALUES (?, ?)`, userID, floorplanID)
+	return err == nil, err
 }
 
 func (d *DB) ListSeats(floorplanID int64) ([]models.Seat, error) {

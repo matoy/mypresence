@@ -30,6 +30,26 @@ type FloorplanHandler struct {
 // User-facing page: /floorplan
 // ----------------------------------------------------------------
 
+func sortFloorplansWithFavorites(fps []models.Floorplan, favIDs []int64) []models.Floorplan {
+	if len(fps) == 0 {
+		return fps
+	}
+	favSet := make(map[int64]bool, len(favIDs))
+	for _, id := range favIDs {
+		favSet[id] = true
+	}
+	var favs, nonFavs []models.Floorplan
+	for _, fp := range fps {
+		fp.IsFavorite = favSet[fp.ID]
+		if fp.IsFavorite {
+			favs = append(favs, fp)
+		} else {
+			nonFavs = append(nonFavs, fp)
+		}
+	}
+	return append(favs, nonFavs...)
+}
+
 // FloorplanPage renders the seat-booking page for regular users.
 func (h *FloorplanHandler) FloorplanPage(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
@@ -49,7 +69,12 @@ func (h *FloorplanHandler) FloorplanPage(w http.ResponseWriter, r *http.Request)
 		fpID, _ = strconv.ParseInt(fpIDStr, 10, 64)
 	}
 
-	floorplans, _ := h.DB.ListFloorplans()
+	rawFloorplans, _ := h.DB.ListFloorplans()
+	var favIDs []int64
+	if user != nil {
+		favIDs, _ = h.DB.GetUserFavoriteFloorplanIDs(user.ID)
+	}
+	floorplans := sortFloorplansWithFavorites(rawFloorplans, favIDs)
 
 	// Default to first floorplan if none selected
 	if fpID == 0 && len(floorplans) > 0 {
@@ -59,18 +84,28 @@ func (h *FloorplanHandler) FloorplanPage(w http.ResponseWriter, r *http.Request)
 	var currentFP *models.Floorplan
 	var seats []models.SeatWithStatus
 	var isOnSite bool
+	var isFavorite bool
 
 	if fpID > 0 {
 		currentFP, _ = h.DB.GetFloorplan(fpID)
 		if currentFP != nil {
-			isOnSite, _ = h.DB.GetUserOnSiteStatus(user.ID, dateStr)
-			if isOnSite {
-				seats, _ = h.DB.GetSeatsWithStatus(fpID, user.ID, dateStr, half)
-			} else {
-				// Still show seat layout but read-only (no reservations)
-				rawSeats, _ := h.DB.ListSeats(fpID)
-				for _, s := range rawSeats {
-					seats = append(seats, models.SeatWithStatus{Seat: s, Status: "free"})
+			for _, id := range favIDs {
+				if id == currentFP.ID {
+					isFavorite = true
+					break
+				}
+			}
+			currentFP.IsFavorite = isFavorite
+			if user != nil {
+				isOnSite, _ = h.DB.GetUserOnSiteStatus(user.ID, dateStr)
+				if isOnSite {
+					seats, _ = h.DB.GetSeatsWithStatus(fpID, user.ID, dateStr, half)
+				} else {
+					// Still show seat layout but read-only (no reservations)
+					rawSeats, _ := h.DB.ListSeats(fpID)
+					for _, s := range rawSeats {
+						seats = append(seats, models.SeatWithStatus{Seat: s, Status: "free"})
+					}
 				}
 			}
 		}
@@ -83,6 +118,7 @@ func (h *FloorplanHandler) FloorplanPage(w http.ResponseWriter, r *http.Request)
 		"Date":       dateStr,
 		"Half":       half,
 		"IsOnSite":   isOnSite,
+		"IsFavorite": isFavorite,
 	})
 }
 
@@ -465,8 +501,34 @@ func (h *FloorplanHandler) ListFloorplansAPI(w http.ResponseWriter, r *http.Requ
 	if floorplans == nil {
 		floorplans = []models.Floorplan{}
 	}
+	user := middleware.GetUser(r)
+	if user != nil {
+		favIDs, _ := h.DB.GetUserFavoriteFloorplanIDs(user.ID)
+		floorplans = sortFloorplansWithFavorites(floorplans, favIDs)
+	}
 	metrics.FloorplanOpsTotal.WithLabelValues("list_floorplans", "success").Inc()
 	jsonOK(w, floorplans)
+}
+
+// ToggleFloorplanFavoriteAPI toggles the starred state of a floorplan for the current user.
+// POST /api/floorplan-favorite/{id}
+func (h *FloorplanHandler) ToggleFloorplanFavoriteAPI(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r)
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		metrics.FloorplanOpsTotal.WithLabelValues("favorite", "failure").Inc()
+		jsonError(w, "ID invalide", http.StatusBadRequest)
+		return
+	}
+	isFav, err := h.DB.ToggleFloorplanFavorite(user.ID, id)
+	if err != nil {
+		slog.Error("floorplan.favorite.toggle", "error", err)
+		metrics.FloorplanOpsTotal.WithLabelValues("favorite", "failure").Inc()
+		jsonError(w, "Erreur serveur", http.StatusInternalServerError)
+		return
+	}
+	metrics.FloorplanOpsTotal.WithLabelValues("favorite", "success").Inc()
+	jsonOK(w, map[string]bool{"favorite": isFav})
 }
 
 // ListSeatsWithStatusForDatesAPI handles GET /api/floorplans/{id}/seats/status.

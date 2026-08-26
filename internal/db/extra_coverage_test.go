@@ -270,3 +270,53 @@ func TestExtraDB_PresencesAndUser_Branches(t *testing.T) {
 		t.Errorf("SeedDefaults second call: %v", err)
 	}
 }
+
+func TestFloorplanFavorites_DB(t *testing.T) {
+	d := newTestDB(t)
+	uID, _ := d.CreateLocalUser("fpfav_user@test.com", "FpFavUser", "password123")
+	fpID1, _ := d.CreateFloorplan("Building A - Floor 1", 0)
+	fpID2, _ := d.CreateFloorplan("Building A - Floor 2", 1)
+
+	// Initially empty
+	favs, err := d.GetUserFavoriteFloorplanIDs(uID)
+	if err != nil || len(favs) != 0 {
+		t.Fatalf("expected empty favorites, got %v (err=%v)", favs, err)
+	}
+
+	// Toggle on fpID1
+	isFav, err := d.ToggleFloorplanFavorite(uID, fpID1)
+	if err != nil || !isFav {
+		t.Fatalf("expected isFav=true, got %v (err=%v)", isFav, err)
+	}
+
+	// Toggle on fpID2
+	isFav2, err := d.ToggleFloorplanFavorite(uID, fpID2)
+	if err != nil || !isFav2 {
+		t.Fatalf("expected isFav2=true, got %v (err=%v)", isFav2, err)
+	}
+
+	favs, err = d.GetUserFavoriteFloorplanIDs(uID)
+	if err != nil || len(favs) != 2 {
+		t.Fatalf("expected 2 favorites, got %v", favs)
+	}
+
+	// Toggle off fpID1
+	isFav, err = d.ToggleFloorplanFavorite(uID, fpID1)
+	if err != nil || isFav {
+		t.Fatalf("expected isFav=false after untoggle, got %v (err=%v)", isFav, err)
+	}
+
+	favs, err = d.GetUserFavoriteFloorplanIDs(uID)
+	if err != nil || len(favs) != 1 || favs[0] != fpID2 {
+		t.Fatalf("expected [fpID2], got %v", favs)
+	}
+
+	// Delete floorplan cleans up favorite
+	if err := d.DeleteFloorplan(fpID2); err != nil {
+		t.Fatalf("DeleteFloorplan: %v", err)
+	}
+	favs, err = d.GetUserFavoriteFloorplanIDs(uID)
+	if err != nil || len(favs) != 0 {
+		t.Fatalf("expected 0 favorites after floorplan deletion, got %v", favs)
+	}
+}

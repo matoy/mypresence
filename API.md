@@ -238,17 +238,15 @@ Clear presence(s) for one or more dates.
 ### Floor Plans _(disabled if `DISABLE_FLOORPLANS=true`)_
 
 #### `GET /api/floorplans`
-List all floor plans.
-
+List all floor plans (ordered with the caller's favorite floors first).
 **Response 200**
 ```json
 [
-  { "id": 1, "name": "Étage 3", "image_path": "floorplan_1.png", "sort_order": 0 }
+  { "id": 1, "name": "Étage 3", "image_path": "floorplan_1.png", "sort_order": 0, "is_favorite": true }
 ]
-```
 
-#### `GET /api/floorplans/{id}/seats`
-List seats for a floor plan (without booking status).
+#### `POST /api/floorplan-favorite/{id}`
+Toggle the favorite status of a floor plan for the authenticated user.
 
 **Response 200**
 ```json

@@ -191,3 +191,24 @@ func TestCountryKeys_AllLanguages(t *testing.T) {
 		}
 	}
 }
+
+func TestFloorplanFavoriteKeys_AllLanguages(t *testing.T) {
+	requiredKeys := []string{
+		"fp.favorite",
+		"fp.unfavorite",
+		"fp.favorite_added",
+		"fp.favorite_removed",
+		"help.topic.floorplan.item4",
+	}
+
+	langs := []string{"en", "fr", "de", "es", "it"}
+	for _, lang := range langs {
+		m := T(lang)
+		for _, key := range requiredKeys {
+			val, ok := m[key]
+			if !ok || val == "" {
+				t.Errorf("lang %q is missing required floorplan favorite key %q", lang, key)
+			}
+		}
+	}
+}

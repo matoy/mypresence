@@ -366,10 +366,11 @@ type AdminLog struct {
 
 // Floorplan represents a floor map with seats.
 type Floorplan struct {
-	ID        int64  `json:"id"`
-	Name      string `json:"name"`
-	ImagePath string `json:"image_path"`
-	SortOrder int    `json:"sort_order"`
+	ID         int64  `json:"id"`
+	Name       string `json:"name"`
+	ImagePath  string `json:"image_path"`
+	SortOrder  int    `json:"sort_order"`
+	IsFavorite bool   `json:"is_favorite,omitempty"`
 }
 
 // Seat represents a bookable seat on a floorplan.

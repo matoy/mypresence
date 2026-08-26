@@ -304,6 +304,7 @@ func buildRouter(database *db.DB, cfg *config.Config, dataDir string, rateLimite
 	authMux.HandleFunc("GET /api/seats", fpH.SeatsAPI)
 	authMux.HandleFunc("GET /api/floorplans", fpH.ListFloorplansAPI)
 	authMux.HandleFunc("GET /api/floorplans/{id}/seats", fpH.ListSeatsForFloorplanAPI)
+	authMux.HandleFunc("POST /api/floorplan-favorite/{id}", fpH.ToggleFloorplanFavoriteAPI)
 	authMux.HandleFunc("POST /api/reservations", fpH.ReserveSeat)
 	authMux.HandleFunc("POST /api/reservations/bulk", fpH.BulkReserveSeats)
 	authMux.HandleFunc("DELETE /api/reservations/bulk", fpH.CancelReservationsByDates)

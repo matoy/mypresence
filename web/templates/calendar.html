@@ -298,7 +298,7 @@
                         <select x-model.number="seatFloorplanID" @change="loadSeatModalSeats()"
                                 class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm">
                             <template x-for="fp in seatFloorplans" :key="fp.id">
-                                <option :value="fp.id" x-text="fp.name"></option>
+                                <option :value="fp.id" x-text="(fp.is_favorite ? '⭐ ' : '') + fp.name"></option>
                             </template>
                         </select>
                     </div>
@@ -585,7 +585,7 @@
                         <select x-model.number="seatFloorplanID" @change="loadSeatModalSeats()"
                                 class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm">
                             <template x-for="fp in seatFloorplans" :key="fp.id">
-                                <option :value="fp.id" x-text="fp.name"></option>
+                                <option :value="fp.id" x-text="(fp.is_favorite ? '⭐ ' : '') + fp.name"></option>
                             </template>
                         </select>
                     </div>

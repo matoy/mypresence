@@ -1,6 +1,6 @@
 {{define "content"}}
 {{with .Data}}
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" x-data="floorplanApp({{json .Seats}}, {{json .Date}}, {{json .Half}}, {{if .CurrentFP}}{{.CurrentFP.ID}}{{else}}0{{end}})">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" x-data="floorplanApp({{json .Seats}}, {{json .Date}}, {{json .Half}}, {{if .CurrentFP}}{{.CurrentFP.ID}}{{else}}0{{end}}, {{if .IsFavorite}}true{{else}}false{{end}})">
 
     <div class="flex items-center justify-between mb-4">
         <h1 class="text-2xl font-bold text-gray-900">{{index $.T "fp.title"}}</h1>
@@ -44,15 +44,28 @@
         </div>
 
         <!-- Floorplan selector -->
-        {{if gt (len .Floorplans) 1}}
+        {{if gt (len .Floorplans) 0}}
         <div class="flex items-center gap-2">
+            {{if gt (len .Floorplans) 1}}
             <label class="text-sm font-medium text-gray-500">{{index $.T "fp.floor"}}</label>
             <select @change="fpID = parseInt($event.target.value); reload()"
                     class="px-3 py-2 border border-gray-300 rounded-lg text-sm">
                 {{range .Floorplans}}
-                <option value="{{.ID}}" {{if and $.Data.CurrentFP (eq .ID $.Data.CurrentFP.ID)}}selected{{end}}>{{.Name}}</option>
+                <option value="{{.ID}}" {{if and $.Data.CurrentFP (eq .ID $.Data.CurrentFP.ID)}}selected{{end}}>{{if .IsFavorite}}⭐ {{end}}{{.Name}}</option>
                 {{end}}
             </select>
+            {{end}}
+            {{if .CurrentFP}}
+            <button type="button"
+                    @click="toggleFavorite()"
+                    class="p-1.5 rounded-lg hover:bg-yellow-50 transition flex items-center justify-center focus:outline-none"
+                    :class="isFavorite ? 'text-yellow-400' : 'text-gray-300 hover:text-yellow-300'"
+                    :title="isFavorite ? _t['fp.unfavorite'] : _t['fp.favorite']">
+                <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                </svg>
+            </button>
+            {{end}}
         </div>
         {{end}}
 
@@ -163,15 +176,32 @@
 </div>
 
 <script>
-function floorplanApp(initialSeats, initialDate, initialHalf, initialFpID) {
+function floorplanApp(initialSeats, initialDate, initialHalf, initialFpID, initialIsFavorite) {
     return {
         seats: initialSeats || [],
         date: initialDate,
         half: initialHalf || 'full',
         fpID: initialFpID,
+        isFavorite: !!initialIsFavorite,
         imageLoaded: false,
         confirm: { show: false, title: '', message: '', action: ()=>{}, danger: false },
         toast: { show: false, message: '', error: false },
+
+        async toggleFavorite() {
+            if (!this.fpID) return;
+            try {
+                const resp = await fetch(`/api/floorplan-favorite/${this.fpID}`, { method: 'POST' });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    this.isFavorite = data.favorite;
+                    this.showToast(data.favorite ? (_t['fp.favorite_added'] || 'Étage ajouté aux favoris') : (_t['fp.favorite_removed'] || 'Étage retiré des favoris'));
+                } else {
+                    this.showToast(_t['fp.error'] || 'Erreur', true);
+                }
+            } catch {
+                this.showToast(_t['fp.conn_error'] || 'Erreur de connexion', true);
+            }
+        },
 
         reload() {
             const url = new URL(window.location.href);
