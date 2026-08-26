@@ -193,14 +193,11 @@ function calendarApp(statuses, currentUserId, isAdmin, presences) {
                 if (resp.ok) {
                     window.location.reload();
                 } else {
-                    const data = await resp.json();
-                    alert(data.error || 'Erreur');
-                }
-            } catch (e) {
-                alert('Erreur de connexion');
+                    const data = await resp.json().catch(() => ({}));
+                    if (resp.status === 423) {
+                alert((typeof _t !== 'undefined' && _t['fp.conn_error']) || 'Erreur de connexion');
             }
             this.pendingHalf = 'full';
-            this.cancelSelect();
         },
 
         // Clear presences for selected dates
@@ -219,13 +216,12 @@ function calendarApp(statuses, currentUserId, isAdmin, presences) {
                 });
                 if (resp.ok) {
                     window.location.reload();
-                }
-            } catch (e) {
-                alert('Erreur de connexion');
+                } else {
+                    const data = await resp.json().catch(() => ({}));
+                    if (resp.status === 423) {
             }
             this.pendingHalf = 'full';
             this.cancelSelect();
-        },
 
         cancelSelect() {
             this.selecting = false;
@@ -457,18 +453,15 @@ function calendarApp(statuses, currentUserId, isAdmin, presences) {
                 if (resp.ok) {
                     window.location.reload();
                 } else {
-                    const d = await resp.json();
-                    alert(d.error || 'Erreur');
-                }
-            } catch (e) {
-                alert('Erreur de connexion');
-            }
-        },
-
+                    const d = await resp.json().catch(() => ({}));
+                    if (resp.status === 423) {
+                        alert((typeof _t !== 'undefined' && _t['cert.locked_warning']) || d.error || 'Déclaration certifiée : modification impossible pour ce mois.');
+                    } else {
+                        alert(d.error || (typeof _t !== 'undefined' && _t['fp.error']) || 'Erreur');
+                    }
         // Initialize event listeners
         init() {
             // End selection on mouseup
-            document.addEventListener('mouseup', (e) => {
                 if (this.longPressTimer) {
                     clearTimeout(this.longPressTimer);
                     this.longPressTimer = null;

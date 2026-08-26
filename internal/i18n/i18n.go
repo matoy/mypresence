@@ -181,6 +181,7 @@ var en = map[string]string{
 	"cert.decertify_project_button_title":  "Click to cancel this project certification",
 	"cert.decertify_project_modal_title":   "Cancel project certification",
 	"cert.decertify_project_modal_message": "This will cancel the project declaration certification for this employee and this month, allowing it to be modified again.",
+	"cert.locked_warning":                  "Declaration certified: changes are not allowed for this month.",
 
 	// Admin common
 	"admin.search":   "Search",
@@ -812,6 +813,7 @@ var fr = map[string]string{
 	"cert.decertify_project_button_title":  "Cliquer pour annuler cette certification projet",
 	"cert.decertify_project_modal_title":   "Annuler la certification projet",
 	"cert.decertify_project_modal_message": "Cela annulera la certification de la déclaration projet de cet employé pour ce mois, permettant à nouveau sa modification.",
+	"cert.locked_warning":                  "Déclaration certifiée : modification impossible pour ce mois.",
 
 	"admin.search":   "Rechercher",
 	"admin.all":      "Tous",
@@ -1435,6 +1437,7 @@ var de = map[string]string{
 	"cert.decertify_project_button_title":  "Klicken, um diese Projektzertifizierung aufzuheben",
 	"cert.decertify_project_modal_title":   "Projektzertifizierung aufheben",
 	"cert.decertify_project_modal_message": "Dadurch wird die Zertifizierung der Projekterklärung für diesen Mitarbeiter und diesen Monat aufgehoben, sodass sie wieder geändert werden kann.",
+	"cert.locked_warning":                  "Erklärung zertifiziert: Änderungen für diesen Monat sind nicht möglich.",
 
 	"admin.search":   "Suchen",
 	"admin.all":      "Alle",
@@ -2059,6 +2062,7 @@ var es = map[string]string{
 	"cert.decertify_project_button_title":  "Haga clic para anular esta certificación de proyecto",
 	"cert.decertify_project_modal_title":   "Anular certificación de proyecto",
 	"cert.decertify_project_modal_message": "Esto anulará la certificación de la declaración de proyecto de este empleado para este mes, permitiendo modificarla de nuevo.",
+	"cert.locked_warning":                  "Declaración certificada: no se permiten modificaciones para este mes.",
 
 	"admin.search":   "Buscar",
 	"admin.all":      "Todos",
@@ -2680,6 +2684,7 @@ var it = map[string]string{
 	"cert.decertify_project_button_title":  "Clicca per annullare questa certificazione di progetto",
 	"cert.decertify_project_modal_title":   "Annulla certificazione di progetto",
 	"cert.decertify_project_modal_message": "Questo annullerà la certificazione della dichiarazione di progetto per questo dipendente e questo mese, consentendo nuovamente la sua modifica.",
+	"cert.locked_warning":                  "Dichiarazione certificata: impossibile apportare modifiche per questo mese.",
 
 	// Admin common
 	"admin.search":   "Cerca",

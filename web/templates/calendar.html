@@ -41,7 +41,7 @@
                      window.location.reload();
                  } else {
                      const d = await resp.json().catch(() => ({}));
-                     alert(d.error || 'Erreur');
+                     alert((typeof _t !== 'undefined' && _t['cert.certify_error']) || d.error || 'Erreur');
                  }
              }
          }">

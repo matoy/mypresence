@@ -450,7 +450,7 @@ function projectsApp(billable, totalDeclared, initialEntries, favoriteIDs, allPr
                 window.location.reload();
             } else {
                 const d = await resp.json().catch(() => ({}));
-                alert(d.error || 'Erreur');
+                alert(d.error || (typeof _t !== 'undefined' && _t['cert.certify_error']) || 'Erreur');
             }
         },
 
@@ -493,7 +493,11 @@ function projectsApp(billable, totalDeclared, initialEntries, favoriteIDs, allPr
                 const data = await resp.json();
                 if (!resp.ok) {
                     this.toastError = true;
-                    this.toast = data.error || 'Error';
+                    if (resp.status === 423) {
+                        this.toast = (typeof _t !== 'undefined' && _t['cert.locked_warning']) || data.error || 'Déclaration certifiée : modification impossible pour ce mois.';
+                    } else {
+                        this.toast = data.error || (typeof _t !== 'undefined' && _t['fp.error']) || 'Error';
+                    }
                 } else {
                     this.toastError = false;
                     this.toast = '✓';
@@ -613,7 +617,7 @@ function projectsManualApp(dates, weights, activitiesByDate, jiraEnabled, requir
                 window.location.reload();
             } else {
                 const d = await resp.json().catch(() => ({}));
-                alert(d.error || 'Erreur');
+                alert(d.error || (typeof _t !== 'undefined' && _t['cert.certify_error']) || 'Erreur');
             }
         },
 
@@ -731,7 +735,11 @@ function projectsManualApp(dates, weights, activitiesByDate, jiraEnabled, requir
                 });
                 const data = await resp.json();
                 if (!resp.ok) {
-                    d._error = data.error || 'Error';
+                    if (resp.status === 423) {
+                        d._error = (typeof _t !== 'undefined' && _t['cert.locked_warning']) || data.error || 'Déclaration certifiée : modification impossible pour ce mois.';
+                    } else {
+                        d._error = data.error || (typeof _t !== 'undefined' && _t['fp.error']) || 'Error';
+                    }
                     this.toastError = true;
                     this.toast = d._error;
                 } else {
