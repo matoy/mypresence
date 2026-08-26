@@ -98,8 +98,9 @@ func buildTemplateFuncMap(cfg *config.Config) template.FuncMap {
 			return tmplActivitySummaryRocket(notSet, onSiteDays, billableDays, projectActivity, cfg.OnsiteRatioThreshold)
 		},
 		// Presence half-day helpers for templates
-		"presenceHalf":    tmplPresenceHalf,
-		"hasDatePresence": tmplHasDatePresence,
+		"presenceHalf":     tmplPresenceHalf,
+		"hasDatePresence":  tmplHasDatePresence,
+		"presenceOverride": tmplPresenceOverride,
 		"dict": func(pairs ...interface{}) map[string]interface{} {
 			d := make(map[string]interface{})
 			for i := 0; i < len(pairs)-1; i += 2 {

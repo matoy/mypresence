@@ -194,7 +194,11 @@ function calendarApp(statuses, currentUserId, isAdmin, presences) {
                     window.location.reload();
                 } else {
                     const data = await resp.json().catch(() => ({}));
-                    alert(data.error || (typeof _t !== 'undefined' && _t['fp.conn_error']) || 'Erreur');
+                    if (resp.status === 423) {
+                        alert((typeof _t !== 'undefined' && _t['cert.locked_warning']) || data.error || 'Déclaration certifiée : modification impossible pour ce mois.');
+                    } else {
+                        alert(data.error || (typeof _t !== 'undefined' && _t['fp.error']) || 'Erreur');
+                    }
                 }
             } catch (e) {
                 alert((typeof _t !== 'undefined' && _t['fp.conn_error']) || 'Erreur de connexion');
@@ -221,7 +225,11 @@ function calendarApp(statuses, currentUserId, isAdmin, presences) {
                     window.location.reload();
                 } else {
                     const data = await resp.json().catch(() => ({}));
-                    alert(data.error || (typeof _t !== 'undefined' && _t['fp.conn_error']) || 'Erreur');
+                    if (resp.status === 423) {
+                        alert((typeof _t !== 'undefined' && _t['cert.locked_warning']) || data.error || 'Déclaration certifiée : modification impossible pour ce mois.');
+                    } else {
+                        alert(data.error || (typeof _t !== 'undefined' && _t['fp.error']) || 'Erreur');
+                    }
                 }
             } catch (e) {
                 alert((typeof _t !== 'undefined' && _t['fp.conn_error']) || 'Erreur de connexion');
@@ -667,8 +675,15 @@ function teamCalendarApp(statuses, currentUserId, canEdit, allPresences) {
                     body: JSON.stringify({ user_id: this.selectedUserId, dates: this.selectedDates, status_id: statusId, half: this.pendingHalf })
                 });
                 if (resp.ok) { window.location.reload(); }
-                else { const d = await resp.json(); alert(d.error || 'Erreur'); }
-            } catch (e) { alert('Erreur de connexion'); }
+                else {
+                    const d = await resp.json().catch(() => ({}));
+                    if (resp.status === 423) {
+                        alert((typeof _t !== 'undefined' && _t['cert.locked_warning']) || d.error || 'Déclaration certifiée : modification impossible pour ce mois.');
+                    } else {
+                        alert(d.error || (typeof _t !== 'undefined' && _t['fp.error']) || 'Erreur');
+                    }
+                }
+            } catch (e) { alert((typeof _t !== 'undefined' && _t['fp.conn_error']) || 'Erreur de connexion'); }
             this.pendingHalf = 'full';
             this.cancelSelect();
         },
@@ -681,8 +696,16 @@ function teamCalendarApp(statuses, currentUserId, canEdit, allPresences) {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ user_id: this.selectedUserId, dates: this.selectedDates, half: '' })
                 });
-                if (resp.ok) window.location.reload();
-            } catch (e) { alert('Erreur de connexion'); }
+                if (resp.ok) { window.location.reload(); }
+                else {
+                    const d = await resp.json().catch(() => ({}));
+                    if (resp.status === 423) {
+                        alert((typeof _t !== 'undefined' && _t['cert.locked_warning']) || d.error || 'Déclaration certifiée : modification impossible pour ce mois.');
+                    } else {
+                        alert(d.error || (typeof _t !== 'undefined' && _t['fp.error']) || 'Erreur');
+                    }
+                }
+            } catch (e) { alert((typeof _t !== 'undefined' && _t['fp.conn_error']) || 'Erreur de connexion'); }
             this.pendingHalf = 'full';
             this.cancelSelect();
         },

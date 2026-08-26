@@ -1934,6 +1934,96 @@ WHERE pl.user_id = ?`
 	return logs, nil
 }
 
+// GetPresenceOverrides returns the latest third-party overrides (where actor_id != user_id)
+// for each user and date within [startDate, endDate].
+// If a user subsequently self-declared on that date, it is not considered an override.
+func (d *DB) GetPresenceOverrides(userIDs []int64, startDate, endDate string) (map[int64]map[string]models.PresenceOverride, error) {
+	result := make(map[int64]map[string]models.PresenceOverride)
+	if len(userIDs) == 0 {
+		return result, nil
+	}
+
+	placeholders := make([]string, len(userIDs))
+	args := make([]interface{}, 0, len(userIDs)+2)
+	for i, id := range userIDs {
+		placeholders[i] = "?"
+		args = append(args, id)
+	}
+	args = append(args, startDate, endDate)
+
+	// Fetch logs in ascending chronological order so that the last entry per (user_id, date) is the final state.
+	query := fmt.Sprintf(
+		"SELECT id, user_id, actor_id, action, date, half, created_at FROM presence_logs WHERE user_id IN (%s) AND date >= ? AND date <= ? ORDER BY created_at ASC, id ASC",
+		strings.Join(placeholders, ","),
+	)
+
+	rows, err := d.presence.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() //nolint:errcheck
+
+	type logEntry struct {
+		actorID int64
+		action  string
+		half    string
+	}
+	latestPerUserDate := make(map[int64]map[string]logEntry)
+	actorIDs := make(map[int64]struct{})
+
+	for rows.Next() {
+		var id, userID, actorID int64
+		var action, date, half string
+		var createdAt time.Time
+		if err := rows.Scan(&id, &userID, &actorID, &action, &date, &half, &createdAt); err != nil {
+			return nil, err
+		}
+		if latestPerUserDate[userID] == nil {
+			latestPerUserDate[userID] = make(map[string]logEntry)
+		}
+		latestPerUserDate[userID][date] = logEntry{
+			actorID: actorID,
+			action:  action,
+			half:    half,
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	for userID, dateMap := range latestPerUserDate {
+		for _, entry := range dateMap {
+			if entry.actorID != userID && entry.actorID > 0 {
+				actorIDs[entry.actorID] = struct{}{}
+			}
+		}
+	}
+
+	names := d.fetchUserNames(actorIDs)
+
+	for userID, dateMap := range latestPerUserDate {
+		for date, entry := range dateMap {
+			if entry.actorID != userID && entry.actorID > 0 {
+				if result[userID] == nil {
+					result[userID] = make(map[string]models.PresenceOverride)
+				}
+				actorName := names[entry.actorID]
+				if actorName == "" {
+					actorName = fmt.Sprintf("User #%d", entry.actorID)
+				}
+				result[userID][date] = models.PresenceOverride{
+					ActorID:   entry.actorID,
+					ActorName: actorName,
+					Action:    entry.action,
+					Half:      entry.half,
+				}
+			}
+		}
+	}
+
+	return result, nil
+}
+
 // --- Name lookup helpers ---
 
 func (d *DB) GetTeamName(id int64) string {

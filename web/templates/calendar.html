@@ -1,6 +1,6 @@
 {{define "content"}}
 {{with .Data}}
-{{$days := .Days}}{{$allStatuses := .Statuses}}{{$presences := .Presences}}{{$uid := .CurrentUserID}}{{$reservations := .ReservationDates}}
+{{$days := .Days}}{{$allStatuses := .Statuses}}{{$presences := .Presences}}{{$overrides := .Overrides}}{{$uid := .CurrentUserID}}{{$reservations := .ReservationDates}}
 <div class="max-w-full mx-auto px-2 sm:px-4 lg:px-6"
      x-data="calendarApp({{json .Statuses}}, {{.CurrentUserID}}, true, {{json .Presences}})">
 
@@ -152,16 +152,18 @@
                         {{$fullSidColor := statusColor $allStatuses $fullSid}}
                         {{$amSidColor   := statusColor $allStatuses $amSid}}
                         {{$pmSidColor   := statusColor $allStatuses $pmSid}}
+                        {{$ov := presenceOverride $overrides .Date}}
                         <div class="relative">
                         {{if $fullSid}}
                         <div class="w-full h-10 transition-all {{if not (or .IsWeekend (and .IsHoliday (not .HolidayAllowImputed)))}}hover:brightness-90{{end}}"
                              :class="isSelected({{$uid}}, '{{.Date}}') ? 'ring-2 ring-primary ring-inset' : ''"
                              :style="'background-color: ' + '{{$fullSidColor}}' + '; opacity: {{if .IsWeekend}}0.6{{else}}1{{end}}'"
-                             title="{{statusName $allStatuses $fullSid}}">
+                             title="{{statusName $allStatuses $fullSid}}{{if $ov}} ({{if eq $ov.Action "clear"}}{{printf (index $.T "cal.cleared_by") $ov.ActorName}}{{else}}{{printf (index $.T "cal.modified_by") $ov.ActorName}}{{end}}){{end}}">
                         </div>
                         {{else if or $amSid $pmSid}}
                         <div class="w-full h-10 flex flex-col transition-all {{if not (or .IsWeekend (and .IsHoliday (not .HolidayAllowImputed)))}}hover:brightness-90{{end}}"
-                             :class="isSelected({{$uid}}, '{{.Date}}') ? 'ring-2 ring-primary ring-inset' : ''">
+                             :class="isSelected({{$uid}}, '{{.Date}}') ? 'ring-2 ring-primary ring-inset' : ''"
+                             {{if $ov}}title="{{if eq $ov.Action "clear"}}{{printf (index $.T "cal.cleared_by") $ov.ActorName}}{{else}}{{printf (index $.T "cal.modified_by") $ov.ActorName}}{{end}}"{{end}}>
                             <div class="flex-1 w-full"
                                  :style="'background-color: ' + '{{if $amSid}}{{$amSidColor}}{{else}}#e5e7eb{{end}}'"
                                  title="AM{{if $amSid}}: {{statusName $allStatuses $amSid}}{{end}}"></div>
@@ -173,7 +175,13 @@
                         <div class="w-full h-10 transition-all
                             {{if or .IsWeekend .IsHoliday}}bg-gray-100{{else}}hover:bg-gray-100{{end}}"
                              :class="isSelected({{$uid}}, '{{.Date}}') ? 'ring-2 ring-primary ring-inset bg-primary/10' : ''"
-                             {{if and .IsHoliday (not .IsWeekend)}}title="{{.HolidayName}}"{{end}}>
+                             {{if $ov}}title="{{if eq $ov.Action "clear"}}{{printf (index $.T "cal.cleared_by") $ov.ActorName}}{{else}}{{printf (index $.T "cal.modified_by") $ov.ActorName}}{{end}}"{{else if and .IsHoliday (not .IsWeekend)}}title="{{.HolidayName}}"{{end}}>
+                        </div>
+                        {{end}}
+                        {{if $ov}}
+                        <div class="absolute top-0.5 right-0.5 z-10 flex items-center justify-center pointer-events-none select-none"
+                             title="{{if eq $ov.Action "clear"}}{{printf (index $.T "cal.cleared_by") $ov.ActorName}}{{else}}{{printf (index $.T "cal.modified_by") $ov.ActorName}}{{end}}">
+                            <span class="text-[10px] leading-none bg-white/90 dark:bg-gray-800/90 rounded-full px-0.5 py-0.5 shadow-sm border border-gray-300/60 dark:border-gray-600">✍️</span>
                         </div>
                         {{end}}
                         {{if index $reservations .Date}}
@@ -421,6 +429,7 @@
                 {{range $tv.Members}}
                 {{$memberID := .ID}}
                 {{$memberPresences := index $tv.Presences .ID}}
+                {{$memberOverrides := index $tv.Overrides .ID}}
                 {{$memberReservations := index $tv.Reservations .ID}}
                 <tr class="border-b border-gray-100 last:border-0">
                     <td class="sticky left-0 z-10 bg-white border-r border-gray-200 px-2 py-0 align-middle">
@@ -433,6 +442,7 @@
                     {{$fullSid := presenceHalf $memberPresences .Date "full"}}
                     {{$amSid   := presenceHalf $memberPresences .Date "AM"}}
                     {{$pmSid   := presenceHalf $memberPresences .Date "PM"}}
+                    {{$ov      := presenceOverride $memberOverrides .Date}}
                     <td class="px-0 py-0 border-b border-gray-100 select-none calendar-cell
                         {{if or .IsWeekend (and .IsHoliday (not .HolidayAllowImputed))}}bg-gray-50/80 {{if $tv.CanEdit}}cursor-not-allowed{{else}}cursor-default{{end}}{{else}}{{if $tv.CanEdit}}cursor-pointer{{else}}cursor-default{{end}}{{end}}"
                         data-user-id="{{$memberID}}"
@@ -455,11 +465,12 @@
                         <div class="w-full h-10 transition-all {{if $tv.CanEdit}}{{if not (or .IsWeekend (and .IsHoliday (not .HolidayAllowImputed)))}}hover:brightness-90{{end}}{{end}}"
                              {{if $tv.CanEdit}}:class="isSelected({{$memberID}}, '{{.Date}}') ? 'ring-2 ring-primary ring-inset' : ''"{{end}}
                              :style="'background-color: ' + '{{$fullSidColor}}' + '; opacity: {{if .IsWeekend}}0.6{{else}}1{{end}}'"
-                             title="{{statusName $allStatuses $fullSid}}">
+                             title="{{statusName $allStatuses $fullSid}}{{if $ov}} ({{if eq $ov.Action "clear"}}{{printf (index $.T "cal.cleared_by") $ov.ActorName}}{{else}}{{printf (index $.T "cal.modified_by") $ov.ActorName}}{{end}}){{end}}">
                         </div>
                         {{else if or $amSid $pmSid}}
                         <div class="w-full h-10 flex flex-col transition-all {{if $tv.CanEdit}}{{if not (or .IsWeekend (and .IsHoliday (not .HolidayAllowImputed)))}}hover:brightness-90{{end}}{{end}}"
-                             {{if $tv.CanEdit}}:class="isSelected({{$memberID}}, '{{.Date}}') ? 'ring-2 ring-primary ring-inset' : ''"{{end}}>
+                             {{if $tv.CanEdit}}:class="isSelected({{$memberID}}, '{{.Date}}') ? 'ring-2 ring-primary ring-inset' : ''"{{end}}
+                             {{if $ov}}title="{{if eq $ov.Action "clear"}}{{printf (index $.T "cal.cleared_by") $ov.ActorName}}{{else}}{{printf (index $.T "cal.modified_by") $ov.ActorName}}{{end}}"{{end}}>
                             <div class="flex-1 w-full"
                                  :style="'background-color: ' + '{{if $amSid}}{{$amSidColor}}{{else}}#e5e7eb{{end}}'"
                                  title="AM{{if $amSid}}: {{statusName $allStatuses $amSid}}{{end}}"></div>
@@ -470,7 +481,14 @@
                         {{else}}
                         <div class="w-full h-10 transition-all
                             {{if or .IsWeekend .IsHoliday}}bg-gray-100{{else}}{{if $tv.CanEdit}}hover:bg-gray-100{{end}}{{end}}"
-                             {{if $tv.CanEdit}}:class="isSelected({{$memberID}}, '{{.Date}}') ? 'ring-2 ring-primary ring-inset bg-primary/10' : ''"{{end}}>
+                             {{if $tv.CanEdit}}:class="isSelected({{$memberID}}, '{{.Date}}') ? 'ring-2 ring-primary ring-inset bg-primary/10' : ''"{{end}}
+                             {{if $ov}}title="{{if eq $ov.Action "clear"}}{{printf (index $.T "cal.cleared_by") $ov.ActorName}}{{else}}{{printf (index $.T "cal.modified_by") $ov.ActorName}}{{end}}"{{end}}>
+                        </div>
+                        {{end}}
+                        {{if $ov}}
+                        <div class="absolute top-0.5 right-0.5 z-10 flex items-center justify-center pointer-events-none select-none"
+                             title="{{if eq $ov.Action "clear"}}{{printf (index $.T "cal.cleared_by") $ov.ActorName}}{{else}}{{printf (index $.T "cal.modified_by") $ov.ActorName}}{{end}}">
+                            <span class="text-[10px] leading-none bg-white/90 dark:bg-gray-800/90 rounded-full px-0.5 py-0.5 shadow-sm border border-gray-300/60 dark:border-gray-600">✍️</span>
                         </div>
                         {{end}}
                         {{if index $memberReservations .Date}}

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/matoy/mypresence/internal/db"
+	"github.com/matoy/mypresence/internal/i18n"
 	"github.com/matoy/mypresence/internal/metrics"
 	"github.com/matoy/mypresence/internal/middleware"
 	"github.com/matoy/mypresence/internal/models"
@@ -28,8 +29,9 @@ type CalendarHandler struct {
 type teamCalendarView struct {
 	Team           models.Team
 	Members        []models.User
-	Presences      map[int64]map[string]map[string]int64 // userID → date → half → statusID
-	Reservations   map[int64]map[string]bool             // userID → date → bool
+	Presences      map[int64]map[string]map[string]int64         // userID → date → half → statusID
+	Overrides      map[int64]map[string]models.PresenceOverride // userID → date → PresenceOverride
+	Reservations   map[int64]map[string]bool                     // userID → date → bool
 	CanEdit        bool
 	Certifications map[int64]bool // userID → declaration certified for the displayed month
 }
@@ -74,6 +76,13 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 		userPresences = make(map[string]map[string]int64)
 	}
 
+	// Get current user's third-party overrides
+	userOverridesMap, _ := h.DB.GetPresenceOverrides([]int64{user.ID}, startDate, endDate)
+	userOverrides := userOverridesMap[user.ID]
+	if userOverrides == nil {
+		userOverrides = make(map[string]models.PresenceOverride)
+	}
+
 	// A month is complete when every declarable day has at least one status set.
 	declarableDays, declaredDays, calendarComplete := computeMonthCompletion(days, userPresences)
 
@@ -111,6 +120,10 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 		if tp == nil {
 			tp = make(map[int64]map[string]map[string]int64)
 		}
+		to, _ := h.DB.GetPresenceOverrides(userIDs, startDate, endDate)
+		if to == nil {
+			to = make(map[int64]map[string]models.PresenceOverride)
+		}
 		teamReservations := make(map[int64]map[string]bool, len(members))
 		if !h.DisableFloorplans {
 			for _, m := range members {
@@ -126,6 +139,7 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 			Team:           team,
 			Members:        members,
 			Presences:      tp,
+			Overrides:      to,
 			Reservations:   teamReservations,
 			CanEdit:        canEditTeam,
 			Certifications: teamCertifications,
@@ -141,6 +155,7 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 		"NextMonth":        int(nextTime.Month()),
 		"Days":             days,
 		"Presences":        userPresences,
+		"Overrides":        userOverrides,
 		"Statuses":         statuses,
 		"CurrentUserID":    user.ID,
 		"ReservationDates": reservationDates,
@@ -220,7 +235,12 @@ func (h *CalendarHandler) SetPresences(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if locked {
-		jsonError(w, "Déclaration certifiée : modification impossible pour ce mois", http.StatusLocked)
+		lang := i18n.LangFromRequest(r, "fr")
+		msg := i18n.T(lang)["cert.locked_warning"]
+		if msg == "" {
+			msg = "Déclaration certifiée : modification impossible pour ce mois."
+		}
+		jsonError(w, msg, http.StatusLocked)
 		return
 	}
 
@@ -280,7 +300,12 @@ func (h *CalendarHandler) ClearPresences(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if locked {
-		jsonError(w, "Déclaration certifiée : modification impossible pour ce mois", http.StatusLocked)
+		lang := i18n.LangFromRequest(r, "fr")
+		msg := i18n.T(lang)["cert.locked_warning"]
+		if msg == "" {
+			msg = "Déclaration certifiée : modification impossible pour ce mois."
+		}
+		jsonError(w, msg, http.StatusLocked)
 		return
 	}
 

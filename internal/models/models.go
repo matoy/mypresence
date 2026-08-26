@@ -351,6 +351,14 @@ type PresenceLog struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+// PresenceOverride indicates that a presence day was declared, modified, or cleared by a third party.
+type PresenceOverride struct {
+	ActorID   int64  `json:"actor_id"`
+	ActorName string `json:"actor_name"`
+	Action    string `json:"action"` // "set" or "clear"
+	Half      string `json:"half"`   // "full", "AM", or "PM"
+}
+
 // AdminLog records an admin operation on an entity (team, status, holiday, user).
 type AdminLog struct {
 	ID         int64     `json:"id"`

@@ -1,6 +1,10 @@
 package main
 
-import "strconv"
+import (
+	"strconv"
+
+	"github.com/matoy/mypresence/internal/models"
+)
 
 // tmplFmtF formats a float64 for display: whole numbers without decimals, others to 1 decimal place.
 func tmplFmtF(f float64) string {
@@ -61,6 +65,17 @@ func tmplHasDatePresence(m map[string]map[string]int64, date string) bool {
 		return len(halves) > 0
 	}
 	return false
+}
+
+// tmplPresenceOverride returns the PresenceOverride for date if present, or nil.
+func tmplPresenceOverride(m map[string]models.PresenceOverride, date string) *models.PresenceOverride {
+	if m == nil {
+		return nil
+	}
+	if ov, ok := m[date]; ok {
+		return &ov
+	}
+	return nil
 }
 
 // tmplActivitySummaryRocket returns true when the achievement criteria are met:

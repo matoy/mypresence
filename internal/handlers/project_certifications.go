@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/matoy/mypresence/internal/i18n"
 	"github.com/matoy/mypresence/internal/metrics"
 	"github.com/matoy/mypresence/internal/middleware"
 	"github.com/matoy/mypresence/internal/models"
@@ -134,7 +135,11 @@ func rejectIfProjectMonthCertified(w http.ResponseWriter, h *ProjectsHandler, us
 		return true
 	}
 	if certified {
-		jsonError(w, "Déclaration certifiée : modification impossible pour ce mois", http.StatusLocked)
+		msg := i18n.T("fr")["cert.locked_warning"]
+		if msg == "" {
+			msg = "Déclaration certifiée : modification impossible pour ce mois."
+		}
+		jsonError(w, msg, http.StatusLocked)
 		return true
 	}
 	return false

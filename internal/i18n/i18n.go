@@ -162,6 +162,8 @@ var en = map[string]string{
 	"cal.modal_title":      "🖥️ Reserve a desk",
 	"cal.half_am":          "· Morning",
 	"cal.half_pm":          "· Afternoon",
+	"cal.modified_by":      "Modified by %s",
+	"cal.cleared_by":       "Cleared by %s",
 
 	// Monthly declaration certification
 	"cert.certify_button_title":     "Certify monthly declaration",
@@ -862,6 +864,8 @@ var fr = map[string]string{
 	"cal.modal_title":      "🖥️ Réserver un bureau",
 	"cal.half_am":          "· Matin",
 	"cal.half_pm":          "· Après-midi",
+	"cal.modified_by":      "Modifié par %s",
+	"cal.cleared_by":       "Supprimé par %s",
 
 	// Certification de la déclaration mensuelle
 	"cert.certify_button_title":     "Certifier la déclaration mensuelle",
@@ -1554,6 +1558,8 @@ var de = map[string]string{
 	"cal.modal_title":      "🖥️ Schreibtisch reservieren",
 	"cal.half_am":          "· Vormittag",
 	"cal.half_pm":          "· Nachmittag",
+	"cal.modified_by":      "Geändert von %s",
+	"cal.cleared_by":       "Gelöscht von %s",
 
 	// Zertifizierung der monatlichen Erklärung
 	"cert.certify_button_title":     "Monatliche Erklärung zertifizieren",
@@ -2247,6 +2253,8 @@ var es = map[string]string{
 	"cal.modal_title":      "🖥️ Reservar escritorio",
 	"cal.half_am":          "· Mañana",
 	"cal.half_pm":          "· Tarde",
+	"cal.modified_by":      "Modificado por %s",
+	"cal.cleared_by":       "Eliminado por %s",
 
 	// Certificación de la declaración mensual
 	"cert.certify_button_title":     "Certificar la declaración mensual",
@@ -2937,6 +2945,8 @@ var it = map[string]string{
 	"cal.modal_title":      "🖥️ Prenota scrivania",
 	"cal.half_am":          "· Mattina",
 	"cal.half_pm":          "· Pomeriggio",
+	"cal.modified_by":      "Modificato da %s",
+	"cal.cleared_by":       "Rimosso da %s",
 
 	// Certificazione della dichiarazione mensile
 	"cert.certify_button_title":     "Certificare la dichiarazione mensile",
