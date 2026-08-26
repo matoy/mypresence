@@ -73,6 +73,9 @@ func TestLayoutTemplate_AdminMenu_HiddenForBasicUser(t *testing.T) {
 	if strings.Contains(html, "/admin/news") {
 		t.Fatal("news link should not be present for basic user")
 	}
+	if strings.Contains(html, "/admin/notifications") {
+		t.Fatal("notifications link should not be present for basic user")
+	}
 }
 
 func TestLayoutTemplate_AdminMenu_ShowsProjectsAndImpersonateForGlobal(t *testing.T) {
@@ -86,6 +89,9 @@ func TestLayoutTemplate_AdminMenu_ShowsProjectsAndImpersonateForGlobal(t *testin
 	}
 	if c := strings.Count(html, "/impersonate"); c < 2 {
 		t.Fatalf("expected impersonate link in both desktop and mobile admin menus, got %d", c)
+	}
+	if c := strings.Count(html, "/admin/notifications"); c < 2 {
+		t.Fatalf("expected notifications link in both desktop and mobile admin menus, got %d", c)
 	}
 }
 

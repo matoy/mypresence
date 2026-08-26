@@ -106,7 +106,7 @@ func buildAppMux(cfg *config.Config, database *db.DB) http.Handler {
 	resetPasswordHandler := &handlers.ResetPasswordHandler{DB: database, Config: cfg, Render: renderPage, RateLimiter: middleware.NewLoginRateLimiter()}
 	patHandler, projectsHandler := initOptionalHandlers(cfg, database, renderPage)
 	newsHandler := &handlers.NewsHandler{DB: database, Render: renderPage}
-	notifHandler := &handlers.NotificationsHandler{DB: database}
+	notifHandler := &handlers.NotificationsHandler{DB: database, Render: renderPage}
 
 	// Initialize SAML if configured
 	if cfg.SAMLEnabled {
@@ -285,6 +285,15 @@ func buildAppMux(cfg *config.Config, database *db.DB) http.Handler {
 	generalSettingsMux.HandleFunc("POST /admin/settings/env", generalSettingsHandler.UpdateEnvVar)
 	mux.Handle("/admin/settings", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(generalSettingsMux)))
 	mux.Handle("/admin/settings/", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(generalSettingsMux)))
+
+	notifAdminMux := http.NewServeMux()
+	notifAdminMux.HandleFunc("GET /admin/notifications", notifHandler.AdminNotificationsPage)
+	notifAdminMux.HandleFunc("POST /admin/notifications", notifHandler.AdminSendNotification)
+	notifAdminMux.HandleFunc("POST /api/admin/notifications", notifHandler.AdminSendNotification)
+	mux.Handle("/admin/notifications", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(notifAdminMux)))
+	mux.Handle("/admin/notifications/", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(notifAdminMux)))
+	mux.Handle("/api/admin/notifications", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(notifAdminMux)))
+	mux.Handle("/api/admin/notifications/", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(notifAdminMux)))
 
 	newsMux := http.NewServeMux()
 	newsMux.HandleFunc("GET /admin/news", newsHandler.NewsPage)

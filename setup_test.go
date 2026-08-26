@@ -327,6 +327,9 @@ func TestBuildTemplateFuncMap_And_LoadTemplates(t *testing.T) {
 	if _, ok := templates["calendar"]; !ok {
 		t.Errorf("expected 'calendar' template")
 	}
+	if _, ok := templates["admin_notifications"]; !ok {
+		t.Errorf("expected 'admin_notifications' template")
+	}
 }
 
 func TestNewRenderPage(t *testing.T) {

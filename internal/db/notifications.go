@@ -165,3 +165,61 @@ WHERE user_id = ?`
 
 	return notifs, nil
 }
+
+// GetAllNotifications returns recent notifications across all users, newest first.
+func (d *DB) GetAllNotifications(limit int) ([]models.Notification, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	dl := d.dialect
+	query := fmt.Sprintf(`
+SELECT id, user_id, actor_id, type, title, message, link, acknowledged, acknowledged_at, created_at
+FROM notifications
+ORDER BY created_at DESC, id DESC LIMIT %d`, limit)
+
+	rows, err := d.core.Query(dl.rebind(query))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() //nolint:errcheck
+
+	var notifs []models.Notification
+	userIDs := make(map[int64]struct{})
+	for rows.Next() {
+		var n models.Notification
+		var ackAt sql.NullTime
+		if err := rows.Scan(
+			&n.ID, &n.UserID, &n.ActorID, &n.Type, &n.Title, &n.Message, &n.Link,
+			&n.Acknowledged, &ackAt, &n.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		if ackAt.Valid {
+			n.AcknowledgedAt = &ackAt.Time
+		}
+		if n.ActorID > 0 {
+			userIDs[n.ActorID] = struct{}{}
+		}
+		if n.UserID > 0 {
+			userIDs[n.UserID] = struct{}{}
+		}
+		notifs = append(notifs, n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if len(userIDs) > 0 {
+		names := d.fetchUserNames(userIDs)
+		for i := range notifs {
+			if notifs[i].ActorID > 0 {
+				notifs[i].ActorName = names[notifs[i].ActorID]
+			}
+			if notifs[i].UserID > 0 {
+				notifs[i].RecipientName = names[notifs[i].UserID]
+			}
+		}
+	}
+
+	return notifs, nil
+}

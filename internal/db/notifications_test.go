@@ -106,4 +106,19 @@ func TestNotifications_CRUDAndLifecycle(t *testing.T) {
 	if len(futureLogs) != 0 {
 		t.Fatalf("expected 0 future log entries, got %d", len(futureLogs))
 	}
+
+	// 8. Test GetAllNotifications
+	allNotifs, err := d.GetAllNotifications(10)
+	if err != nil {
+		t.Fatalf("GetAllNotifications: %v", err)
+	}
+	if len(allNotifs) != 1 {
+		t.Fatalf("expected 1 notification in GetAllNotifications, got %d", len(allNotifs))
+	}
+	if allNotifs[0].RecipientName != "Alice" {
+		t.Errorf("expected RecipientName 'Alice', got %q", allNotifs[0].RecipientName)
+	}
+	if allNotifs[0].ActorName != "Bob Admin" {
+		t.Errorf("expected ActorName 'Bob Admin', got %q", allNotifs[0].ActorName)
+	}
 }

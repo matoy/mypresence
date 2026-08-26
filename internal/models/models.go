@@ -426,8 +426,9 @@ type NewsMessage struct {
 type Notification struct {
 	ID             int64      `json:"id"`
 	UserID         int64      `json:"user_id"`
+	RecipientName  string     `json:"recipient_name,omitempty"`
 	ActorID        int64      `json:"actor_id"`
-	ActorName      string     `json:"actor_name"`
+	ActorName      string     `json:"actor_name,omitempty"`
 	Type           string     `json:"type"` // e.g. "team_added", "info"
 	Title          string     `json:"title"`
 	Message        string     `json:"message"`
