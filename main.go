@@ -106,6 +106,7 @@ func buildAppMux(cfg *config.Config, database *db.DB) http.Handler {
 	resetPasswordHandler := &handlers.ResetPasswordHandler{DB: database, Config: cfg, Render: renderPage, RateLimiter: middleware.NewLoginRateLimiter()}
 	patHandler, projectsHandler := initOptionalHandlers(cfg, database, renderPage)
 	newsHandler := &handlers.NewsHandler{DB: database, Render: renderPage}
+	notifHandler := &handlers.NotificationsHandler{DB: database}
 
 	// Initialize SAML if configured
 	if cfg.SAMLEnabled {
@@ -197,6 +198,10 @@ func buildAppMux(cfg *config.Config, database *db.DB) http.Handler {
 
 	// Active news (all authenticated users)
 	authMux.HandleFunc("GET /api/news", newsHandler.GetActiveNewsAPI)
+
+	// In-app notifications (all authenticated users)
+	authMux.HandleFunc("POST /api/notifications/{id}/ack", notifHandler.AcknowledgeNotification)
+	authMux.HandleFunc("GET /api/notifications/unread", notifHandler.GetUnreadNotificationsAPI)
 
 	registerOptionalAuthRoutes(authMux, cfg, patHandler, floorplanHandler)
 

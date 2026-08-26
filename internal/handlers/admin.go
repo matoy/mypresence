@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -183,10 +184,24 @@ func (h *AdminHandler) AddTeamMember(w http.ResponseWriter, r *http.Request) {
 		memberName = u.Name
 	}
 	h.DB.AddTeamMember(teamID, req.UserID) //nolint:errcheck
+	var actorID int64
+	actorName := "Admin"
 	if currentUser != nil {
+		actorID = currentUser.ID
+		if currentUser.Name != "" {
+			actorName = currentUser.Name
+		}
 		h.DB.LogAdminAction(currentUser.ID, "team", teamID, "add_member", memberName)
 		slog.Info("admin.team.add_member", "actor", currentUser.Email, "team_id", teamID, "member", memberName)
 	}
+	teamName := h.DB.GetTeamName(teamID)
+	if teamName == "" {
+		teamName = strconv.FormatInt(teamID, 10)
+	}
+	notifTitle := "Ajout à une équipe"
+	notifMsg := fmt.Sprintf("Vous avez été ajouté à l'équipe « %s » par %s.", teamName, actorName)
+	h.DB.CreateNotification(req.UserID, actorID, "team_added", notifTitle, notifMsg, teamName) //nolint:errcheck
+
 	metrics.AdminOpsTotal.WithLabelValues("team", "add_member", "success").Inc()
 	jsonOK(w, map[string]string{"status": "ok"})
 }

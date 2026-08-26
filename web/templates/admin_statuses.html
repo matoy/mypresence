@@ -74,7 +74,7 @@
                     x-data="{ editing: false, editName: {{json .Name}}, editColor: {{json .Color}}, editBillable: {{.Billable}}, editOnSite: {{.OnSite}}, editOrder: {{.SortOrder}} }">
                     <td class="px-4 py-3">
                         <template x-if="!editing">
-                            <div class="h-8 w-8 rounded-lg shadow-inner" style="background-color: {{.Color}}"></div>
+                            <div class="h-8 w-8 rounded-lg shadow-inner" :style="'background-color: {{.Color}}'"></div>
                         </template>
                         <template x-if="editing">
                             <input type="color" x-model="editColor"

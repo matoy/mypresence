@@ -35,6 +35,7 @@ func (h *SettingsHandler) MyLogsPage(w http.ResponseWriter, r *http.Request) {
 
 	logs, _ := h.DB.GetUserLogs(user.ID, since)
 	adminLogs, _ := h.DB.GetAdminLogsByActor(user.ID, since)
+	notifLogs, _ := h.DB.GetUserNotificationLogs(user.ID, since)
 	statuses, _ := h.DB.ListStatuses()
 
 	// Only show admin actions section if user has a role beyond basic.
@@ -52,6 +53,7 @@ func (h *SettingsHandler) MyLogsPage(w http.ResponseWriter, r *http.Request) {
 		"TargetUser":       user,
 		"Logs":             logs,
 		"AdminLogs":        adminLogs,
+		"NotificationLogs": notifLogs,
 		"Statuses":         statuses,
 		"Days":             days,
 		"BackURL":          "/",

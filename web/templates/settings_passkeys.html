@@ -15,8 +15,13 @@
     {{if .Success}}
     <div class="bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-green-700 text-sm">{{.Success}}</div>
     {{end}}
-    <div id="pk-register-error" class="hidden bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-700 text-sm"></div>
-    <div id="pk-register-success" class="hidden bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-green-700 text-sm"></div>
+    <div id="pk-register-error"
+         data-err-unsupported="{{index $.T "passkeys.error.unsupported"}}"
+         data-err-register="{{index $.T "passkeys.error.register"}}"
+         class="hidden bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-700 text-sm"></div>
+    <div id="pk-register-success"
+         data-ok-register="{{index $.T "passkeys.success.register"}}"
+         class="hidden bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-green-700 text-sm"></div>
 
     <!-- Register new passkey -->
     <div class="bg-white rounded-2xl shadow-md p-6">
@@ -58,7 +63,8 @@
                     </p>
                 </div>
                 <form method="POST" action="/settings/passkeys/delete"
-                      onsubmit="return confirm('{{index $.T "passkeys.delete_confirm"}}')">
+                      data-confirm="{{index $.T "passkeys.delete_confirm"}}"
+                      onsubmit="return confirm(this.dataset.confirm)">
                     <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
                     <input type="hidden" name="id" value="{{.IDBase64}}">
                     <button type="submit"
@@ -94,7 +100,7 @@ async function registerPasskey() {
     okEl.classList.add('hidden');
 
     if (!window.PublicKeyCredential) {
-        errEl.textContent = {{index .T "passkeys.error.unsupported" | js}};
+        errEl.textContent = (errEl.dataset && errEl.dataset.errUnsupported) || 'Unsupported';
         errEl.classList.remove('hidden');
         return;
     }
@@ -134,12 +140,12 @@ async function registerPasskey() {
         );
         if (!finishResp.ok) throw new Error('finish failed');
 
-        okEl.textContent = {{index .T "passkeys.success.register" | js}};
+        okEl.textContent = (okEl.dataset && okEl.dataset.okRegister) || 'Passkey registered';
         okEl.classList.remove('hidden');
         setTimeout(() => window.location.reload(), 1200);
     } catch(err) {
         if (err.name !== 'NotAllowedError') {
-            errEl.textContent = {{index .T "passkeys.error.register" | js}};
+            errEl.textContent = (errEl.dataset && errEl.dataset.errRegister) || 'Registration failed';
             errEl.classList.remove('hidden');
         }
         btn.disabled = false;

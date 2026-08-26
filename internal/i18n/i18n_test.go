@@ -229,3 +229,37 @@ func TestCertLockedWarningKeys_AllLanguages(t *testing.T) {
 		}
 	}
 }
+
+func TestNotificationKeys_AllLanguages(t *testing.T) {
+	requiredKeys := []string{
+		"notifications.title",
+		"notifications.acknowledge",
+		"notifications.team_added_title",
+		"notifications.team_added_msg",
+		"logs.notifications_section",
+		"logs.no_notifications",
+		"logs.notif_type",
+		"logs.notif_message",
+		"logs.notif_status",
+		"logs.notif_actor",
+		"logs.notif_acknowledged",
+		"logs.notif_unacknowledged",
+		"logs.expand_all",
+		"logs.collapse_all",
+		"logs.toggle_admin",
+		"logs.toggle_notifications",
+		"logs.toggle_presence",
+	}
+
+	langs := []string{"en", "fr", "de", "es", "it"}
+	for _, lang := range langs {
+		m := T(lang)
+		for _, key := range requiredKeys {
+			val, ok := m[key]
+			if !ok || val == "" {
+				t.Errorf("lang %q is missing required notification key %q", lang, key)
+			}
+		}
+	}
+}
+

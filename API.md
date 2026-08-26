@@ -235,6 +235,40 @@ Clear presence(s) for one or more dates.
 
 ---
 
+### In-App Notifications
+
+#### `GET /api/notifications/unread`
+List unread / unacknowledged in-app notifications for the authenticated user.
+
+**Response 200**
+```json
+[
+  {
+    "id": 1,
+    "user_id": 5,
+    "actor_id": 1,
+    "actor_name": "Bob Admin",
+    "type": "team_added",
+    "title": "Ajout à une équipe",
+    "message": "Vous avez été ajouté à l'équipe « Engineering » par Bob Admin.",
+    "link": "",
+    "acknowledged": false,
+    "acknowledged_at": null,
+    "created_at": "2026-08-26T18:00:00Z"
+  }
+]
+```
+
+#### `POST /api/notifications/{id}/ack`
+Acknowledge an in-app notification for the authenticated user.
+
+**Response 200**
+```json
+{ "status": "ok" }
+```
+
+---
+
 ### Floor Plans _(disabled if `DISABLE_FLOORPLANS=true`)_
 
 #### `GET /api/floorplans`

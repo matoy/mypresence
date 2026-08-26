@@ -97,7 +97,7 @@
     <div class="flex flex-wrap gap-2 mb-3">
         {{range .Statuses}}
         <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium text-white shadow-sm"
-              style="background-color: {{.Color}}">
+              :style="'background-color: {{.Color}}'">
             {{.Name}}
             {{if .Billable}}<span class="opacity-75">€</span>{{end}}
         </span>
@@ -149,21 +149,24 @@
                         {{$fullSid := presenceHalf $presences .Date "full"}}
                         {{$amSid   := presenceHalf $presences .Date "AM"}}
                         {{$pmSid   := presenceHalf $presences .Date "PM"}}
+                        {{$fullSidColor := statusColor $allStatuses $fullSid}}
+                        {{$amSidColor   := statusColor $allStatuses $amSid}}
+                        {{$pmSidColor   := statusColor $allStatuses $pmSid}}
                         <div class="relative">
                         {{if $fullSid}}
                         <div class="w-full h-10 transition-all {{if not (or .IsWeekend (and .IsHoliday (not .HolidayAllowImputed)))}}hover:brightness-90{{end}}"
                              :class="isSelected({{$uid}}, '{{.Date}}') ? 'ring-2 ring-primary ring-inset' : ''"
-                             style="background-color: {{statusColor $allStatuses $fullSid}}; opacity: {{if .IsWeekend}}0.6{{else}}1{{end}}"
+                             :style="'background-color: ' + '{{$fullSidColor}}' + '; opacity: {{if .IsWeekend}}0.6{{else}}1{{end}}'"
                              title="{{statusName $allStatuses $fullSid}}">
                         </div>
                         {{else if or $amSid $pmSid}}
                         <div class="w-full h-10 flex flex-col transition-all {{if not (or .IsWeekend (and .IsHoliday (not .HolidayAllowImputed)))}}hover:brightness-90{{end}}"
                              :class="isSelected({{$uid}}, '{{.Date}}') ? 'ring-2 ring-primary ring-inset' : ''">
                             <div class="flex-1 w-full"
-                                 style="background-color: {{if $amSid}}{{statusColor $allStatuses $amSid}}{{else}}#e5e7eb{{end}}"
+                                 :style="'background-color: ' + '{{if $amSid}}{{$amSidColor}}{{else}}#e5e7eb{{end}}'"
                                  title="AM{{if $amSid}}: {{statusName $allStatuses $amSid}}{{end}}"></div>
                             <div class="flex-1 w-full"
-                                 style="background-color: {{if $pmSid}}{{statusColor $allStatuses $pmSid}}{{else}}#e5e7eb{{end}}"
+                                 :style="'background-color: ' + '{{if $pmSid}}{{$pmSidColor}}{{else}}#e5e7eb{{end}}'"
                                  title="PM{{if $pmSid}}: {{statusName $allStatuses $pmSid}}{{end}}"></div>
                         </div>
                         {{else}}
@@ -444,27 +447,30 @@
                         @touchmove.prevent="handleTouchMove($event)"
                         @contextmenu.prevent="openContextMenu({{$memberID}}, '{{.Date}}', $event)"
                         {{end}}>
+                        {{$fullSidColor := statusColor $allStatuses $fullSid}}
+                        {{$amSidColor   := statusColor $allStatuses $amSid}}
+                        {{$pmSidColor   := statusColor $allStatuses $pmSid}}
                         <div class="relative">
                         {{if $fullSid}}
                         <div class="w-full h-10 transition-all {{if $tv.CanEdit}}{{if not (or .IsWeekend (and .IsHoliday (not .HolidayAllowImputed)))}}hover:brightness-90{{end}}{{end}}"
                              {{if $tv.CanEdit}}:class="isSelected({{$memberID}}, '{{.Date}}') ? 'ring-2 ring-primary ring-inset' : ''"{{end}}
-                             style="background-color: {{statusColor $allStatuses $fullSid}}; opacity: {{if .IsWeekend}}0.6{{else}}1{{end}}"
+                             :style="'background-color: ' + '{{$fullSidColor}}' + '; opacity: {{if .IsWeekend}}0.6{{else}}1{{end}}'"
                              title="{{statusName $allStatuses $fullSid}}">
                         </div>
                         {{else if or $amSid $pmSid}}
                         <div class="w-full h-10 flex flex-col transition-all {{if $tv.CanEdit}}{{if not (or .IsWeekend (and .IsHoliday (not .HolidayAllowImputed)))}}hover:brightness-90{{end}}{{end}}"
                              {{if $tv.CanEdit}}:class="isSelected({{$memberID}}, '{{.Date}}') ? 'ring-2 ring-primary ring-inset' : ''"{{end}}>
                             <div class="flex-1 w-full"
-                                 style="background-color: {{if $amSid}}{{statusColor $allStatuses $amSid}}{{else}}#e5e7eb{{end}}"
+                                 :style="'background-color: ' + '{{if $amSid}}{{$amSidColor}}{{else}}#e5e7eb{{end}}'"
                                  title="AM{{if $amSid}}: {{statusName $allStatuses $amSid}}{{end}}"></div>
                             <div class="flex-1 w-full"
-                                 style="background-color: {{if $pmSid}}{{statusColor $allStatuses $pmSid}}{{else}}#e5e7eb{{end}}"
+                                 :style="'background-color: ' + '{{if $pmSid}}{{$pmSidColor}}{{else}}#e5e7eb{{end}}'"
                                  title="PM{{if $pmSid}}: {{statusName $allStatuses $pmSid}}{{end}}"></div>
                         </div>
                         {{else}}
                         <div class="w-full h-10 transition-all
                             {{if or .IsWeekend .IsHoliday}}bg-gray-100{{else}}{{if $tv.CanEdit}}hover:bg-gray-100{{end}}{{end}}"
-                             {{if $tv.CanEdit}}:class="isSelected({{$memberID}}, '{{.Date}}') ? 'ring-2 ring-primary ring-inset bg-primary/10' : '"{{end}}>
+                             {{if $tv.CanEdit}}:class="isSelected({{$memberID}}, '{{.Date}}') ? 'ring-2 ring-primary ring-inset bg-primary/10' : ''"{{end}}>
                         </div>
                         {{end}}
                         {{if index $memberReservations .Date}}
@@ -679,9 +685,16 @@
 {{end}}
 
 {{if and (gt (len .TeamViews) 0) (gt $.TeamCalendarRefreshMinutes 0)}}
+<div id="team-calendar-refresh" data-minutes="{{$.TeamCalendarRefreshMinutes}}" style="display:none"></div>
 <script>
     // Auto-refresh the team calendar(s) so presence updates from teammates show up without a manual reload.
-    setTimeout(() => { window.location.reload(); }, {{$.TeamCalendarRefreshMinutes}} * 60 * 1000);
+    (function() {
+        const refEl = document.getElementById('team-calendar-refresh');
+        const mins = refEl ? parseInt(refEl.dataset.minutes, 10) : 0;
+        if (mins > 0) {
+            setTimeout(() => { window.location.reload(); }, mins * 60 * 1000);
+        }
+    })();
 </script>
 {{end}}
 

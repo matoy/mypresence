@@ -242,3 +242,57 @@ func TestLayoutTemplate_ActiveNewsBanner_RendersTrack(t *testing.T) {
 		t.Fatal("expected news content in output")
 	}
 }
+
+func TestLayoutTemplate_NotificationsToast_Renders(t *testing.T) {
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	layoutPath := filepath.Clean(filepath.Join(filepath.Dir(thisFile), "../../web/templates/layout.html"))
+	layoutBytes, err := os.ReadFile(layoutPath)
+	if err != nil {
+		t.Fatalf("read layout template: %v", err)
+	}
+
+	funcMap := template.FuncMap{
+		"json": func(v interface{}) template.JS {
+			b, _ := json.Marshal(v)
+			return template.JS(b)
+		},
+		"safeNewsContent": func(s string) template.HTML {
+			return template.HTML(template.HTMLEscapeString(s))
+		},
+	}
+	base := string(layoutBytes) + `{{define "content"}}content{{end}}`
+	tmpl, err := template.New("layout.html").Funcs(funcMap).Parse(base)
+	if err != nil {
+		t.Fatalf("parse layout template: %v", err)
+	}
+
+	data := models.PageData{
+		Config: map[string]interface{}{"AppName": "myPresence"},
+		User:   &models.User{ID: 1, Name: "TestUser", Roles: models.RoleBasic},
+		Page:   "calendar",
+		T: map[string]string{
+			"notifications.acknowledge": "Acknowledge",
+		},
+		Lang: "en",
+		Notifications: []models.Notification{
+			{ID: 10, UserID: 1, Title: "Team assignment", Message: "Added to team A", Type: "team_added"},
+		},
+	}
+
+	var out bytes.Buffer
+	if err := tmpl.ExecuteTemplate(&out, "layout", data); err != nil {
+		t.Fatalf("execute layout template: %v", err)
+	}
+	html := out.String()
+
+	if !strings.Contains(html, "notifications-toast-container") {
+		t.Fatal("expected notifications-toast-container in output")
+	}
+	if !strings.Contains(html, "notificationToasts") {
+		t.Fatal("expected notificationToasts in output")
+	}
+}
+

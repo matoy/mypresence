@@ -60,7 +60,10 @@
                     </svg>
                     {{index .T "login.passkey"}}
                 </button>
-                <p id="passkey-error" class="hidden mt-2 text-sm text-red-600 text-center"></p>
+                <p id="passkey-error"
+                   data-err-unsupported="{{index .T "passkeys.error.unsupported"}}"
+                   data-err-login="{{index .T "passkeys.error.login"}}"
+                   class="hidden mt-2 text-sm text-red-600 text-center"></p>
             </div>
 
             <div class="relative">
@@ -124,7 +127,7 @@ async function loginWithPasskey() {
     errorEl.classList.add('hidden');
 
     if (!window.PublicKeyCredential) {
-        errorEl.textContent = {{index .T "passkeys.error.unsupported" | js}};
+        errorEl.textContent = (errorEl.dataset && errorEl.dataset.errUnsupported) || 'Unsupported';
         errorEl.classList.remove('hidden');
         return;
     }
@@ -162,7 +165,7 @@ async function loginWithPasskey() {
         window.location.href = '/';
     } catch(err) {
         if (err.name !== 'NotAllowedError') {
-            errorEl.textContent = {{index .T "passkeys.error.login" | js}};
+            errorEl.textContent = (errorEl.dataset && errorEl.dataset.errLogin) || 'Login failed';
             errorEl.classList.remove('hidden');
         }
         btn.disabled = false;

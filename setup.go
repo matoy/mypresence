@@ -223,10 +223,13 @@ func newRenderPage(cfg *config.Config, database *db.DB, templates map[string]*te
 			IsDomainManager:            isDomainManager,
 			TeamCalendarRefreshMinutes: cfg.TeamCalendarRefreshMinutes,
 		}
-		// Fetch active news banners for authenticated users.
+		// Fetch active news banners and unread notifications for authenticated users.
 		if user != nil {
 			if activeNews, err := database.GetActiveNewsMessages(); err == nil {
 				pd.ActiveNewsMessages = activeNews
+			}
+			if unreadNotifs, err := database.GetUnreadNotifications(user.ID); err == nil {
+				pd.Notifications = unreadNotifs
 			}
 		}
 		if logoExists {

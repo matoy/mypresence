@@ -1,6 +1,6 @@
 {{define "content"}}
 {{with .Data}}
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" x-data="domainsAdmin({{json .Domains}})">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" x-data="domainsAdmin()">
     <div class="flex items-center justify-between mb-6">
         <h1 class="text-2xl font-bold text-gray-900">{{index $.T "domains.title"}}</h1>
         <button @click="openCreateModal()"
@@ -135,9 +135,8 @@
         </div>
     </div>
 </div>
-<script>
-const allUsersForDomains = {{json .Users}};
-const allTeamsForDomains = {{json .AllTeams}};
-</script>
+<script id="admin-domains-data" type="application/json">{{json .Domains}}</script>
+<script id="admin-domains-users-data" type="application/json">{{json .Users}}</script>
+<script id="admin-domains-teams-data" type="application/json">{{json .AllTeams}}</script>
 {{end}}
 {{end}}

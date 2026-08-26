@@ -84,7 +84,7 @@ func TestOpen_SQLite_MigratesSchema(t *testing.T) {
 	}
 	defer d.Close()
 
-	assertTablesExist(t, d.core, []string{"users", "teams", "user_teams", "sessions", "personal_access_tokens", "password_reset_tokens"}, "core")
+	assertTablesExist(t, d.core, []string{"users", "teams", "user_teams", "sessions", "personal_access_tokens", "password_reset_tokens", "notifications"}, "core")
 	assertTablesExist(t, d.presence, []string{"statuses", "presences", "holidays", "presence_logs"}, "presence")
 	assertTablesExist(t, d.floorplan, []string{"floorplans", "seats", "seat_reservations", "floorplan_favorites"}, "floorplan")
 	assertTablesExist(t, d.audit, []string{"admin_logs"}, "audit")

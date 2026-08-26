@@ -422,6 +422,21 @@ type NewsMessage struct {
 	Recurring bool   `json:"recurring"`  // repeat every month using start/end day-of-month
 }
 
+// Notification represents an in-app user notification.
+type Notification struct {
+	ID             int64      `json:"id"`
+	UserID         int64      `json:"user_id"`
+	ActorID        int64      `json:"actor_id"`
+	ActorName      string     `json:"actor_name"`
+	Type           string     `json:"type"` // e.g. "team_added", "info"
+	Title          string     `json:"title"`
+	Message        string     `json:"message"`
+	Link           string     `json:"link"`
+	Acknowledged   bool       `json:"acknowledged"`
+	AcknowledgedAt *time.Time `json:"acknowledged_at"`
+	CreatedAt      time.Time  `json:"created_at"`
+}
+
 // PageData is the common data passed to all templates.
 type PageData struct {
 	Config            interface{}
@@ -460,6 +475,8 @@ type PageData struct {
 	PasskeysEnabled bool
 	// News banners active today
 	ActiveNewsMessages []NewsMessage
+	// In-app notifications for the current user
+	Notifications []Notification
 }
 
 // Project represents a billable project that users can log time against.

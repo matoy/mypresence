@@ -61,7 +61,7 @@
                     </th>
                     {{range .Statuses}}
                     <th class="px-3 py-3 text-center text-xs font-semibold border-b border-blue-100 min-w-[80px]"
-                        style="color: {{.Color}}">
+                        :style="'color: {{.Color}}'">
                         {{.Name}}
                     </th>
                     {{end}}
@@ -95,7 +95,7 @@
                         {{$countF := getCountF $execStatusTotals .ID}}
                         {{if $countF}}
                         <div class="inline-flex items-center justify-center min-w-[28px] h-7 rounded-full text-white text-xs font-bold"
-                             style="background-color: {{.Color}}">
+                             :style="'background-color: {{.Color}}'">
                             {{fmtF $countF}}
                         </div>
                         {{else}}
@@ -185,7 +185,7 @@
                     </th>
                     {{range .Statuses}}
                     <th class="px-3 py-3 text-center text-xs font-semibold border-b border-gray-200 min-w-[80px]"
-                        style="color: {{.Color}}">
+                        :style="'color: {{.Color}}'">
                         {{.Name}}
                     </th>
                     {{end}}
@@ -224,7 +224,11 @@
                             {{if and $certifiedUsers (index $certifiedUsers .User.ID)}}
                                 {{if $canDecertify}}
                                 <button type="button"
-                                        onclick="openDecertifyModal({{.User.ID}}, '{{.User.Name}}', {{$month}}, {{$year}})"
+                                        data-uid="{{.User.ID}}"
+                                        data-uname="{{.User.Name}}"
+                                        data-month="{{$month}}"
+                                        data-year="{{$year}}"
+                                        onclick="openDecertifyModal(this.dataset.uid, this.dataset.uname, this.dataset.month, this.dataset.year)"
                                         title="{{index $.T "cert.decertify_button_title"}}"
                                         class="leading-none hover:opacity-70 transition text-amber-500">
                                     <svg class="h-4 w-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 10-8 0v4h8z"/></svg>
@@ -238,7 +242,11 @@
                             {{if and $showProjectActivity $projectCertifiedUsers (index $projectCertifiedUsers .User.ID)}}
                                 {{if $canDecertify}}
                                 <button type="button"
-                                        onclick="openDecertifyProjectModal({{.User.ID}}, '{{.User.Name}}', {{$month}}, {{$year}})"
+                                        data-uid="{{.User.ID}}"
+                                        data-uname="{{.User.Name}}"
+                                        data-month="{{$month}}"
+                                        data-year="{{$year}}"
+                                        onclick="openDecertifyProjectModal(this.dataset.uid, this.dataset.uname, this.dataset.month, this.dataset.year)"
                                         title="{{index $.T "cert.decertify_project_button_title"}}"
                                         class="leading-none hover:opacity-70 transition text-blue-500">
                                     <svg class="h-4 w-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 10-8 0v4h8z"/></svg>
@@ -256,7 +264,7 @@
                         {{$countF := getCountF $stat.StatusCounts .ID}}
                         {{if $countF}}
                         <div class="inline-flex items-center justify-center min-w-[28px] h-7 rounded-full text-white text-xs font-bold"
-                             style="background-color: {{.Color}}">
+                             :style="'background-color: {{.Color}}'">
                             {{fmtF $countF}}
                         </div>
                         {{else}}
@@ -327,7 +335,7 @@
                         {{$totalF := getCountF $statusTotals .ID}}
                         {{if $totalF}}
                         <div class="inline-flex items-center justify-center min-w-[28px] h-7 rounded-full text-white text-xs font-bold"
-                             style="background-color: {{.Color}}; opacity: 0.8">
+                             :style="'background-color: {{.Color}}; opacity: 0.8'">
                             {{fmtF $totalF}}
                         </div>
                         {{else}}
@@ -424,13 +432,16 @@
                                 {{$fullSid := presenceHalf $userPresences .Date "full"}}
                                 {{$amSid   := presenceHalf $userPresences .Date "AM"}}
                                 {{$pmSid   := presenceHalf $userPresences .Date "PM"}}
+                                {{$fullSidColor := statusColor $allStatuses $fullSid}}
+                                {{$amSidColor := statusColor $allStatuses $amSid}}
+                                {{$pmSidColor := statusColor $allStatuses $pmSid}}
                                 {{if $fullSid}}
-                                <div class="mx-auto h-5 w-5 rounded flex items-center justify-center text-white text-[8px] font-bold leading-none" style="background-color: {{statusColor $allStatuses $fullSid}}" title="{{statusName $allStatuses $fullSid}}">{{if statusBillable $allStatuses $fullSid}}1{{end}}</div>
+                                <div class="mx-auto h-5 w-5 rounded flex items-center justify-center text-white text-[8px] font-bold leading-none" :style="'background-color: ' + '{{$fullSidColor}}'" title="{{statusName $allStatuses $fullSid}}">{{if statusBillable $allStatuses $fullSid}}1{{end}}</div>
                                 {{else if or $amSid $pmSid}}
                                 <div class="mx-auto h-5 w-5 rounded overflow-hidden flex flex-col">
-                                    <div class="flex-1 flex items-center justify-center text-white text-[7px] font-bold leading-none" style="background-color: {{if $amSid}}{{statusColor $allStatuses $amSid}}{{else}}#e5e7eb{{end}}"
+                                    <div class="flex-1 flex items-center justify-center text-white text-[7px] font-bold leading-none" :style="'background-color: ' + '{{if $amSid}}{{$amSidColor}}{{else}}#e5e7eb{{end}}'"
                                          title="AM{{if $amSid}}: {{statusName $allStatuses $amSid}}{{end}}">{{if $amSid}}{{if statusBillable $allStatuses $amSid}}½{{end}}{{end}}</div>
-                                    <div class="flex-1 flex items-center justify-center text-white text-[7px] font-bold leading-none" style="background-color: {{if $pmSid}}{{statusColor $allStatuses $pmSid}}{{else}}#e5e7eb{{end}}"
+                                    <div class="flex-1 flex items-center justify-center text-white text-[7px] font-bold leading-none" :style="'background-color: ' + '{{if $pmSid}}{{$pmSidColor}}{{else}}#e5e7eb{{end}}'"
                                          title="PM{{if $pmSid}}: {{statusName $allStatuses $pmSid}}{{end}}">{{if $pmSid}}{{if statusBillable $allStatuses $pmSid}}½{{end}}{{end}}</div>
                                 </div>
                                 {{else}}
@@ -538,7 +549,7 @@ function exportTable(tableId, filename, sheetName) {
 
 let decertifyTarget = null;
 function openDecertifyModal(userId, userName, month, year) {
-    decertifyTarget = { userId, month, year };
+    decertifyTarget = { userId: parseInt(userId, 10), month: parseInt(month, 10), year: parseInt(year, 10) };
     const modal = document.getElementById('decertify-modal');
     if (modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
 }
@@ -566,7 +577,7 @@ async function confirmDecertify() {
 
 let decertifyProjectTarget = null;
 function openDecertifyProjectModal(userId, userName, month, year) {
-    decertifyProjectTarget = { userId, month, year };
+    decertifyProjectTarget = { userId: parseInt(userId, 10), month: parseInt(month, 10), year: parseInt(year, 10) };
     const modal = document.getElementById('decertify-project-modal');
     if (modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
 }

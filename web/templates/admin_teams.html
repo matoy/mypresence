@@ -5,13 +5,20 @@
 {{$jiraEnabled := .JiraEnabled}}
 {{$domains := .Domains}}
 {{$countries := .Countries}}
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" x-data="teamsAdmin({{json .Teams}}, {{json .Countries}})">
+
+<!-- Safe JSON data payloads for Alpine component -->
+<script id="teams-json-data" type="application/json">{{json .Teams}}</script>
+<script id="countries-json-data" type="application/json">{{json .Countries}}</script>
+<script id="users-json-data" type="application/json">{{json .Users}}</script>
+
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" x-data="teamsAdmin()">
     <div class="flex items-center justify-between mb-6">
         <h1 class="text-2xl font-bold text-gray-900">{{index $.T "teams.title"}}</h1>
         <div class="flex items-center gap-3">
             <span class="text-sm text-gray-400" x-text="filteredCount + ' / ' + totalCount"></span>
             {{if $canManageTeams}}
             <button @click="showCreateModal = true; createError = ''; newTeamName = ''; newTeamJiraKey = ''; newTeamManual = false; newTeamRequireComment = false; newTeamDomainId = 0; newTeamCountryCodes = ''"
+                    type="button"
                     class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
                 + {{index $.T "teams.create"}}
             </button>
@@ -37,6 +44,7 @@
                 </select>
             </div>
             <button @click="resetFilters()"
+                    type="button"
                     class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
                 {{index $.T "admin.reset"}}
             </button>
@@ -48,8 +56,35 @@
     {{$activeCount := 0}}
     {{range .Members}}{{if not .LeftAt}}{{$activeCount = add $activeCount 1}}{{end}}{{end}}
     <div class="bg-white rounded-xl shadow-md p-6 mb-4"
-         x-data="{ editTeam: false, editNameValue: '', editJiraKey: '', editManual: false, editRequireComment: false, editDomainId: 0, editCountryCodes: '{{.Team.CountryCodes}}', showAddMember: false, memberSearch: '', memberIds: [{{range $i, $m := .Members}}{{if $i}},{{end}}{{$m.ID}}{{end}}] }"
-         x-show="matchesTeam({{json .Team.Name}}, {{$activeCount}})"
+         data-team-id="{{.Team.ID}}"
+         data-team-name="{{.Team.Name}}"
+         data-jira-key="{{.Team.JiraSpaceKey}}"
+         data-manual="{{if .Team.TimesheetsManagedManually}}true{{else}}false{{end}}"
+         data-comment="{{if .Team.RequireActivityComment}}true{{else}}false{{end}}"
+         data-domain-id="{{.Team.DomainID}}"
+         data-country-codes="{{.Team.CountryCodes}}"
+         data-active-members="{{$activeCount}}"
+         x-data="{
+            editTeam: false,
+            editNameValue: '',
+            editJiraKey: '',
+            editManual: false,
+            editRequireComment: false,
+            editDomainId: 0,
+            editCountryCodes: '',
+            showAddMember: false,
+            memberSearch: '',
+            memberIds: [{{range $i, $m := .Members}}{{if $i}},{{end}}{{$m.ID}}{{end}}]
+         }"
+         x-init="
+            editNameValue = $el.dataset.teamName || '';
+            editJiraKey = $el.dataset.jiraKey || '';
+            editManual = $el.dataset.manual === 'true';
+            editRequireComment = $el.dataset.comment === 'true';
+            editDomainId = parseInt($el.dataset.domainId) || 0;
+            editCountryCodes = $el.dataset.countryCodes || '';
+         "
+         x-show="matchesTeam($el.dataset.teamName, parseInt($el.dataset.activeMembers) || 0)"
          x-cloak>
         <div class="flex items-center justify-between mb-4">
             <div class="flex items-center gap-3 flex-1 min-w-0">
@@ -127,10 +162,12 @@
                         </div>
                         <div class="flex gap-2 mt-1">
                             <button @click="saveTeamDetails({{.Team.ID}}, editNameValue, editJiraKey, editManual, editRequireComment, editDomainId, editCountryCodes); editTeam = false"
+                                    type="button"
                                     class="text-xs px-2.5 py-1.5 bg-primary text-white rounded-lg font-medium hover:opacity-90 transition">
                                 {{index $.T "admin.save"}}
                             </button>
                             <button @click="editTeam = false"
+                                    type="button"
                                     class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition">
                                 {{index $.T "admin.cancel"}}
                             </button>
@@ -140,7 +177,8 @@
             </div>
             <div class="flex items-center gap-2">
                 {{if $canManageTeams}}
-                <button @click="editTeam = !editTeam; editNameValue = {{json .Team.Name}}; editJiraKey = {{json .Team.JiraSpaceKey}}; editManual = {{.Team.TimesheetsManagedManually}}; editRequireComment = {{.Team.RequireActivityComment}}; editDomainId = {{.Team.DomainID}}; editCountryCodes = '{{.Team.CountryCodes}}'; $nextTick(() => $refs.editNameInput?.focus())"
+                <button @click="editTeam = !editTeam; $nextTick(() => $refs.editNameInput?.focus())"
+                        type="button"
                         class="p-2 text-gray-400 hover:text-gray-600 transition" title="Edit">
                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
@@ -149,6 +187,7 @@
                 {{end}}
                 {{if $teamItem.CanEdit}}
                 <button @click="showAddMember = !showAddMember"
+                        type="button"
                         class="p-2 text-green-500 hover:text-green-700 transition" title="Add member">
                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
@@ -157,6 +196,7 @@
                 {{end}}
                 {{if $canManageTeams}}
                 <button @click="if(confirm(_t['teams.delete_confirm'])) deleteTeam({{.Team.ID}})"
+                        type="button"
                         class="p-2 text-red-400 hover:text-red-600 transition" title="Delete">
                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
@@ -176,7 +216,7 @@
                    x-init="$watch('showAddMember', v => { if (v) $nextTick(() => $el.focus()); })"
                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mb-2 focus:ring-2 focus:ring-green-400/50">
             <div class="max-h-48 overflow-y-auto border border-gray-200 rounded-lg bg-white divide-y divide-gray-100">
-                <template x-for="u in allUsersForTeams.filter(u => !memberIds.includes(u.id) && (memberSearch === '' || u.name.toLowerCase().includes(memberSearch.toLowerCase()) || u.email.toLowerCase().includes(memberSearch.toLowerCase())))" :key="u.id">
+                <template x-for="u in (allUsers || []).filter(u => !memberIds.includes(u.id) && (memberSearch === '' || (u.name || '').toLowerCase().includes(memberSearch.toLowerCase()) || (u.email || '').toLowerCase().includes(memberSearch.toLowerCase())))" :key="u.id">
                     <button type="button"
                             @click="addMember({{.Team.ID}}, u.id); showAddMember = false; memberSearch = ''"
                             class="w-full text-left px-3 py-2 hover:bg-green-50 transition flex flex-col">
@@ -184,7 +224,7 @@
                         <span x-text="u.email" class="text-xs text-gray-500"></span>
                     </button>
                 </template>
-                <div x-show="allUsersForTeams.filter(u => !memberIds.includes(u.id) && (memberSearch === '' || u.name.toLowerCase().includes(memberSearch.toLowerCase()) || u.email.toLowerCase().includes(memberSearch.toLowerCase()))).length === 0"
+                <div x-show="(allUsers || []).filter(u => !memberIds.includes(u.id) && (memberSearch === '' || (u.name || '').toLowerCase().includes(memberSearch.toLowerCase()) || (u.email || '').toLowerCase().includes(memberSearch.toLowerCase()))).length === 0"
                      class="px-3 py-3 text-sm text-gray-400 text-center" x-text="_t['teams.no_users']"></div>
             </div>
         </div>
@@ -216,6 +256,7 @@
                 <div class="flex items-center gap-1">
                     {{if .LeftAt}}
                     <button @click="clearLeftAt({{$teamItem.Team.ID}}, {{.ID}})"
+                            type="button"
                             class="text-xs px-2 py-1 bg-green-100 hover:bg-green-200 text-green-700 rounded transition"
                             title="{{index $.T "teams.clear_left_at"}}">
                         ↩ {{index $.T "teams.clear_left_at"}}
@@ -223,6 +264,7 @@
                     {{else}}
                     <div x-data="{ showDep: false }" class="flex items-center gap-1">
                         <button @click="showDep = !showDep"
+                                type="button"
                                 class="text-gray-400 hover:text-orange-500 transition p-1"
                                 :title="_t['teams.set_left_at']">
                             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -235,6 +277,7 @@
                                @keydown.escape="showDep = false">
                     </div>
                     <button @click="removeMember({{$teamItem.Team.ID}}, {{.ID}})"
+                            type="button"
                             class="text-red-400 hover:text-red-600 transition p-1" title="Remove">
                         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -320,10 +363,12 @@
             <p x-show="createError" x-text="createError" class="mt-3 text-sm text-red-600"></p>
             <div class="flex justify-end gap-3 mt-6">
                 <button @click="showCreateModal = false"
+                        type="button"
                         class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
                     {{index $.T "admin.cancel"}}
                 </button>
                 <button @click="createTeam()"
+                        type="button"
                         class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
                     {{index $.T "admin.create"}}
                 </button>
@@ -332,8 +377,5 @@
     </div>
     {{end}}
 </div>
-<script>
-const allUsersForTeams = {{json .Users}};
-</script>
 {{end}}
 {{end}}

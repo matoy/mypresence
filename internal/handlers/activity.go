@@ -211,7 +211,7 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 	var execUserCount int
 	if showExecSummary && len(allTeams) > 0 {
 		execStatusTotals, execTotalBillable, execTotalOnSite, execTotalNotSet, execTotalWorkingDays, execProjectActivityPct, execUserCount =
-			h.computeExecSummary(allTeams, startDate, endDate, workingDaysExcluded, year, month)
+			h.computeExecSummary(allTeams, startDate, endDate, year, month)
 	}
 
 	prevTime := time.Date(year, time.Month(month)-1, 1, 0, 0, 0, 0, time.UTC)
@@ -523,7 +523,7 @@ func computeDayBillableOnSite(presenceMap map[int64]map[string]map[string]int64,
 func (h *ActivityHandler) computeExecSummary(
 	allTeams []models.Team,
 	startDate, endDate string,
-	workingDaysExcl, year, month int,
+	year, month int,
 ) (statusTotals map[int64]float64, totalBillable, totalOnSite, totalNotSet, totalWorkingDays, projectActivityPct float64, userCount int) {
 	statusTotals = make(map[int64]float64)
 	seen := make(map[int64]bool)

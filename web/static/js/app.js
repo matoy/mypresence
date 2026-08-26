@@ -194,10 +194,13 @@ function calendarApp(statuses, currentUserId, isAdmin, presences) {
                     window.location.reload();
                 } else {
                     const data = await resp.json().catch(() => ({}));
-                    if (resp.status === 423) {
+                    alert(data.error || (typeof _t !== 'undefined' && _t['fp.conn_error']) || 'Erreur');
+                }
+            } catch (e) {
                 alert((typeof _t !== 'undefined' && _t['fp.conn_error']) || 'Erreur de connexion');
             }
             this.pendingHalf = 'full';
+            this.cancelSelect();
         },
 
         // Clear presences for selected dates
@@ -218,10 +221,14 @@ function calendarApp(statuses, currentUserId, isAdmin, presences) {
                     window.location.reload();
                 } else {
                     const data = await resp.json().catch(() => ({}));
-                    if (resp.status === 423) {
+                    alert(data.error || (typeof _t !== 'undefined' && _t['fp.conn_error']) || 'Erreur');
+                }
+            } catch (e) {
+                alert((typeof _t !== 'undefined' && _t['fp.conn_error']) || 'Erreur de connexion');
             }
             this.pendingHalf = 'full';
             this.cancelSelect();
+        },
 
         cancelSelect() {
             this.selecting = false;
@@ -459,9 +466,16 @@ function calendarApp(statuses, currentUserId, isAdmin, presences) {
                     } else {
                         alert(d.error || (typeof _t !== 'undefined' && _t['fp.error']) || 'Erreur');
                     }
+                }
+            } catch (e) {
+                alert((typeof _t !== 'undefined' && _t['fp.conn_error']) || 'Erreur de connexion');
+            }
+        },
+
         // Initialize event listeners
         init() {
             // End selection on mouseup
+            document.addEventListener('mouseup', (e) => {
                 if (this.longPressTimer) {
                     clearTimeout(this.longPressTimer);
                     this.longPressTimer = null;
@@ -858,10 +872,34 @@ function teamCalendarApp(statuses, currentUserId, canEdit, allPresences) {
 // ============================================================
 // Admin: Teams management
 // ============================================================
-function teamsAdmin(initialTeams, countriesCatalog) {
+// Admin: Teams management
+// ============================================================
+function teamsAdmin(initialTeams, countriesCatalog, allUsers) {
+    let teams = initialTeams;
+    let countries = countriesCatalog;
+    let users = allUsers;
+    if (!teams) {
+        const el = document.getElementById('teams-json-data');
+        if (el && el.textContent) {
+            try { teams = JSON.parse(el.textContent); } catch (e) { teams = []; }
+        }
+    }
+    if (!countries) {
+        const el = document.getElementById('countries-json-data');
+        if (el && el.textContent) {
+            try { countries = JSON.parse(el.textContent); } catch (e) { countries = []; }
+        }
+    }
+    if (!users) {
+        const el = document.getElementById('users-json-data');
+        if (el && el.textContent) {
+            try { users = JSON.parse(el.textContent); } catch (e) { users = []; }
+        }
+    }
     return {
-        teams: initialTeams || [],
-        countriesCatalog: countriesCatalog || [],
+        teams: teams || [],
+        countriesCatalog: countries || [],
+        allUsers: users || [],
         newTeamName: '',
         newTeamJiraKey: '',
         newTeamManual: false,
@@ -874,13 +912,15 @@ function teamsAdmin(initialTeams, countriesCatalog) {
         filterMembers: 'all',
 
         get totalCount() {
-            return this.teams.length;
+            return (this.teams || []).length;
         },
 
         get filteredCount() {
-            return this.teams.filter(t => {
-                const activeMemberCount = (t.Members || []).filter(m => !m.left_at).length;
-                return this.matchesTeam((t.Team && t.Team.name) || '', activeMemberCount);
+            return (this.teams || []).filter(t => {
+                const members = t.Members || t.members || [];
+                const activeMemberCount = members.filter(m => !m.left_at).length;
+                const teamName = (t.Team && (t.Team.name || t.Team.Name)) || (t.team && (t.team.name || t.team.Name)) || '';
+                return this.matchesTeam(teamName, activeMemberCount);
             }).length;
         },
 
@@ -890,7 +930,7 @@ function teamsAdmin(initialTeams, countriesCatalog) {
         },
 
         matchesTeam(name, memberCount) {
-            const q = this.filterText.trim().toLowerCase();
+            const q = (this.filterText || '').trim().toLowerCase();
             if (q && !(name || '').toLowerCase().includes(q)) return false;
             if (this.filterMembers === 'with' && memberCount <= 0) return false;
             if (this.filterMembers === 'empty' && memberCount > 0) return false;
@@ -898,12 +938,13 @@ function teamsAdmin(initialTeams, countriesCatalog) {
         },
 
         isCountryInList(listStr, code) {
-            if (!listStr) return false;
+            if (!listStr || !code) return false;
             const codes = listStr.split(',').map(s => s.trim().toUpperCase());
             return codes.includes(code.toUpperCase());
         },
 
         toggleCountryInList(currentStr, code) {
+            if (!code) return currentStr || '';
             let codes = (currentStr || '').split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
             const target = code.toUpperCase();
             if (codes.includes(target)) {
@@ -917,7 +958,7 @@ function teamsAdmin(initialTeams, countriesCatalog) {
         async createTeam() {
             this.createError = '';
             if (!this.newTeamName.trim()) {
-                this.createError = 'Name is required';
+                this.createError = _t['teams.error_name_required'] || 'Name is required';
                 return;
             }
             const r = await fetch('/admin/teams', {
@@ -939,7 +980,7 @@ function teamsAdmin(initialTeams, countriesCatalog) {
             }
             try {
                 const d = await r.json();
-                this.createError = d.error || 'Error';
+                this.createError = _t[d.error] || d.error || 'Error';
             } catch (e) {
                 this.createError = 'Error';
             }
@@ -961,7 +1002,6 @@ function teamsAdmin(initialTeams, countriesCatalog) {
             window.location.reload();
         },
 
-
         async deleteTeam(id) {
             await fetch(`/admin/teams/${id}`, { method: 'DELETE' });
             window.location.reload();
@@ -977,7 +1017,7 @@ function teamsAdmin(initialTeams, countriesCatalog) {
         },
 
         async removeMember(teamId, userId) {
-            if (!confirm('Remove this member from the team?')) return;
+            if (!confirm(_t['teams.remove_member_confirm'] || 'Remove this member from the team?')) return;
             await fetch(`/admin/teams/${teamId}/members/${userId}`, { method: 'DELETE' });
             window.location.reload();
         },
@@ -1006,8 +1046,25 @@ function teamsAdmin(initialTeams, countriesCatalog) {
 // Admin: Domains management
 // ============================================================
 function domainsAdmin(initialDomains) {
+    let domains = initialDomains;
+    if (!domains) {
+        const el = document.getElementById('admin-domains-data');
+        if (el && el.textContent) {
+            try { domains = JSON.parse(el.textContent); } catch (e) { domains = []; }
+        }
+    }
+    let allUsers = window.allUsersForDomains || [];
+    const usersEl = document.getElementById('admin-domains-users-data');
+    if (usersEl && usersEl.textContent) {
+        try { allUsers = JSON.parse(usersEl.textContent); } catch (e) {}
+    }
+    let allTeams = window.allTeamsForDomains || [];
+    const teamsEl = document.getElementById('admin-domains-teams-data');
+    if (teamsEl && teamsEl.textContent) {
+        try { allTeams = JSON.parse(teamsEl.textContent); } catch (e) {}
+    }
     return {
-        domains: initialDomains || [],
+        domains: domains || [],
         showModal: false,
         editId: null,
         form: { name: '', manager_ids: [], team_ids: [] },
@@ -1016,18 +1073,18 @@ function domainsAdmin(initialDomains) {
         formError: '',
 
         userName(id) {
-            const u = (allUsersForDomains || []).find(u => u.id === id);
+            const u = (allUsers || []).find(u => u.id === id);
             return u ? u.name : id;
         },
 
         teamName(id) {
-            const t = (allTeamsForDomains || []).find(t => t.id === id);
+            const t = (allTeams || []).find(t => t.id === id);
             return t ? t.name : id;
         },
 
         get filteredManagerCandidates() {
             const q = this.managerSearch.trim().toLowerCase();
-            return (allUsersForDomains || []).filter(u =>
+            return (allUsers || []).filter(u =>
                 !this.form.manager_ids.includes(u.id) &&
                 (q === '' || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q))
             );
@@ -1035,7 +1092,7 @@ function domainsAdmin(initialDomains) {
 
         get filteredTeamCandidates() {
             const q = this.teamSearch.trim().toLowerCase();
-            return (allTeamsForDomains || []).filter(t =>
+            return (allTeams || []).filter(t =>
                 !this.form.team_ids.includes(t.id) &&
                 (q === '' || t.name.toLowerCase().includes(q))
             );
@@ -1245,3 +1302,67 @@ function statusAdmin(initialStatuses) {
         }
     };
 }
+
+// ============================================================
+// Notification Toasts (Alpine.js component)
+// ============================================================
+function notificationToasts(initialNotifs) {
+    let notifs = initialNotifs;
+    if (!notifs) {
+        const el = document.getElementById('notifications-json-data');
+        if (el && el.textContent) {
+            try { notifs = JSON.parse(el.textContent); } catch (e) { notifs = []; }
+        }
+    }
+    return {
+        notifs: notifs || [],
+        formatDate(dtStr) {
+            if (!dtStr) return '';
+            try {
+                const d = new Date(dtStr);
+                return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            } catch (e) {
+                return dtStr;
+            }
+        },
+        getTitle(notif) {
+            if (!notif) return '';
+            if (notif.type === 'team_added' && typeof _t !== 'undefined' && _t['notifications.team_added_title']) {
+                return _t['notifications.team_added_title'];
+            }
+            return notif.title || '';
+        },
+        getMessage(notif) {
+            if (!notif) return '';
+            if (notif.type === 'team_added' && typeof _t !== 'undefined' && _t['notifications.team_added_msg']) {
+                const tpl = _t['notifications.team_added_msg'];
+                const team = notif.link || '';
+                const actor = notif.actor_name || 'Admin';
+                if (team) {
+                    const parts = tpl.split('%s');
+                    if (parts.length === 3) {
+                        return parts[0] + team + parts[1] + actor + parts[2];
+                    }
+                }
+            }
+            return notif.message || '';
+        },
+        async ack(id) {
+            try {
+                const resp = await fetch('/api/notifications/' + id + '/ack', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                if (resp.ok) {
+                    const idx = this.notifs.findIndex(n => n.id === id);
+                    if (idx !== -1) {
+                        this.notifs[idx].acknowledged = true;
+                    }
+                }
+            } catch (err) {
+                console.error('Error acknowledging notification:', err);
+            }
+        }
+    };
+}
+

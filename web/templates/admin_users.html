@@ -308,15 +308,31 @@
 
 </div>
 
-<script>
-const allRoles = {{json .AllRoles}};
-const usersData = {{json .Users}};
-const currentUserId = {{.CurrentUserID}};
+<script id="admin-users-roles-data" type="application/json">{{json .AllRoles}}</script>
+<script id="admin-users-data" type="application/json">{{json .Users}}</script>
+<script id="admin-users-current-id" type="application/json">{{.CurrentUserID}}</script>
 
+<script>
 function usersRolesAdmin() {
+    let allRoles = [];
+    const rolesEl = document.getElementById('admin-users-roles-data');
+    if (rolesEl && rolesEl.textContent) {
+        try { allRoles = JSON.parse(rolesEl.textContent); } catch (e) {}
+    }
+    let usersData = [];
+    const usersEl = document.getElementById('admin-users-data');
+    if (usersEl && usersEl.textContent) {
+        try { usersData = JSON.parse(usersEl.textContent); } catch (e) {}
+    }
+    let currentUserId = 0;
+    const currentIdEl = document.getElementById('admin-users-current-id');
+    if (currentIdEl && currentIdEl.textContent) {
+        try { currentUserId = JSON.parse(currentIdEl.textContent); } catch (e) {}
+    }
     return {
         allRoles,
-        users: usersData.map(u => ({
+        currentUserId,
+        users: (usersData || []).map(u => ({
             ...u,
             _editing: false,
             _changingPw: false,

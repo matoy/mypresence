@@ -237,6 +237,7 @@ func buildRouter(database *db.DB, cfg *config.Config, dataDir string, rateLimite
 	resetH := &handlers.ResetPasswordHandler{DB: database, Config: cfg, Render: renderPage}
 	fpH := &handlers.FloorplanHandler{DB: database, DataDir: dataDir, Render: renderPage}
 	projectsH := &handlers.ProjectsHandler{DB: database, Render: renderPage}
+	notifH := &handlers.NotificationsHandler{DB: database}
 
 	mux := http.NewServeMux()
 
@@ -298,6 +299,10 @@ func buildRouter(database *db.DB, cfg *config.Config, dataDir string, rateLimite
 	authMux.HandleFunc("GET /impersonate", settingsH.ImpersonatePage)
 	authMux.Handle("POST /impersonate", middleware.ValidateCSRF(cfg.SecretKey)(http.HandlerFunc(settingsH.ImpersonatePost)))
 	authMux.Handle("POST /impersonate-exit", middleware.ValidateCSRF(cfg.SecretKey)(http.HandlerFunc(settingsH.ImpersonateExitPost)))
+
+	// Notifications
+	authMux.HandleFunc("POST /api/notifications/{id}/ack", notifH.AcknowledgeNotification)
+	authMux.HandleFunc("GET /api/notifications/unread", notifH.GetUnreadNotificationsAPI)
 
 	// Floorplan user routes
 	authMux.HandleFunc("GET /floorplan", fpH.FloorplanPage)

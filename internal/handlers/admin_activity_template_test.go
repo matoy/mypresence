@@ -164,11 +164,24 @@ func TestAdminActivityTemplate_DecertifyButtonForGlobalAdmin(t *testing.T) {
 	if !strings.Contains(html, "text-amber-500") {
 		t.Fatal("expected certified seal button to render")
 	}
-	// Whitespace inside the onclick attribute comes from template indentation
-	// and is insignificant in JS, so normalize it before comparing.
+	// The decertify button uses data-* attributes to avoid inline Go template
+	// interpolation inside onclick (which confuses JS linters). Verify that
+	// the rendered HTML contains the correct data attributes for user/month/year.
 	normalized := strings.Join(strings.Fields(html), " ")
-	if !strings.Contains(normalized, "openDecertifyModal( 1 , 'Alice', 5 , 2026 )") {
-		t.Fatalf("expected decertify button wired with correct user/month/year, got: %s", html)
+	if !strings.Contains(normalized, `data-uid="1"`) {
+		t.Fatalf("expected decertify button to have data-uid=\"1\", got: %s", html)
+	}
+	if !strings.Contains(normalized, `data-uname="Alice"`) {
+		t.Fatalf("expected decertify button to have data-uname=\"Alice\", got: %s", html)
+	}
+	if !strings.Contains(normalized, `data-month="5"`) {
+		t.Fatalf("expected decertify button to have data-month=\"5\", got: %s", html)
+	}
+	if !strings.Contains(normalized, `data-year="2026"`) {
+		t.Fatalf("expected decertify button to have data-year=\"2026\", got: %s", html)
+	}
+	if !strings.Contains(normalized, "openDecertifyModal(this.dataset.uid") {
+		t.Fatalf("expected decertify button to call openDecertifyModal via dataset, got: %s", html)
 	}
 }
 

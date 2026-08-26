@@ -433,7 +433,7 @@
     {{end}}
     {{range .ActiveNewsMessages}}
     <!-- News banner -->
-    <div class="news-banner-container overflow-hidden" style="background-color: {{.BgColor}};">
+    <div class="news-banner-container overflow-hidden" style="background-color: {{.BgColor}}">
         <div class="news-banner-track text-white py-1.5 px-4 text-sm font-medium">
             {{safeNewsContent .Content}}
             &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#10023;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
@@ -776,6 +776,59 @@
         <a href="https://github.com/matoy/mypresence/blob/main/LICENSE" target="_blank" rel="noopener noreferrer"
            class="hover:text-gray-600 transition">GPL v3</a>
     </footer>
+    {{end}}
+
+    {{if and .User .Notifications}}
+    <!-- Safe JSON payload for notification toasts -->
+    <script id="notifications-json-data" type="application/json">{{json .Notifications}}</script>
+    <!-- Floating In-App Notifications Toast Container -->
+    <div id="notifications-toast-container"
+         x-data="notificationToasts()"
+         class="fixed bottom-5 right-5 z-50 flex flex-col gap-3 max-w-sm w-[calc(100vw-2.5rem)] pointer-events-none"
+         x-cloak>
+        <template x-for="notif in notifs" :key="notif.id">
+            <div x-show="!notif.acknowledged"
+                 x-transition:enter="transition ease-out duration-300 transform"
+                 x-transition:enter-start="opacity-0 translate-y-4 scale-95"
+                 x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+                 x-transition:leave="transition ease-in duration-200 transform"
+                 x-transition:leave-start="opacity-100 translate-y-0 scale-100"
+                 x-transition:leave-end="opacity-0 translate-y-2 scale-95"
+                 class="pointer-events-auto bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 p-4 flex flex-col gap-2.5 backdrop-blur-md">
+                <div class="flex items-start justify-between gap-3">
+                    <div class="flex items-center gap-2.5">
+                        <div class="h-8 w-8 rounded-xl bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 flex items-center justify-center flex-shrink-0 text-base shadow-sm">
+                            <span x-show="notif.type === 'team_added'">👥</span>
+                            <span x-show="notif.type !== 'team_added'">🔔</span>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-bold text-gray-900 dark:text-white leading-tight" x-text="getTitle(notif)"></h4>
+                            <p class="text-[11px] text-gray-400 dark:text-gray-400 mt-0.5" x-text="formatDate(notif.created_at)"></p>
+                        </div>
+                    </div>
+                    <button @click="ack(notif.id)"
+                            type="button"
+                            class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                            title="{{index $.T "notifications.acknowledge"}}">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+                <p class="text-xs text-gray-600 dark:text-gray-300 leading-relaxed pl-1" x-text="getMessage(notif)"></p>
+                <div class="flex items-center justify-end gap-2 pt-1 border-t border-gray-100 dark:border-gray-700">
+                    <button @click="ack(notif.id)"
+                            type="button"
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-primary hover:opacity-90 text-white shadow-sm transition">
+                        <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span>{{index $.T "notifications.acknowledge"}}</span>
+                    </button>
+                </div>
+            </div>
+        </template>
+    </div>
     {{end}}
 
     <script src="/static/js/app.js"></script>
