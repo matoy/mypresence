@@ -1,6 +1,6 @@
 {{define "content"}}
 {{with .Data}}
-{{$days := .Days}}{{$allStatuses := .Statuses}}{{$presences := .Presences}}{{$overrides := .Overrides}}{{$uid := .CurrentUserID}}{{$reservations := .ReservationDates}}
+{{$days := .Days}}{{$allStatuses := .Statuses}}{{$presences := .Presences}}{{$overrides := .Overrides}}{{$uid := .CurrentUserID}}{{$reservations := .ReservationDates}}{{$projActivities := .ProjectActivities}}
 <div class="max-w-full mx-auto px-2 sm:px-4 lg:px-6"
      x-data="calendarApp({{json .Statuses}}, {{.CurrentUserID}}, true, {{json .Presences}})">
 
@@ -188,6 +188,14 @@
                         <div class="absolute bottom-0 left-0 right-0 flex justify-center pointer-events-none select-none" :title="_t['cal.desk_reserved']">
                             <span style="font-size:1.1rem;line-height:1.2;">🖥️</span>
                         </div>
+                        {{end}}
+                        {{if $projActivities}}
+                        {{if index $projActivities .Date}}
+                        <div class="absolute bottom-0.5 right-0.5 z-10 flex items-center justify-center pointer-events-none select-none"
+                             title="{{index $.T "cal.project_activity_complete"}}">
+                            <span class="text-[10px] leading-none bg-white/90 dark:bg-gray-800/90 rounded-full px-0.5 py-0.5 shadow-sm border border-gray-300/60 dark:border-gray-600">🎯</span>
+                        </div>
+                        {{end}}
                         {{end}}
                         </div>
                     </td>
@@ -431,6 +439,7 @@
                 {{$memberPresences := index $tv.Presences .ID}}
                 {{$memberOverrides := index $tv.Overrides .ID}}
                 {{$memberReservations := index $tv.Reservations .ID}}
+                {{$memberProjActivities := index $tv.ProjectActivities .ID}}
                 <tr class="border-b border-gray-100 last:border-0">
                     <td class="sticky left-0 z-10 bg-white border-r border-gray-200 px-2 py-0 align-middle">
                         <span class="text-xs font-semibold {{if eq $memberID $uid}}text-primary{{else}}text-gray-700{{end}} flex items-center gap-1 max-w-[100px]"
@@ -495,6 +504,14 @@
                         <div class="absolute bottom-0 left-0 right-0 flex justify-center pointer-events-none select-none" :title="_t['cal.desk_reserved']">
                             <span style="font-size:1.1rem;line-height:1.2;">🖥️</span>
                         </div>
+                        {{end}}
+                        {{if $memberProjActivities}}
+                        {{if index $memberProjActivities .Date}}
+                        <div class="absolute bottom-0.5 right-0.5 z-10 flex items-center justify-center pointer-events-none select-none"
+                             title="{{index $.T "cal.project_activity_complete"}}">
+                            <span class="text-[10px] leading-none bg-white/90 dark:bg-gray-800/90 rounded-full px-0.5 py-0.5 shadow-sm border border-gray-300/60 dark:border-gray-600">🎯</span>
+                        </div>
+                        {{end}}
                         {{end}}
                         </div>
                     </td>

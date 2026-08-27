@@ -23,17 +23,19 @@ type CalendarHandler struct {
 	DB                *db.DB
 	Render            func(w http.ResponseWriter, r *http.Request, page string, data interface{})
 	DisableFloorplans bool
+	DisableProjects   bool
 }
 
 // teamCalendarView holds display data for one team's presence sub-table.
 type teamCalendarView struct {
-	Team           models.Team
-	Members        []models.User
-	Presences      map[int64]map[string]map[string]int64         // userID → date → half → statusID
-	Overrides      map[int64]map[string]models.PresenceOverride // userID → date → PresenceOverride
-	Reservations   map[int64]map[string]bool                     // userID → date → bool
-	CanEdit        bool
-	Certifications map[int64]bool // userID → declaration certified for the displayed month
+	Team              models.Team
+	Members           []models.User
+	Presences         map[int64]map[string]map[string]int64         // userID → date → half → statusID
+	Overrides         map[int64]map[string]models.PresenceOverride // userID → date → PresenceOverride
+	Reservations      map[int64]map[string]bool                     // userID → date → bool
+	CanEdit           bool
+	Certifications    map[int64]bool             // userID → declaration certified for the displayed month
+	ProjectActivities map[int64]map[string]bool // userID → date → 100% complete
 }
 
 // CalendarPage renders the monthly calendar view for the logged-in user.
@@ -100,6 +102,22 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 		reservationDates = make(map[string]bool)
 	}
 
+	// Get project activities for current user (dates with 100% activity declared)
+	userProjectActivities := make(map[string]bool)
+	if !h.DisableProjects {
+		if activities, err := h.DB.ListUserActivitiesForMonth(user.ID, year, month); err == nil {
+			activitySums := make(map[string]float64)
+			for _, a := range activities {
+				activitySums[a.Date] += a.Percentage
+			}
+			for date, sum := range activitySums {
+				if sum >= 100.0-0.001 {
+					userProjectActivities[date] = true
+				}
+			}
+		}
+	}
+
 	// Get statuses (only active ones for the picker)
 	statuses, _ := h.DB.ListActiveStatuses()
 
@@ -135,36 +153,60 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		teamCertifications, _ := h.DB.GetCertifiedUserIDs(userIDs, year, month)
+
+		teamProjectActivities := make(map[int64]map[string]bool)
+		if !h.DisableProjects && len(userIDs) > 0 {
+			if teamActs, err := h.DB.GetActivitiesForUsersMonth(userIDs, year, month); err == nil {
+				memberSums := make(map[int64]map[string]float64)
+				for _, a := range teamActs {
+					if memberSums[a.UserID] == nil {
+						memberSums[a.UserID] = make(map[string]float64)
+					}
+					memberSums[a.UserID][a.Date] += a.Percentage
+				}
+				for uid, dates := range memberSums {
+					teamProjectActivities[uid] = make(map[string]bool)
+					for date, sum := range dates {
+						if sum >= 100.0-0.001 {
+							teamProjectActivities[uid][date] = true
+						}
+					}
+				}
+			}
+		}
+
 		teamViews = append(teamViews, teamCalendarView{
-			Team:           team,
-			Members:        members,
-			Presences:      tp,
-			Overrides:      to,
-			Reservations:   teamReservations,
-			CanEdit:        canEditTeam,
-			Certifications: teamCertifications,
+			Team:              team,
+			Members:           members,
+			Presences:         tp,
+			Overrides:         to,
+			Reservations:      teamReservations,
+			CanEdit:           canEditTeam,
+			Certifications:    teamCertifications,
+			ProjectActivities: teamProjectActivities,
 		})
 	}
 
 	h.Render(w, r, "calendar", map[string]interface{}{
-		"Year":             year,
-		"Month":            month,
-		"PrevYear":         prevTime.Year(),
-		"PrevMonth":        int(prevTime.Month()),
-		"NextYear":         nextTime.Year(),
-		"NextMonth":        int(nextTime.Month()),
-		"Days":             days,
-		"Presences":        userPresences,
-		"Overrides":        userOverrides,
-		"Statuses":         statuses,
-		"CurrentUserID":    user.ID,
-		"ReservationDates": reservationDates,
-		"Floorplans":       floorplans,
-		"CalendarComplete": calendarComplete,
-		"DeclarableDays":   declarableDays,
-		"DeclaredDays":     declaredDays,
-		"TeamViews":        teamViews,
-		"Certified":        certified,
+		"Year":              year,
+		"Month":             month,
+		"PrevYear":          prevTime.Year(),
+		"PrevMonth":         int(prevTime.Month()),
+		"NextYear":          nextTime.Year(),
+		"NextMonth":         int(nextTime.Month()),
+		"Days":              days,
+		"Presences":         userPresences,
+		"Overrides":         userOverrides,
+		"Statuses":          statuses,
+		"CurrentUserID":     user.ID,
+		"ReservationDates":  reservationDates,
+		"Floorplans":        floorplans,
+		"CalendarComplete":  calendarComplete,
+		"DeclarableDays":    declarableDays,
+		"DeclaredDays":      declaredDays,
+		"TeamViews":         teamViews,
+		"Certified":         certified,
+		"ProjectActivities": userProjectActivities,
 	})
 }
 

@@ -95,7 +95,7 @@ func buildAppMux(cfg *config.Config, database *db.DB) http.Handler {
 		Render:      renderPage,
 		RateLimiter: middleware.NewLoginRateLimiter(),
 	}
-	calHandler := &handlers.CalendarHandler{DB: database, Render: renderPage, DisableFloorplans: cfg.DisableFloorplans}
+	calHandler := &handlers.CalendarHandler{DB: database, Render: renderPage, DisableFloorplans: cfg.DisableFloorplans, DisableProjects: cfg.DisableProjects}
 	adminHandler := &handlers.AdminHandler{DB: database, Config: cfg, Render: renderPage}
 	activityHandler := &handlers.ActivityHandler{DB: database, Render: renderPage, DisableProjects: cfg.DisableProjects}
 	holidaysHandler := &handlers.HolidaysHandler{DB: database, Render: renderPage}
