@@ -788,7 +788,7 @@
     <!-- Floating In-App Notifications Toast Container -->
     <div id="notifications-toast-container"
          x-data="notificationToasts()"
-         class="fixed bottom-5 right-5 z-50 flex flex-col gap-3 max-w-sm w-[calc(100vw-2.5rem)] pointer-events-none"
+         class="fixed bottom-5 right-5 z-50 flex flex-col gap-3.5 max-w-sm w-[calc(100vw-2.5rem)] pointer-events-none"
          x-cloak>
         <template x-for="notif in notifs" :key="notif.id">
             <div x-show="!notif.acknowledged"
@@ -798,25 +798,36 @@
                  x-transition:leave="transition ease-in duration-200 transform"
                  x-transition:leave-start="opacity-100 translate-y-0 scale-100"
                  x-transition:leave-end="opacity-0 translate-y-2 scale-95"
-                 class="pointer-events-auto bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border p-4 flex flex-col gap-2.5 backdrop-blur-md"
+                 class="pointer-events-auto relative overflow-hidden bg-gradient-to-b from-white via-white to-gray-50/90 dark:from-gray-800 dark:via-gray-800 dark:to-gray-850/95 rounded-2xl p-4 flex flex-col gap-2.5 backdrop-blur-md border transition-all duration-200 shadow-[0_12px_32px_-4px_rgba(0,0,0,0.14),0_4px_12px_-2px_rgba(0,0,0,0.06),inset_0_1px_1px_rgba(255,255,255,1),inset_0_-1px_1px_rgba(0,0,0,0.05)] dark:shadow-[0_14px_36px_-4px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.12),inset_0_-1px_0_rgba(0,0,0,0.4)]"
                  :class="{
-                     'border-blue-200 dark:border-blue-800/80 shadow-blue-500/10': notif.type === 'info',
-                     'border-amber-200 dark:border-amber-800/80 shadow-amber-500/10': notif.type === 'warning',
-                     'border-emerald-200 dark:border-emerald-800/80 shadow-emerald-500/10': notif.type === 'success',
-                     'border-rose-200 dark:border-rose-800/80 shadow-rose-500/10': notif.type === 'alert',
-                     'border-purple-200 dark:border-purple-800/80 shadow-purple-500/10': notif.type === 'team_added',
-                     'border-gray-100 dark:border-gray-700': !['info','warning','success','alert','team_added'].includes(notif.type)
+                     'border-blue-200/90 dark:border-blue-700/60 shadow-blue-500/10': notif.type === 'info',
+                     'border-amber-200/90 dark:border-amber-700/60 shadow-amber-500/10': notif.type === 'warning',
+                     'border-emerald-200/90 dark:border-emerald-700/60 shadow-emerald-500/10': notif.type === 'success',
+                     'border-rose-200/90 dark:border-rose-700/60 shadow-rose-500/10': notif.type === 'alert',
+                     'border-purple-200/90 dark:border-purple-700/60 shadow-purple-500/10': notif.type === 'team_added',
+                     'border-gray-200 dark:border-gray-700': !['info','warning','success','alert','team_added'].includes(notif.type)
                  }">
-                <div class="flex items-start justify-between gap-3">
-                    <div class="flex items-center gap-2.5">
-                        <div class="h-9 w-9 rounded-xl flex items-center justify-center flex-shrink-0 text-base shadow-sm font-bold"
+                <!-- Colored vertical relief accent bar -->
+                <div class="absolute left-0 top-0 bottom-0 w-1.5 transition-colors"
+                     :class="{
+                         'bg-gradient-to-b from-blue-400 to-blue-600': notif.type === 'info',
+                         'bg-gradient-to-b from-amber-400 to-amber-600': notif.type === 'warning',
+                         'bg-gradient-to-b from-emerald-400 to-emerald-600': notif.type === 'success',
+                         'bg-gradient-to-b from-rose-400 to-rose-600': notif.type === 'alert',
+                         'bg-gradient-to-b from-purple-400 to-purple-600': notif.type === 'team_added',
+                         'bg-gradient-to-b from-primary to-secondary': !['info','warning','success','alert','team_added'].includes(notif.type)
+                     }"></div>
+
+                <div class="flex items-start justify-between gap-3 pl-1">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <div class="h-9 w-9 rounded-xl flex items-center justify-center flex-shrink-0 text-base shadow-[0_2px_4px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.85)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.15)] ring-1 ring-inset"
                              :class="{
-                                 'bg-blue-50 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300': notif.type === 'info',
-                                 'bg-amber-50 dark:bg-amber-900/50 text-amber-600 dark:text-amber-300': notif.type === 'warning',
-                                 'bg-emerald-50 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-300': notif.type === 'success',
-                                 'bg-rose-50 dark:bg-rose-900/50 text-rose-600 dark:text-rose-300': notif.type === 'alert',
-                                 'bg-purple-50 dark:bg-purple-900/50 text-purple-600 dark:text-purple-300': notif.type === 'team_added',
-                                 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300': !['info','warning','success','alert','team_added'].includes(notif.type)
+                                 'bg-gradient-to-br from-blue-50 to-blue-100/80 dark:from-blue-950/60 dark:to-blue-900/40 text-blue-600 dark:text-blue-300 ring-blue-200/70 dark:ring-blue-800/50': notif.type === 'info',
+                                 'bg-gradient-to-br from-amber-50 to-amber-100/80 dark:from-amber-950/60 dark:to-amber-900/40 text-amber-600 dark:text-amber-300 ring-amber-200/70 dark:ring-amber-800/50': notif.type === 'warning',
+                                 'bg-gradient-to-br from-emerald-50 to-emerald-100/80 dark:from-emerald-950/60 dark:to-emerald-900/40 text-emerald-600 dark:text-emerald-300 ring-emerald-200/70 dark:ring-emerald-800/50': notif.type === 'success',
+                                 'bg-gradient-to-br from-rose-50 to-rose-100/80 dark:from-rose-950/60 dark:to-rose-900/40 text-rose-600 dark:text-rose-300 ring-rose-200/70 dark:ring-rose-800/50': notif.type === 'alert',
+                                 'bg-gradient-to-br from-purple-50 to-purple-100/80 dark:from-purple-950/60 dark:to-purple-900/40 text-purple-600 dark:text-purple-300 ring-purple-200/70 dark:ring-purple-800/50': notif.type === 'team_added',
+                                 'bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800 text-gray-600 dark:text-gray-300 ring-gray-200 dark:ring-gray-600': !['info','warning','success','alert','team_added'].includes(notif.type)
                              }">
                             <span x-show="notif.type === 'info'">ℹ️</span>
                             <span x-show="notif.type === 'warning'">⚠️</span>
@@ -825,16 +836,14 @@
                             <span x-show="notif.type === 'team_added'">👥</span>
                             <span x-show="!['info','warning','success','alert','team_added'].includes(notif.type)">🔔</span>
                         </div>
-                        <div>
-                            <div class="flex items-center gap-1.5 flex-wrap">
-                                <h4 class="text-sm font-bold text-gray-900 dark:text-white leading-tight" x-text="getTitle(notif)"></h4>
-                            </div>
-                            <p class="text-[11px] text-gray-400 dark:text-gray-400 mt-0.5" x-text="formatDate(notif.created_at)"></p>
+                        <div class="min-w-0 flex-1">
+                            <h4 class="text-sm font-bold text-gray-900 dark:text-white leading-snug truncate" x-text="getTitle(notif)"></h4>
+                            <p class="text-[11px] font-medium text-gray-400 dark:text-gray-400 mt-0.5" x-text="formatDate(notif.created_at)"></p>
                         </div>
                     </div>
                     <button @click="ack(notif.id)"
                             type="button"
-                            class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                            class="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700/70 transition active:scale-95"
                             title="{{index $.T "notifications.acknowledge"}}">
                         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -843,10 +852,10 @@
                 </div>
                 <p class="text-xs text-gray-600 dark:text-gray-300 leading-relaxed pl-1 whitespace-pre-wrap" x-text="getMessage(notif)"></p>
                 <template x-if="notif.link">
-                    <div class="flex items-center justify-end pt-2 border-t border-gray-100 dark:border-gray-700">
+                    <div class="flex items-center justify-end pt-2 border-t border-gray-100/80 dark:border-gray-700/60 pl-1">
                         <a :href="notif.link"
                            :target="notif.link.startsWith('http') ? '_blank' : '_self'"
-                           class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg bg-blue-50 dark:bg-blue-900/40 text-primary dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/70 transition">
+                           class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-gradient-to-r from-primary to-secondary text-white shadow-sm hover:opacity-95 hover:shadow transition-all duration-150 active:scale-95">
                             <span>{{index $.T "notifications.open_link"}}</span>
                             <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
