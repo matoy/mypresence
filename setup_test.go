@@ -349,6 +349,7 @@ func TestNewRenderPage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
+	database.SetBcryptCost(4)
 	defer database.Close()
 
 	uID, _ := database.CreateLocalUser("admin@example.com", "Admin User", "pass")

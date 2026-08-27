@@ -40,6 +40,7 @@ func TestBuildAppMux(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
+	database.SetBcryptCost(4)
 	defer database.Close()
 
 	// 1. Build mux with all features enabled

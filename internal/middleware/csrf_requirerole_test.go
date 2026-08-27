@@ -269,6 +269,7 @@ func newDomainMiddlewareTestDB(t *testing.T) *db.DB {
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
+	database.SetBcryptCost(4)
 	t.Cleanup(func() { database.Close() })
 	return database
 }

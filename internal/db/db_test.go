@@ -19,6 +19,7 @@ func newTestDB(t *testing.T) *DB {
 	if err != nil {
 		t.Fatalf("open test db: %v", err)
 	}
+	db.SetBcryptCost(4)
 	t.Cleanup(func() { db.Close() })
 	return db
 }
