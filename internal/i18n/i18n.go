@@ -99,7 +99,7 @@ var en = map[string]string{
 	"login.username": "Username",
 	"login.password": "Password",
 	"login.submit":   "Local login",
-	"login.sso":      "Sign in with SAML 2.0 IDP",
+	"login.sso":      "Enterprise authentication",
 	"login.or":       "or",
 
 	// Calendar months
@@ -807,7 +807,7 @@ var fr = map[string]string{
 	"login.username": "Identifiant",
 	"login.password": "Mot de passe",
 	"login.submit":   "Connexion locale",
-	"login.sso":      "Se connecter avec SAML 2.0 IDP",
+	"login.sso":      "Authentification entreprise",
 	"login.or":       "ou",
 
 	// Calendar months
@@ -1506,7 +1506,7 @@ var de = map[string]string{
 	"login.username": "Benutzername",
 	"login.password": "Passwort",
 	"login.submit":   "Lokale Anmeldung",
-	"login.sso":      "Mit SAML 2.0 IDP anmelden",
+	"login.sso":      "Unternehmens-Authentifizierung",
 	"login.or":       "oder",
 
 	// Calendar months
@@ -2206,7 +2206,7 @@ var es = map[string]string{
 	"login.username": "Usuario",
 	"login.password": "Contraseña",
 	"login.submit":   "Inicio de sesión local",
-	"login.sso":      "Iniciar sesión con SAML 2.0 IDP",
+	"login.sso":      "Autenticación empresarial",
 	"login.or":       "o",
 
 	// Calendar months
@@ -2902,7 +2902,7 @@ var it = map[string]string{
 	"login.username": "Nome utente",
 	"login.password": "Password",
 	"login.submit":   "Accesso locale",
-	"login.sso":      "Accedi con SAML 2.0 IDP",
+	"login.sso":      "Autenticazione aziendale",
 	"login.or":       "o",
 
 	// Calendar months

@@ -241,6 +241,9 @@ func TestLayoutTemplate_ActiveNewsBanner_RendersTrack(t *testing.T) {
 	if !strings.Contains(html, "news-banner-container") {
 		t.Fatal("expected news-banner-container in output")
 	}
+	if !strings.Contains(html, `style="background-color: #dc2626;"`) {
+		t.Fatal("expected style=\"background-color: #dc2626;\" in output, got: " + html)
+	}
 	if !strings.Contains(html, "news-banner-track") {
 		t.Fatal("expected news-banner-track in output")
 	}
