@@ -409,3 +409,59 @@ func TestAdminSendNotification_UserPrefix_JSON(t *testing.T) {
 		t.Fatalf("expected 1 notification for target user %d, got %d", targetID, len(notifs))
 	}
 }
+
+func TestAdminDeleteNotification_JSON(t *testing.T) {
+	d := newCRUDTestDB(t)
+	h := &NotificationsHandler{DB: d}
+
+	adminID, _ := d.CreateLocalUser("admin_del@test.com", "Admin Del", "pass12345")
+	_ = d.UpdateUserRoles(adminID, models.RoleGlobal)
+	adminToken, _ := d.CreateSession(adminID)
+
+	targetID, _ := d.CreateLocalUser("del_target@test.com", "Del Target", "pass12345")
+	notifID, err := d.CreateNotification(targetID, adminID, "info", "To be deleted", "Msg", "")
+	if err != nil {
+		t.Fatalf("CreateNotification: %v", err)
+	}
+
+	// Delete as admin via JSON
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/notifications/"+strconv.FormatInt(notifID, 10)+"/delete", nil)
+	req.SetPathValue("id", strconv.FormatInt(notifID, 10))
+	req.Header.Set("Accept", "application/json")
+	req.AddCookie(&http.Cookie{Name: "session", Value: adminToken})
+	rec := httptest.NewRecorder()
+
+	middleware.Auth(d, http.HandlerFunc(h.AdminDeleteNotification)).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d (%s)", rec.Code, rec.Body.String())
+	}
+
+	// Verify it was deleted from DB
+	allNotifs, _ := d.GetAllNotifications(10)
+	if len(allNotifs) != 0 {
+		t.Fatalf("expected 0 notifications after delete, got %d", len(allNotifs))
+	}
+}
+
+func TestAdminDeleteNotification_Forbidden(t *testing.T) {
+	d := newCRUDTestDB(t)
+	h := &NotificationsHandler{DB: d}
+
+	u1, _ := d.CreateLocalUser("user_del@test.com", "User Del", "pass12345")
+	token, _ := d.CreateSession(u1)
+
+	notifID, _ := d.CreateNotification(u1, 0, "info", "Test", "Msg", "")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/notifications/"+strconv.FormatInt(notifID, 10)+"/delete", nil)
+	req.SetPathValue("id", strconv.FormatInt(notifID, 10))
+	req.Header.Set("Accept", "application/json")
+	req.AddCookie(&http.Cookie{Name: "session", Value: token})
+	rec := httptest.NewRecorder()
+
+	middleware.Auth(d, http.HandlerFunc(h.AdminDeleteNotification)).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 Forbidden, got %d", rec.Code)
+	}
+}

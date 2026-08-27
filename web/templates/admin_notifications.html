@@ -36,43 +36,43 @@
     </div>
     {{end}}
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        <!-- Notification Compose Card -->
-        <div class="lg:col-span-1 bg-white rounded-xl shadow-md border border-gray-100 p-6">
-            <div class="flex items-center gap-2 mb-4 pb-3 border-b border-gray-100">
-                <div class="h-8 w-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
-                    </svg>
-                </div>
-                <h2 class="text-lg font-semibold text-gray-800">{{index $.T "notifications.send_card_title"}}</h2>
+    <!-- Notification Compose Card -->
+    <div class="bg-white rounded-xl shadow-md border border-gray-100 p-6 mb-8">
+        <div class="flex items-center gap-2 mb-4 pb-3 border-b border-gray-100">
+            <div class="h-8 w-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                </svg>
+            </div>
+            <h2 class="text-lg font-semibold text-gray-800">{{index $.T "notifications.send_card_title"}}</h2>
+        </div>
+
+        <form @submit.prevent="openConfirm()" class="space-y-4">
+            <!-- Client-side error alert -->
+            <div x-show="formError" x-cloak class="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs">
+                <span x-text="formError"></span>
             </div>
 
-            <form @submit.prevent="openConfirm()" class="space-y-4">
-                <!-- Client-side error alert -->
-                <div x-show="formError" x-cloak class="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs">
-                    <span x-text="formError"></span>
-                </div>
+            <!-- Client-side success alert -->
+            <div x-show="formSuccess" x-cloak class="p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-xs flex items-center gap-1.5">
+                <svg class="h-4 w-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                <span x-text="formSuccess"></span>
+            </div>
 
-                <!-- Client-side success alert -->
-                <div x-show="formSuccess" x-cloak class="p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-xs flex items-center gap-1.5">
-                    <svg class="h-4 w-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                    <span x-text="formSuccess"></span>
-                </div>
-
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <!-- Recipient Mode Selector -->
                 <div>
                     <label class="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
                         {{index $.T "notifications.recipient"}} <span class="text-red-500">*</span>
                     </label>
                     
-                    <!-- Segmented Mode Tabs -->
+                    <!-- Segmented Mode Tabs (Individual, Team, Everyone) -->
                     <div class="grid grid-cols-3 gap-1 p-1 bg-gray-100 rounded-lg mb-2.5 text-xs font-medium">
                         <button type="button"
-                                @click="recipientMode = 'all'"
-                                :class="recipientMode === 'all' ? 'bg-white text-primary shadow-sm font-semibold' : 'text-gray-600 hover:text-gray-900'"
+                                @click="recipientMode = 'user'"
+                                :class="recipientMode === 'user' ? 'bg-white text-primary shadow-sm font-semibold' : 'text-gray-600 hover:text-gray-900'"
                                 class="py-1.5 px-2 rounded-md transition text-center">
-                            {{index $.T "notifications.mode_all"}}
+                            {{index $.T "notifications.mode_user"}}
                         </button>
                         <button type="button"
                                 @click="recipientMode = 'team'"
@@ -81,75 +81,11 @@
                             {{index $.T "notifications.mode_team"}}
                         </button>
                         <button type="button"
-                                @click="recipientMode = 'user'"
-                                :class="recipientMode === 'user' ? 'bg-white text-primary shadow-sm font-semibold' : 'text-gray-600 hover:text-gray-900'"
+                                @click="recipientMode = 'all'"
+                                :class="recipientMode === 'all' ? 'bg-white text-primary shadow-sm font-semibold' : 'text-gray-600 hover:text-gray-900'"
                                 class="py-1.5 px-2 rounded-md transition text-center">
-                            {{index $.T "notifications.mode_user"}}
+                            {{index $.T "notifications.mode_all"}}
                         </button>
-                    </div>
-
-                    <!-- Mode: ALL -->
-                    <div x-show="recipientMode === 'all'" class="p-2.5 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-800 flex items-center gap-2">
-                        <span>{{index $.T "notifications.all_users"}} (<strong x-text="activeUsersCount"></strong>)</span>
-                    </div>
-
-                    <!-- Mode: TEAM (Searchable Dropdown) -->
-                    <div x-show="recipientMode === 'team'" class="relative" x-data="{ open: false }" @click.outside="open = false">
-                        <button type="button"
-                                @click="open = !open; if(open) $nextTick(() => $refs.teamSearchInput?.focus())"
-                                class="w-full flex items-center justify-between px-3 py-2 text-xs bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-left hover:border-gray-400 transition">
-                            <span x-show="!selectedTeam" class="text-gray-400">-- {{index $.T "notifications.select_team"}} --</span>
-                            <span x-show="selectedTeam" class="font-semibold text-gray-900 flex items-center gap-1.5 truncate">
-                                <span>👥</span>
-                                <span x-text="selectedTeam ? selectedTeam.name : ''"></span>
-                            </span>
-                            <svg class="h-4 w-4 text-gray-400 flex-shrink-0 transition-transform" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                            </svg>
-                        </button>
-                        
-                        <div x-show="open"
-                             x-cloak
-                             x-transition:enter="transition ease-out duration-100"
-                             x-transition:enter-start="opacity-0 scale-95"
-                             x-transition:enter-end="opacity-100 scale-100"
-                             x-transition:leave="transition ease-in duration-75"
-                             x-transition:leave-start="opacity-100 scale-100"
-                             x-transition:leave-end="opacity-0 scale-95"
-                             class="absolute z-30 mt-1 w-full bg-white rounded-xl shadow-xl border border-gray-200 p-2 space-y-1.5">
-                            <div class="relative">
-                                <input type="text"
-                                       x-ref="teamSearchInput"
-                                       x-model="teamSearch"
-                                       placeholder="{{index $.T "notifications.search_placeholder"}}"
-                                       class="w-full pl-7 pr-6 py-1 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:bg-white">
-                                <svg class="h-3 w-3 text-gray-400 absolute left-2 top-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                                </svg>
-                                <button type="button" x-show="teamSearch" @click="teamSearch = ''" class="absolute right-1.5 top-1.5 text-gray-400 hover:text-gray-600">
-                                    <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                                </button>
-                            </div>
-                            <div class="max-h-48 overflow-y-auto space-y-0.5 custom-scrollbar">
-                                <template x-for="t in filteredTeams" :key="t.id">
-                                    <button type="button"
-                                            @click="selectedTeamId = t.id; open = false; teamSearch = ''"
-                                            class="w-full flex items-center justify-between px-2 py-1.5 text-xs rounded-lg hover:bg-primary/5 transition text-left"
-                                            :class="String(selectedTeamId) === String(t.id) ? 'bg-primary/10 text-primary font-semibold' : 'text-gray-700'">
-                                        <span class="truncate flex items-center gap-1.5">
-                                            <span>👥</span>
-                                            <span x-text="t.name"></span>
-                                        </span>
-                                        <svg x-show="String(selectedTeamId) === String(t.id)" class="h-3.5 w-3.5 text-primary flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                                        </svg>
-                                    </button>
-                                </template>
-                                <div x-show="filteredTeams.length === 0" class="py-2.5 text-center text-xs text-gray-400">
-                                    Aucune équipe trouvée
-                                </div>
-                            </div>
-                        </div>
                     </div>
 
                     <!-- Mode: USER (Searchable Dropdown) -->
@@ -159,7 +95,9 @@
                                 class="w-full flex items-center justify-between px-3 py-2 text-xs bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-left hover:border-gray-400 transition">
                             <span x-show="!selectedUser" class="text-gray-400">-- {{index $.T "notifications.select_user"}} --</span>
                             <span x-show="selectedUser" class="font-semibold text-gray-900 flex items-center gap-1.5 truncate">
-                                <span>👤</span>
+                                <svg class="h-3.5 w-3.5 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                                </svg>
                                 <span x-text="selectedUser ? (selectedUser.name + ' (' + selectedUser.email + ')') : ''"></span>
                             </span>
                             <svg class="h-4 w-4 text-gray-400 flex-shrink-0 transition-transform" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -210,6 +148,74 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Mode: TEAM (Searchable Dropdown) -->
+                    <div x-show="recipientMode === 'team'" class="relative" x-data="{ open: false }" @click.outside="open = false">
+                        <button type="button"
+                                @click="open = !open; if(open) $nextTick(() => $refs.teamSearchInput?.focus())"
+                                class="w-full flex items-center justify-between px-3 py-2 text-xs bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-left hover:border-gray-400 transition">
+                            <span x-show="!selectedTeam" class="text-gray-400">-- {{index $.T "notifications.select_team"}} --</span>
+                            <span x-show="selectedTeam" class="font-semibold text-gray-900 flex items-center gap-1.5 truncate">
+                                <svg class="h-3.5 w-3.5 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                                </svg>
+                                <span x-text="selectedTeam ? selectedTeam.name : ''"></span>
+                            </span>
+                            <svg class="h-4 w-4 text-gray-400 flex-shrink-0 transition-transform" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+                        
+                        <div x-show="open"
+                             x-cloak
+                             x-transition:enter="transition ease-out duration-100"
+                             x-transition:enter-start="opacity-0 scale-95"
+                             x-transition:enter-end="opacity-100 scale-100"
+                             x-transition:leave="transition ease-in duration-75"
+                             x-transition:leave-start="opacity-100 scale-100"
+                             x-transition:leave-end="opacity-0 scale-95"
+                             class="absolute z-30 mt-1 w-full bg-white rounded-xl shadow-xl border border-gray-200 p-2 space-y-1.5">
+                            <div class="relative">
+                                <input type="text"
+                                       x-ref="teamSearchInput"
+                                       x-model="teamSearch"
+                                       placeholder="{{index $.T "notifications.search_placeholder"}}"
+                                       class="w-full pl-7 pr-6 py-1 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:bg-white">
+                                <svg class="h-3 w-3 text-gray-400 absolute left-2 top-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                                </svg>
+                                <button type="button" x-show="teamSearch" @click="teamSearch = ''" class="absolute right-1.5 top-1.5 text-gray-400 hover:text-gray-600">
+                                    <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                </button>
+                            </div>
+                            <div class="max-h-48 overflow-y-auto space-y-0.5 custom-scrollbar">
+                                <template x-for="t in filteredTeams" :key="t.id">
+                                    <button type="button"
+                                            @click="selectedTeamId = t.id; open = false; teamSearch = ''"
+                                            class="w-full flex items-center justify-between px-2 py-1.5 text-xs rounded-lg hover:bg-primary/5 transition text-left"
+                                            :class="String(selectedTeamId) === String(t.id) ? 'bg-primary/10 text-primary font-semibold' : 'text-gray-700'">
+                                        <span class="truncate flex items-center gap-1.5">
+                                            <svg class="h-3.5 w-3.5 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                                            </svg>
+                                            <span x-text="t.name"></span>
+                                        </span>
+                                        <svg x-show="String(selectedTeamId) === String(t.id)" class="h-3.5 w-3.5 text-primary flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                        </svg>
+                                    </button>
+                                </template>
+                                <div x-show="filteredTeams.length === 0" class="py-2.5 text-center text-xs text-gray-400">
+                                    Aucune équipe trouvée
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Mode: ALL (Everyone) -->
+                    <div x-show="recipientMode === 'all'" class="p-2.5 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-800 flex items-center gap-2">
+                        <span>{{index $.T "notifications.all_users"}} (<strong x-text="activeUsersCount"></strong>)</span>
+                    </div>
                 </div>
 
                 <!-- Type Selection -->
@@ -226,7 +232,9 @@
                         <option value="team_added">{{index $.T "notifications.type_team"}}</option>
                     </select>
                 </div>
+            </div>
 
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <!-- Title -->
                 <div>
                     <label class="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
@@ -238,17 +246,6 @@
                            required>
                 </div>
 
-                <!-- Message -->
-                <div>
-                    <label class="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
-                        {{index $.T "notifications.message"}} <span class="text-red-500">*</span>
-                    </label>
-                    <textarea x-model="message" rows="3"
-                              placeholder="{{index $.T "notifications.message_placeholder"}}"
-                              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm resize-y"
-                              required></textarea>
-                </div>
-
                 <!-- Optional Link -->
                 <div>
                     <label class="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
@@ -258,209 +255,291 @@
                            placeholder="{{index $.T "notifications.link_placeholder"}}"
                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
                 </div>
-
-                <!-- Submit Button -->
-                <div class="pt-2">
-                    <button type="submit"
-                            :disabled="sending"
-                            class="w-full py-2.5 px-4 bg-primary hover:opacity-90 disabled:opacity-50 text-white font-medium rounded-lg transition text-sm flex items-center justify-center gap-2 shadow">
-                        <svg x-show="sending" class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
-                        </svg>
-                        <span x-text="sending ? (_t['notifications.sending'] || 'Sending...') : (_t['notifications.send'] || 'Send Notification')"></span>
-                    </button>
-                </div>
-            </form>
-        </div>
-
-        <!-- History Table Card -->
-        <div class="lg:col-span-2 bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden flex flex-col">
-            <!-- Header & Search Toolbar -->
-            <div class="p-4 sm:px-6 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div class="flex items-center gap-2">
-                    <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
-                    <h2 class="text-base font-semibold text-gray-800">{{index $.T "notifications.history_title"}}</h2>
-                </div>
-                
-                <!-- Search input above table -->
-                <div class="flex items-center gap-2 w-full sm:w-72">
-                    <div class="relative w-full">
-                        <input type="text"
-                               x-model="searchQuery"
-                               placeholder="{{index $.T "notifications.search_history_ph"}}"
-                               class="w-full pl-8 pr-7 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-1 focus:ring-primary focus:border-primary">
-                        <svg class="h-3.5 w-3.5 text-gray-400 absolute left-2.5 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                        </svg>
-                        <button type="button"
-                                x-show="searchQuery"
-                                @click="searchQuery = ''"
-                                class="absolute right-2 top-2 text-gray-400 hover:text-gray-600">
-                            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                        </button>
-                    </div>
-                </div>
             </div>
 
-            <!-- Subheader Count -->
-            <div class="px-6 py-2 bg-gray-50/70 border-b border-gray-100 flex items-center justify-between text-xs text-gray-500">
-                <span>
-                    <strong x-text="sortedAndFilteredNotifications.length"></strong>
-                    <span x-text="' / ' + notifications.length + ' item(s)'"></span>
-                </span>
-                <span class="text-[11px] text-gray-400">Tirage : du plus récent au plus ancien</span>
+            <!-- Message -->
+            <div>
+                <label class="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
+                    {{index $.T "notifications.message"}} <span class="text-red-500">*</span>
+                </label>
+                <textarea x-model="message" rows="3"
+                          placeholder="{{index $.T "notifications.message_placeholder"}}"
+                          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm resize-y"
+                          required></textarea>
             </div>
 
-            <div class="overflow-x-auto flex-1">
-                <table class="w-full">
-                    <thead>
-                        <tr class="bg-gray-50 border-b border-gray-200">
-                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T "notifications.col_recipient"}}</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T "notifications.col_type"}}</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T "notifications.col_title"}}</th>
-                            <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">{{index $.T "notifications.col_status"}}</th>
-                            <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">{{index $.T "notifications.col_date"}}</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-100">
-                        <template x-for="n in sortedAndFilteredNotifications" :key="n.id">
-                            <tr class="hover:bg-gray-50 transition">
-                                <td class="px-4 py-3 text-sm">
-                                    <span class="font-medium text-gray-900" x-text="n.recipient_name || ('User #' + n.user_id)"></span>
-                                </td>
-                                <td class="px-4 py-3 text-xs">
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full font-medium"
-                                          :class="{
-                                              'bg-blue-100 text-blue-800': n.type === 'info',
-                                              'bg-amber-100 text-amber-800': n.type === 'warning',
-                                              'bg-green-100 text-green-800': n.type === 'success',
-                                              'bg-red-100 text-red-800': n.type === 'alert',
-                                              'bg-purple-100 text-purple-800': n.type === 'team_added',
-                                              'bg-gray-100 text-gray-700': !['info','warning','success','alert','team_added'].includes(n.type)
-                                          }"
-                                          x-text="n.type">
-                                    </span>
-                                </td>
-                                <td class="px-4 py-3 text-sm">
-                                    <div class="font-semibold text-gray-800" x-text="n.title"></div>
-                                    <div class="text-xs text-gray-500 truncate max-w-xs mt-0.5" x-text="n.message"></div>
-                                    <template x-if="n.link">
-                                        <a :href="n.link" target="_blank" class="text-xs text-primary hover:underline inline-flex items-center gap-1 mt-1 font-mono">
-                                            <span x-text="n.link"></span>
-                                            <svg class="h-3 w-3 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
-                                        </a>
-                                    </template>
-                                </td>
-                                <td class="px-4 py-3 text-center text-xs">
-                                    <span x-show="n.acknowledged" class="inline-flex items-center px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-800" x-text="_t['notifications.status_read'] || 'Acknowledged'"></span>
-                                    <span x-show="!n.acknowledged" class="inline-flex items-center px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-600" x-text="_t['notifications.status_unread'] || 'Unread'"></span>
-                                </td>
-                                <td class="px-4 py-3 text-right text-xs text-gray-500 whitespace-nowrap font-mono" x-text="formatDate(n.created_at)"></td>
-                            </tr>
-                        </template>
-                        <tr x-show="sortedAndFilteredNotifications.length === 0">
-                            <td colspan="5" class="px-6 py-10 text-center text-gray-400" x-text="_t['notifications.history_empty'] || 'No notifications found.'"></td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <!-- Confirmation Modal -->
-    <div x-show="showConfirmModal"
-         x-cloak
-         class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-xs">
-        <div @click.away="showConfirmModal = false"
-             class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-gray-100 space-y-4 animate-scale-in">
-            <div class="flex items-center gap-3">
-                <div class="h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center flex-shrink-0 text-lg">
-                    🔔
-                </div>
-                <div>
-                    <h3 class="text-base font-bold text-gray-900">{{index $.T "notifications.confirm_title"}}</h3>
-                    <p class="text-xs text-gray-500">{{index $.T "notifications.confirm_desc"}}</p>
-                </div>
-            </div>
-
-            <!-- Summary box -->
-            <div class="bg-gray-50 rounded-xl p-3.5 space-y-2 border border-gray-100 text-xs text-gray-700">
-                <div>
-                    <span class="text-gray-400 uppercase tracking-wider text-[10px] font-bold block">{{index $.T "notifications.recipient"}}</span>
-                    <span class="font-semibold text-gray-900" x-text="getRecipientLabel()"></span>
-                </div>
-                <div>
-                    <span class="text-gray-400 uppercase tracking-wider text-[10px] font-bold block">{{index $.T "notifications.msg_title"}}</span>
-                    <span class="font-semibold text-gray-900" x-text="title"></span>
-                </div>
-                <div>
-                    <span class="text-gray-400 uppercase tracking-wider text-[10px] font-bold block">{{index $.T "notifications.message"}}</span>
-                    <p class="text-gray-600 line-clamp-2 mt-0.5" x-text="message"></p>
-                </div>
-                <template x-if="link">
-                    <div>
-                        <span class="text-gray-400 uppercase tracking-wider text-[10px] font-bold block">{{index $.T "notifications.link"}}</span>
-                        <span class="text-primary font-mono" x-text="link"></span>
-                    </div>
-                </template>
-            </div>
-
-            <!-- Modal Action Buttons -->
-            <div class="flex items-center justify-end gap-2 pt-2">
-                <button type="button"
-                        @click="showConfirmModal = false"
-                        class="px-4 py-2 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition">
-                    {{index $.T "notifications.cancel"}}
-                </button>
-                <button type="button"
-                        @click="submitConfirmed()"
+            <!-- Submit Button -->
+            <div class="flex justify-end pt-2">
+                <button type="submit"
                         :disabled="sending"
-                        class="px-4 py-2 text-xs font-semibold text-white bg-primary hover:opacity-90 rounded-lg shadow-sm transition flex items-center gap-1.5">
-                    <svg x-show="sending" class="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                        class="py-2.5 px-6 bg-primary hover:opacity-90 disabled:opacity-50 text-white font-medium rounded-lg transition text-sm flex items-center justify-center gap-2 shadow cursor-pointer">
+                    <svg x-show="sending" class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
                     </svg>
-                    <span>{{index $.T "notifications.confirm_btn"}}</span>
+                    <span x-text="sending ? ((window._t && window._t['notifications.sending']) || 'Sending...') : ((window._t && window._t['notifications.send']) || 'Send Notification')"></span>
                 </button>
             </div>
+        </form>
+    </div>
+
+    <!-- History Table Card -->
+    <div class="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden flex flex-col mb-8">
+        <!-- Header & Search Toolbar -->
+        <div class="p-4 sm:px-6 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="flex items-center gap-2">
+                <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <h2 class="text-base font-semibold text-gray-800">{{index $.T "notifications.history_title"}}</h2>
+            </div>
+            
+            <!-- Search input above table -->
+            <div class="flex items-center gap-2 w-full sm:w-80">
+                <div class="relative w-full">
+                    <input type="text"
+                           x-model="searchQuery"
+                           placeholder="{{index $.T "notifications.search_history_ph"}}"
+                           class="w-full pl-8 pr-7 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-1 focus:ring-primary focus:border-primary">
+                    <svg class="h-3.5 w-3.5 text-gray-400 absolute left-2.5 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                    <button type="button"
+                            x-show="searchQuery"
+                            @click="searchQuery = ''"
+                            class="absolute right-2 top-2 text-gray-400 hover:text-gray-600">
+                        <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Subheader Count -->
+        <div class="px-6 py-2 bg-gray-50/70 border-b border-gray-100 flex items-center justify-between text-xs text-gray-500">
+            <span>
+                <strong x-text="sortedAndFilteredNotifications.length"></strong>
+                <span x-text="' / ' + notifications.length + ' item(s)'"></span>
+            </span>
+            <span class="text-[11px] text-gray-400">Tirage : du plus récent au plus ancien</span>
+        </div>
+
+        <div class="overflow-x-auto flex-1">
+            <table class="w-full">
+                <thead>
+                    <tr class="bg-gray-50 border-b border-gray-200">
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T "notifications.col_recipient"}}</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T "notifications.col_type"}}</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T "notifications.col_title"}}</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">{{index $.T "notifications.col_status"}}</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">{{index $.T "notifications.col_date"}}</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">{{index $.T "admin.actions"}}</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    <template x-for="n in sortedAndFilteredNotifications" :key="n.id">
+                        <tr class="hover:bg-gray-50 transition">
+                            <td class="px-4 py-3 text-sm whitespace-nowrap">
+                                <span class="font-medium text-gray-900" x-text="n.recipient_name || ('User #' + n.user_id)"></span>
+                            </td>
+                            <td class="px-4 py-3 text-xs whitespace-nowrap">
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full font-medium"
+                                      :class="{
+                                          'bg-blue-100 text-blue-800': n.type === 'info',
+                                          'bg-amber-100 text-amber-800': n.type === 'warning',
+                                          'bg-green-100 text-green-800': n.type === 'success',
+                                          'bg-red-100 text-red-800': n.type === 'alert',
+                                          'bg-purple-100 text-purple-800': n.type === 'team_added',
+                                          'bg-gray-100 text-gray-700': !['info','warning','success','alert','team_added'].includes(n.type)
+                                      }"
+                                      x-text="n.type">
+                                </span>
+                            </td>
+                            <td class="px-4 py-3 text-sm">
+                                <div class="font-semibold text-gray-800" x-text="n.title"></div>
+                                <div class="text-xs text-gray-500 line-clamp-2 max-w-xl mt-0.5" x-text="n.message"></div>
+                                <template x-if="n.link">
+                                    <a :href="n.link" target="_blank" class="text-xs text-primary hover:underline inline-flex items-center gap-1 mt-1 font-mono">
+                                        <span x-text="n.link"></span>
+                                        <svg class="h-3 w-3 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                                    </a>
+                                </template>
+                            </td>
+                            <td class="px-4 py-3 text-center text-xs whitespace-nowrap">
+                                <span x-show="n.acknowledged" class="inline-flex items-center px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-800" x-text="(window._t && window._t['notifications.status_read']) || 'Acknowledged'"></span>
+                                <span x-show="!n.acknowledged" class="inline-flex items-center px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-600" x-text="(window._t && window._t['notifications.status_unread']) || 'Unread'"></span>
+                            </td>
+                            <td class="px-4 py-3 text-right text-xs text-gray-500 whitespace-nowrap font-mono" x-text="formatDate(n.created_at)"></td>
+                            <td class="px-4 py-3 text-right text-xs whitespace-nowrap">
+                                <button type="button"
+                                        @click="confirmDelete(n)"
+                                        class="inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded-lg transition cursor-pointer"
+                                        :title="(window._t && window._t['admin.delete']) || '{{index $.T "admin.delete"}}'">
+                                    <svg class="h-4 w-4 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                    </svg>
+                                    <span>{{index $.T "admin.delete"}}</span>
+                                </button>
+                            </td>
+                        </tr>
+                    </template>
+                    <tr x-show="sortedAndFilteredNotifications.length === 0">
+                        <td colspan="6" class="px-6 py-10 text-center text-gray-400" x-text="(window._t && window._t['notifications.history_empty']) || 'No notifications found.'"></td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
     </div>
 
+<!-- Confirmation Modal (Send) -->
+<div x-show="showConfirmModal"
+     x-cloak
+     class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+    <div @click.outside="showConfirmModal = false"
+         class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-gray-100 space-y-4 animate-scale-in">
+        <div class="flex items-center gap-3">
+            <div class="h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                </svg>
+            </div>
+            <div>
+                <h3 class="text-base font-bold text-gray-900">{{index $.T "notifications.confirm_title"}}</h3>
+                <p class="text-xs text-gray-500">{{index $.T "notifications.confirm_desc"}}</p>
+            </div>
+        </div>
+
+        <!-- Summary box -->
+        <div class="bg-gray-50 rounded-xl p-3.5 space-y-2 border border-gray-100 text-xs text-gray-700">
+            <div>
+                <span class="text-gray-400 uppercase tracking-wider text-[10px] font-bold block">{{index $.T "notifications.recipient"}}</span>
+                <span class="font-semibold text-gray-900" x-text="getRecipientLabel()"></span>
+            </div>
+            <div>
+                <span class="text-gray-400 uppercase tracking-wider text-[10px] font-bold block">{{index $.T "notifications.msg_title"}}</span>
+                <span class="font-semibold text-gray-900" x-text="title"></span>
+            </div>
+            <div>
+                <span class="text-gray-400 uppercase tracking-wider text-[10px] font-bold block">{{index $.T "notifications.message"}}</span>
+                <p class="text-gray-600 line-clamp-2 mt-0.5" x-text="message"></p>
+            </div>
+            <template x-if="link">
+                <div>
+                    <span class="text-gray-400 uppercase tracking-wider text-[10px] font-bold block">{{index $.T "notifications.link"}}</span>
+                    <span class="text-primary font-mono" x-text="link"></span>
+                </div>
+            </template>
+        </div>
+
+        <!-- Modal Action Buttons -->
+        <div class="flex items-center justify-end gap-2 pt-2">
+            <button type="button"
+                    @click="showConfirmModal = false"
+                    class="px-4 py-2 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition">
+                {{index $.T "notifications.cancel"}}
+            </button>
+            <button type="button"
+                    @click="submitConfirmed()"
+                    :disabled="sending"
+                    class="px-4 py-2 text-xs font-semibold text-white bg-primary hover:opacity-90 rounded-lg shadow-sm transition flex items-center gap-1.5">
+                <svg x-show="sending" class="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                </svg>
+                <span>{{index $.T "notifications.confirm_btn"}}</span>
+            </button>
+        </div>
+    </div>
 </div>
 
-<!-- Data scripts for safe JSON ingestion -->
-<script id="admin-notif-users" type="application/json">{{json .Users}}</script>
-<script id="admin-notif-teams" type="application/json">{{json .Teams}}</script>
-<script id="admin-notif-history" type="application/json">{{json .Notifications}}</script>
+<!-- Delete Confirmation Modal -->
+<div x-show="showDeleteModal"
+     x-cloak
+     class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+    <div @click.outside="if(!deleting) showDeleteModal = false"
+         class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-gray-100 space-y-4 animate-scale-in">
+        <div class="flex items-center gap-3">
+            <div class="h-10 w-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center flex-shrink-0">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                </svg>
+            </div>
+            <div>
+                <h3 class="text-base font-bold text-gray-900">{{index $.T "notifications.delete_confirm_title"}}</h3>
+                <p class="text-xs text-gray-500">{{index $.T "notifications.delete_confirm_desc"}}</p>
+            </div>
+        </div>
+
+        <template x-if="deletingNotif">
+            <div class="bg-gray-50 rounded-xl p-3.5 space-y-2 border border-gray-100 text-xs text-gray-700">
+                <div>
+                    <span class="text-gray-400 uppercase tracking-wider text-[10px] font-bold block">{{index $.T "notifications.col_recipient"}}</span>
+                    <span class="font-semibold text-gray-900" x-text="deletingNotif.recipient_name || ('User #' + deletingNotif.user_id)"></span>
+                </div>
+                <div>
+                    <span class="text-gray-400 uppercase tracking-wider text-[10px] font-bold block">{{index $.T "notifications.msg_title"}}</span>
+                    <span class="font-semibold text-gray-900" x-text="deletingNotif.title"></span>
+                </div>
+                <div>
+                    <span class="text-gray-400 uppercase tracking-wider text-[10px] font-bold block">{{index $.T "notifications.message"}}</span>
+                    <p class="text-gray-600 line-clamp-2 mt-0.5" x-text="deletingNotif.message"></p>
+                </div>
+            </div>
+        </template>
+
+        <!-- Modal Action Buttons -->
+        <div class="flex items-center justify-end gap-2 pt-2">
+            <button type="button"
+                    @click="showDeleteModal = false"
+                    :disabled="deleting"
+                    class="px-4 py-2 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition">
+                {{index $.T "notifications.cancel"}}
+            </button>
+            <button type="button"
+                    @click="executeDelete()"
+                    :disabled="deleting"
+                    class="px-4 py-2 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-sm transition flex items-center gap-1.5">
+                <svg x-show="deleting" class="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                </svg>
+                <span x-text="deleting ? ((window._t && window._t['notifications.deleting']) || 'Deleting...') : ((window._t && window._t['admin.delete']) || 'Delete')"></span>
+            </button>
+        </div>
+    </div>
+</div>
+
+</div>
+
+<!-- Safe JSON data payloads -->
+<script id="admin-notif-users-data" type="application/json">{{json .Users}}</script>
+<script id="admin-notif-teams-data" type="application/json">{{json .Teams}}</script>
+<script id="admin-notif-history-data" type="application/json">{{json .Notifications}}</script>
 
 <script>
 function adminNotifications() {
     let users = [];
-    const usersEl = document.getElementById('admin-notif-users');
+    const usersEl = document.getElementById('admin-notif-users-data');
     if (usersEl && usersEl.textContent) {
-        try { users = JSON.parse(usersEl.textContent) || []; } catch (e) {}
+        try { users = JSON.parse(usersEl.textContent) || []; } catch(e) {}
     }
 
     let teams = [];
-    const teamsEl = document.getElementById('admin-notif-teams');
+    const teamsEl = document.getElementById('admin-notif-teams-data');
     if (teamsEl && teamsEl.textContent) {
-        try { teams = JSON.parse(teamsEl.textContent) || []; } catch (e) {}
+        try { teams = JSON.parse(teamsEl.textContent) || []; } catch(e) {}
     }
 
     let notifications = [];
-    const notifsEl = document.getElementById('admin-notif-history');
+    const notifsEl = document.getElementById('admin-notif-history-data');
     if (notifsEl && notifsEl.textContent) {
-        try { notifications = JSON.parse(notifsEl.textContent) || []; } catch (e) {}
+        try { notifications = JSON.parse(notifsEl.textContent) || []; } catch(e) {}
     }
 
     return {
-        users,
-        teams,
-        notifications,
-        recipientMode: 'all', // 'all', 'team', 'user'
+        users: Array.isArray(users) ? users : [],
+        teams: Array.isArray(teams) ? teams : [],
+        notifications: Array.isArray(notifications) ? notifications : [],
+        recipientMode: 'user', // 'user', 'team', 'all'
         selectedTeamId: '',
         selectedUserId: '',
         teamSearch: '',
@@ -474,6 +553,9 @@ function adminNotifications() {
         formError: '',
         formSuccess: '',
         showConfirmModal: false,
+        showDeleteModal: false,
+        deletingNotif: null,
+        deleting: false,
 
         get activeUsersCount() {
             return this.users.filter(u => !u.disabled).length;
@@ -543,16 +625,17 @@ function adminNotifications() {
         },
 
         getRecipientLabel() {
+            const t = window._t || {};
             if (this.recipientMode === 'all') {
-                return (_t['notifications.all_users'] || 'All active users') + ' (' + this.activeUsersCount + ')';
+                return (t['notifications.all_users'] || 'All active users') + ' (' + this.activeUsersCount + ')';
             }
             if (this.recipientMode === 'team') {
-                const t = this.teams.find(team => String(team.id) === String(this.selectedTeamId));
-                return t ? ('👥 ' + t.name) : 'Équipe sélectionnée';
+                const team = this.teams.find(tm => String(tm.id) === String(this.selectedTeamId));
+                return team ? team.name : 'Équipe sélectionnée';
             }
             if (this.recipientMode === 'user') {
-                const u = this.users.find(user => String(user.id) === String(this.selectedUserId));
-                return u ? ('👤 ' + u.name + ' (' + u.email + ')') : 'Utilisateur sélectionné';
+                const u = this.users.find(usr => String(usr.id) === String(this.selectedUserId));
+                return u ? (u.name + ' (' + u.email + ')') : 'Utilisateur sélectionné';
             }
             return '';
         },
@@ -560,18 +643,19 @@ function adminNotifications() {
         openConfirm() {
             this.formError = '';
             this.formSuccess = '';
+            const t = window._t || {};
 
             const recipient = this.getRecipientValue();
             if (!recipient) {
-                this.formError = _t['notifications.error.recipient_required'] || 'Please select a recipient.';
+                this.formError = t['notifications.error.recipient_required'] || 'Please select a recipient.';
                 return;
             }
             if (!this.title.trim()) {
-                this.formError = _t['notifications.error.title_required'] || 'Title is required.';
+                this.formError = t['notifications.error.title_required'] || 'Title is required.';
                 return;
             }
             if (!this.message.trim()) {
-                this.formError = _t['notifications.error.message_required'] || 'Message is required.';
+                this.formError = t['notifications.error.message_required'] || 'Message is required.';
                 return;
             }
 
@@ -583,6 +667,7 @@ function adminNotifications() {
             this.sending = true;
             this.formError = '';
             this.formSuccess = '';
+            const t = window._t || {};
 
             try {
                 const resp = await fetch('/api/admin/notifications', {
@@ -598,19 +683,50 @@ function adminNotifications() {
                 });
 
                 if (resp.ok) {
-                    this.formSuccess = _t['notifications.success'] || 'Notification sent successfully';
+                    this.formSuccess = t['notifications.success'] || 'Notification sent successfully';
                     this.title = '';
                     this.message = '';
                     this.link = '';
                     setTimeout(() => { window.location.reload(); }, 800);
                 } else {
                     const data = await resp.json().catch(() => ({}));
-                    this.formError = data.error || (_t['notifications.error.send_failed'] || 'Failed to send notification');
+                    this.formError = data.error || (t['notifications.error.send_failed'] || 'Failed to send notification');
                 }
             } catch (err) {
-                this.formError = _t['notifications.error.send_failed'] || 'Failed to send notification';
+                this.formError = t['notifications.error.send_failed'] || 'Failed to send notification';
             } finally {
                 this.sending = false;
+            }
+        },
+
+        confirmDelete(notif) {
+            if (!notif) return;
+            this.deletingNotif = notif;
+            this.showDeleteModal = true;
+        },
+
+        async executeDelete() {
+            if (!this.deletingNotif) return;
+            this.deleting = true;
+            try {
+                const resp = await fetch('/api/admin/notifications/' + this.deletingNotif.id + '/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                if (resp.ok) {
+                    const id = this.deletingNotif.id;
+                    this.notifications = this.notifications.filter(n => n.id !== id);
+                    this.showDeleteModal = false;
+                    this.deletingNotif = null;
+                } else {
+                    const data = await resp.json().catch(() => ({}));
+                    alert(data.error || 'Failed to delete notification');
+                }
+            } catch (err) {
+                alert('Connection error');
+            } finally {
+                this.deleting = false;
             }
         }
     };

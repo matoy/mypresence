@@ -654,6 +654,11 @@ var en = map[string]string{
 	"notifications.error.title_required":     "Title is required.",
 	"notifications.error.message_required":   "Message is required.",
 	"notifications.error.send_failed":         "Failed to send notification.",
+	"notifications.delete_confirm_title":      "Delete notification",
+	"notifications.delete_confirm_desc":       "Are you sure you want to delete this notification? It will be removed from history and will no longer appear for the recipient.",
+	"notifications.delete_success":            "Notification deleted successfully.",
+	"notifications.deleting":                  "Deleting...",
+	"notifications.col_actions":               "Actions",
 
 	// Passkeys
 	"nav.passkeys":               "🔑 Passkeys",
@@ -1348,6 +1353,11 @@ var fr = map[string]string{
 	"notifications.error.title_required":     "Le titre est requis.",
 	"notifications.error.message_required":   "Le message est requis.",
 	"notifications.error.send_failed":         "Échec de l'envoi de la notification.",
+	"notifications.delete_confirm_title":      "Supprimer la notification",
+	"notifications.delete_confirm_desc":       "Êtes-vous sûr de vouloir supprimer cette notification ? Elle sera retirée de l'historique et ne s'affichera plus chez le destinataire.",
+	"notifications.delete_success":            "Notification supprimée avec succès.",
+	"notifications.deleting":                  "Suppression...",
+	"notifications.col_actions":               "Actions",
 
 	// Passkeys
 	"nav.passkeys":               "🔑 Passkeys",
@@ -2042,6 +2052,11 @@ var de = map[string]string{
 	"notifications.error.title_required":     "Titel ist erforderlich.",
 	"notifications.error.message_required":   "Nachricht ist erforderlich.",
 	"notifications.error.send_failed":         "Senden der Benachrichtigung fehlgeschlagen.",
+	"notifications.delete_confirm_title":      "Benachrichtigung löschen",
+	"notifications.delete_confirm_desc":       "Möchten Sie diese Benachrichtigung wirklich löschen? Sie wird aus dem Verlauf entfernt.",
+	"notifications.delete_success":            "Benachrichtigung erfolgreich gelöscht.",
+	"notifications.deleting":                  "Löschen...",
+	"notifications.col_actions":               "Aktionen",
 
 	// Passkeys
 	"nav.passkeys":               "🔑 Passkeys",
@@ -2731,6 +2746,11 @@ var es = map[string]string{
 	"notifications.error.title_required":     "El título es obligatorio.",
 	"notifications.error.message_required":   "El mensaje es obligatorio.",
 	"notifications.error.send_failed":         "Error al enviar la notificación.",
+	"notifications.delete_confirm_title":      "Eliminar notificación",
+	"notifications.delete_confirm_desc":       "¿Está seguro de que desea eliminar esta notificación? Se eliminará del historial.",
+	"notifications.delete_success":            "Notificación eliminada con éxito.",
+	"notifications.deleting":                  "Eliminando...",
+	"notifications.col_actions":               "Acciones",
 
 	// Passkeys
 	"nav.passkeys":               "🔑 Passkeys",
@@ -3431,6 +3451,11 @@ var it = map[string]string{
 	"notifications.error.title_required":     "Il titolo è obbligatorio.",
 	"notifications.error.message_required":   "Il messaggio è obbligatorio.",
 	"notifications.error.send_failed":         "Invio della notifica non riuscito.",
+	"notifications.delete_confirm_title":      "Elimina notifica",
+	"notifications.delete_confirm_desc":       "Sei sicuro di voler eliminare questa notifica? Verrà rimossa dalla cronologia.",
+	"notifications.delete_success":            "Notifica eliminata con successo.",
+	"notifications.deleting":                  "Eliminazione...",
+	"notifications.col_actions":               "Azioni",
 
 	// Passkeys
 	"nav.passkeys":               "🔑 Passkeys",

@@ -121,4 +121,16 @@ func TestNotifications_CRUDAndLifecycle(t *testing.T) {
 	if allNotifs[0].ActorName != "Bob Admin" {
 		t.Errorf("expected ActorName 'Bob Admin', got %q", allNotifs[0].ActorName)
 	}
+
+	// 9. Delete Notification
+	if err := d.DeleteNotification(notifID); err != nil {
+		t.Fatalf("DeleteNotification: %v", err)
+	}
+	allNotifsAfterDelete, err := d.GetAllNotifications(10)
+	if err != nil {
+		t.Fatalf("GetAllNotifications after delete: %v", err)
+	}
+	if len(allNotifsAfterDelete) != 0 {
+		t.Fatalf("expected 0 notifications after delete, got %d", len(allNotifsAfterDelete))
+	}
 }

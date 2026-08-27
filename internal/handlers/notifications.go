@@ -249,3 +249,45 @@ func (h *NotificationsHandler) AdminSendNotification(w http.ResponseWriter, r *h
 		http.Redirect(w, r, "/admin/notifications?success=1", http.StatusSeeOther)
 	}
 }
+
+// AdminDeleteNotification handles deletion of a notification from the admin panel.
+func (h *NotificationsHandler) AdminDeleteNotification(w http.ResponseWriter, r *http.Request) {
+	currentUser := middleware.GetUser(r)
+	if currentUser == nil || !currentUser.HasRole(models.RoleGlobal) {
+		if strings.Contains(r.Header.Get("Accept"), "application/json") || strings.Contains(r.Header.Get("Content-Type"), "application/json") {
+			jsonError(w, "Forbidden", http.StatusForbidden)
+		} else {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+		}
+		return
+	}
+
+	idStr := r.PathValue("id")
+	if idStr == "" {
+		idStr = r.FormValue("id")
+	}
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id <= 0 {
+		if strings.Contains(r.Header.Get("Accept"), "application/json") || strings.Contains(r.Header.Get("Content-Type"), "application/json") {
+			jsonError(w, "Invalid notification ID", http.StatusBadRequest)
+		} else {
+			http.Redirect(w, r, "/admin/notifications?error=invalid_id", http.StatusSeeOther)
+		}
+		return
+	}
+
+	if err := h.DB.DeleteNotification(id); err != nil {
+		if strings.Contains(r.Header.Get("Accept"), "application/json") || strings.Contains(r.Header.Get("Content-Type"), "application/json") {
+			jsonError(w, "Failed to delete notification", http.StatusInternalServerError)
+		} else {
+			http.Redirect(w, r, "/admin/notifications?error=delete_failed", http.StatusSeeOther)
+		}
+		return
+	}
+
+	if strings.Contains(r.Header.Get("Accept"), "application/json") || strings.Contains(r.Header.Get("Content-Type"), "application/json") {
+		jsonOK(w, map[string]string{"status": "ok"})
+	} else {
+		http.Redirect(w, r, "/admin/notifications?deleted=1", http.StatusSeeOther)
+	}
+}

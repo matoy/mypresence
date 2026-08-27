@@ -290,6 +290,8 @@ func buildAppMux(cfg *config.Config, database *db.DB) http.Handler {
 	notifAdminMux.HandleFunc("GET /admin/notifications", notifHandler.AdminNotificationsPage)
 	notifAdminMux.HandleFunc("POST /admin/notifications", notifHandler.AdminSendNotification)
 	notifAdminMux.HandleFunc("POST /api/admin/notifications", notifHandler.AdminSendNotification)
+	notifAdminMux.HandleFunc("POST /api/admin/notifications/{id}/delete", notifHandler.AdminDeleteNotification)
+	notifAdminMux.HandleFunc("DELETE /api/admin/notifications/{id}", notifHandler.AdminDeleteNotification)
 	mux.Handle("/admin/notifications", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(notifAdminMux)))
 	mux.Handle("/admin/notifications/", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(notifAdminMux)))
 	mux.Handle("/api/admin/notifications", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(notifAdminMux)))

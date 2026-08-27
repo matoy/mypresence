@@ -223,3 +223,11 @@ ORDER BY created_at DESC, id DESC LIMIT %d`, limit)
 
 	return notifs, nil
 }
+
+// DeleteNotification deletes a notification by ID.
+func (d *DB) DeleteNotification(id int64) error {
+	dl := d.dialect
+	query := `DELETE FROM notifications WHERE id = ?`
+	_, err := d.core.Exec(dl.rebind(query), id)
+	return err
+}
