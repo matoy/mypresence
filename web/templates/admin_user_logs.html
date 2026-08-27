@@ -381,7 +381,7 @@
                             <td class="px-4 py-3 text-sm">
                                 {{if and (eq .Action "set") .StatusName}}
                                 <span class="inline-flex items-center gap-1.5">
-                                    <span class="h-2.5 w-2.5 rounded-full flex-shrink-0" :style="'background-color: {{.StatusColor}}'"></span>
+                                    <span class="h-2.5 w-2.5 rounded-full flex-shrink-0" style="background-color: {{.StatusColor}};"></span>
                                     <span class="font-medium text-gray-700">{{.StatusName}}</span>
                                 </span>
                                 {{else}}

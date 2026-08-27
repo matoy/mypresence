@@ -61,7 +61,7 @@
                     </th>
                     {{range .Statuses}}
                     <th class="px-3 py-3 text-center text-xs font-semibold border-b border-blue-100 min-w-[80px]"
-                        :style="'color: {{.Color}}'">
+                        style="color: {{.Color}};">
                         {{.Name}}
                     </th>
                     {{end}}
@@ -95,7 +95,7 @@
                         {{$countF := getCountF $execStatusTotals .ID}}
                         {{if $countF}}
                         <div class="inline-flex items-center justify-center min-w-[28px] h-7 rounded-full text-white text-xs font-bold"
-                             :style="'background-color: {{.Color}}'">
+                             style="background-color: {{.Color}};">
                             {{fmtF $countF}}
                         </div>
                         {{else}}
@@ -185,7 +185,7 @@
                     </th>
                     {{range .Statuses}}
                     <th class="px-3 py-3 text-center text-xs font-semibold border-b border-gray-200 min-w-[80px]"
-                        :style="'color: {{.Color}}'">
+                        style="color: {{.Color}};">
                         {{.Name}}
                     </th>
                     {{end}}
@@ -264,7 +264,7 @@
                         {{$countF := getCountF $stat.StatusCounts .ID}}
                         {{if $countF}}
                         <div class="inline-flex items-center justify-center min-w-[28px] h-7 rounded-full text-white text-xs font-bold"
-                             :style="'background-color: {{.Color}}'">
+                             style="background-color: {{.Color}};">
                             {{fmtF $countF}}
                         </div>
                         {{else}}
@@ -335,7 +335,7 @@
                         {{$totalF := getCountF $statusTotals .ID}}
                         {{if $totalF}}
                         <div class="inline-flex items-center justify-center min-w-[28px] h-7 rounded-full text-white text-xs font-bold"
-                             :style="'background-color: {{.Color}}; opacity: 0.8'">
+                             style="background-color: {{.Color}}; opacity: 0.8;">
                             {{fmtF $totalF}}
                         </div>
                         {{else}}
@@ -435,14 +435,17 @@
                                 {{$fullSidColor := statusColor $allStatuses $fullSid}}
                                 {{$amSidColor := statusColor $allStatuses $amSid}}
                                 {{$pmSidColor := statusColor $allStatuses $pmSid}}
+                                {{$fullSidBillable := statusBillable $allStatuses $fullSid}}
+                                {{$amSidBillable := statusBillable $allStatuses $amSid}}
+                                {{$pmSidBillable := statusBillable $allStatuses $pmSid}}
                                 {{if $fullSid}}
-                                <div class="mx-auto h-5 w-5 rounded flex items-center justify-center text-white text-[8px] font-bold leading-none" :style="'background-color: ' + '{{$fullSidColor}}'" title="{{statusName $allStatuses $fullSid}}">{{if statusBillable $allStatuses $fullSid}}1{{end}}</div>
+                                <div class="mx-auto h-5 w-5 rounded flex items-center justify-center text-white text-[8px] font-bold leading-none" style="background-color: {{$fullSidColor}};" title="{{statusName $allStatuses $fullSid}}">{{if $fullSidBillable}}1{{end}}</div>
                                 {{else if or $amSid $pmSid}}
                                 <div class="mx-auto h-5 w-5 rounded overflow-hidden flex flex-col">
-                                    <div class="flex-1 flex items-center justify-center text-white text-[7px] font-bold leading-none" :style="'background-color: ' + '{{if $amSid}}{{$amSidColor}}{{else}}#e5e7eb{{end}}'"
-                                         title="AM{{if $amSid}}: {{statusName $allStatuses $amSid}}{{end}}">{{if $amSid}}{{if statusBillable $allStatuses $amSid}}½{{end}}{{end}}</div>
-                                    <div class="flex-1 flex items-center justify-center text-white text-[7px] font-bold leading-none" :style="'background-color: ' + '{{if $pmSid}}{{$pmSidColor}}{{else}}#e5e7eb{{end}}'"
-                                         title="PM{{if $pmSid}}: {{statusName $allStatuses $pmSid}}{{end}}">{{if $pmSid}}{{if statusBillable $allStatuses $pmSid}}½{{end}}{{end}}</div>
+                                    <div class="flex-1 flex items-center justify-center text-white text-[7px] font-bold leading-none" style="background-color: {{if $amSid}}{{$amSidColor}}{{else}}#e5e7eb{{end}};"
+                                         title="AM{{if $amSid}}: {{statusName $allStatuses $amSid}}{{end}}">{{if $amSid}}{{if $amSidBillable}}½{{end}}{{end}}</div>
+                                    <div class="flex-1 flex items-center justify-center text-white text-[7px] font-bold leading-none" style="background-color: {{if $pmSid}}{{$pmSidColor}}{{else}}#e5e7eb{{end}};"
+                                         title="PM{{if $pmSid}}: {{statusName $allStatuses $pmSid}}{{end}}">{{if $pmSid}}{{if $pmSidBillable}}½{{end}}{{end}}</div>
                                 </div>
                                 {{else}}
                                 <span class="text-gray-300">·</span>

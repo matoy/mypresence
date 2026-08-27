@@ -287,3 +287,21 @@ func TestAdminActivityTemplate_ExecSummaryRendered(t *testing.T) {
 		t.Fatal("exec summary row should show rocket when criteria met")
 	}
 }
+
+func TestAdminActivityTemplate_StatusStylesAndDailyBreakdown(t *testing.T) {
+	data := baseActivityPageData()
+	html := renderAdminActivityContent(t, data)
+
+	if strings.Contains(html, ":style=") {
+		t.Fatalf("template should not contain Alpine :style directives, got HTML with :style: %s", html)
+	}
+	if !strings.Contains(html, `style="color: #22c55e;"`) {
+		t.Fatal("expected status column header to have inline style with status color")
+	}
+	if !strings.Contains(html, `style="background-color: #22c55e;"`) {
+		t.Fatal("expected status badges to have inline style background-color")
+	}
+	if !strings.Contains(html, `style="background-color: #22c55e; opacity: 0.8;"`) {
+		t.Fatal("expected status footer total to have inline style background-color with opacity")
+	}
+}
