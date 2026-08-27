@@ -571,7 +571,7 @@ foreach ($key in $projectAlloc.Keys) {
             if ($days -le 0) { continue }
             if (DeclareTime $headers $projID $ym.year $ym.month $days) {
                 $remaining -= $days
-                Write-Host "    $($ym.year)-$('{0:D2}' -f $ym.month) $($a.c): $days j (billable=$billable)"
+                Write-Host "    $($ym.year)-$('{0:D2}' -f $ym.month) $($a.c): $days d (billable=$billable)"
             }
         }
     }

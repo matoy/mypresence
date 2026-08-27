@@ -6,8 +6,8 @@ import (
 	"strconv"
 )
 
-// Version is the application version, updated manually for each release.
-const Version = "0.6.13"
+// Version is the application version, updated manually for each release (format: YYYYMMDD-X).
+const Version = "20260827-1"
 
 // Config holds all application configuration loaded from environment variables.
 //
