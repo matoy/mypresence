@@ -361,7 +361,7 @@ func TestNewRenderPage(t *testing.T) {
 	domID, _ := database.CreateDomain("Tech")
 	_ = database.SetDomainManagers(domID, []int64{uID})
 
-	_, _ = database.CreateNewsMessage("System alert", "Maintenance tonight", "2026-08-01", "2026-08-30", "#dc2626", false)
+	_, _ = database.CreateNewsMessage("System alert", "Maintenance tonight", "2026-08-01", "2026-08-30", "#dc2626", 100, "#ffffff", false)
 
 	funcMap := buildTemplateFuncMap(cfg)
 	templates := loadTemplates(funcMap)

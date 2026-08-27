@@ -32,6 +32,7 @@ func buildTemplateFuncMap(cfg *config.Config) template.FuncMap {
 		// safeNewsContent escapes the content and converts [text](url) syntax to safe anchor tags.
 		// Only http/https URLs are allowed.
 		"safeNewsContent": safeNewsContent,
+		"newsBgColor":     tmplNewsBgColor,
 		"seq": func(n int) []int {
 			s := make([]int, n)
 			for i := range s {

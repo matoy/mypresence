@@ -437,8 +437,8 @@
     {{end}}
     {{range .ActiveNewsMessages}}
     <!-- News banner -->
-    <div class="news-banner-container overflow-hidden" style="background-color: {{.BgColor}};">
-        <div class="news-banner-track text-white py-1.5 px-4 text-sm font-medium">
+    <div class="news-banner-container overflow-hidden" style="background-color: {{newsBgColor .BgColor .BgOpacity}};">
+        <div class="news-banner-track py-1.5 px-4 text-sm font-medium" style="color: {{if .TextColor}}{{.TextColor}}{{else}}#ffffff{{end}};">
             {{safeNewsContent .Content}}
             &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#10023;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
             {{safeNewsContent .Content}}

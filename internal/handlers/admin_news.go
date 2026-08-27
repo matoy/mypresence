@@ -72,6 +72,8 @@ func (h *NewsHandler) CreateNews(w http.ResponseWriter, r *http.Request) {
 		StartDate string `json:"start_date"`
 		EndDate   string `json:"end_date"`
 		BgColor   string `json:"bg_color"`
+		BgOpacity *int   `json:"bg_opacity"`
+		TextColor string `json:"text_color"`
 		Recurring bool   `json:"recurring"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -85,6 +87,19 @@ func (h *NewsHandler) CreateNews(w http.ResponseWriter, r *http.Request) {
 	req.BgColor = strings.TrimSpace(req.BgColor)
 	if req.BgColor == "" {
 		req.BgColor = "#dc2626"
+	}
+	req.TextColor = strings.TrimSpace(req.TextColor)
+	if req.TextColor == "" {
+		req.TextColor = "#ffffff"
+	}
+	bgOpacity := 100
+	if req.BgOpacity != nil {
+		bgOpacity = *req.BgOpacity
+		if bgOpacity < 0 {
+			bgOpacity = 0
+		} else if bgOpacity > 100 {
+			bgOpacity = 100
+		}
 	}
 
 	if req.Title == "" || req.Content == "" || req.StartDate == "" || req.EndDate == "" {
@@ -105,12 +120,12 @@ func (h *NewsHandler) CreateNews(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if !hexColorRE.MatchString(req.BgColor) {
+	if !hexColorRE.MatchString(req.BgColor) || !hexColorRE.MatchString(req.TextColor) {
 		jsonError(w, "news.error.invalid_color", http.StatusBadRequest)
 		return
 	}
 
-	id, err := h.DB.CreateNewsMessage(req.Title, req.Content, req.StartDate, req.EndDate, req.BgColor, req.Recurring)
+	id, err := h.DB.CreateNewsMessage(req.Title, req.Content, req.StartDate, req.EndDate, req.BgColor, bgOpacity, req.TextColor, req.Recurring)
 	if err != nil {
 		slog.Error("admin.news.create_error", "error", err)
 		jsonError(w, "Server error", http.StatusInternalServerError)
@@ -137,6 +152,8 @@ func (h *NewsHandler) UpdateNews(w http.ResponseWriter, r *http.Request) {
 		StartDate string `json:"start_date"`
 		EndDate   string `json:"end_date"`
 		BgColor   string `json:"bg_color"`
+		BgOpacity *int   `json:"bg_opacity"`
+		TextColor string `json:"text_color"`
 		Recurring bool   `json:"recurring"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -150,6 +167,19 @@ func (h *NewsHandler) UpdateNews(w http.ResponseWriter, r *http.Request) {
 	req.BgColor = strings.TrimSpace(req.BgColor)
 	if req.BgColor == "" {
 		req.BgColor = "#dc2626"
+	}
+	req.TextColor = strings.TrimSpace(req.TextColor)
+	if req.TextColor == "" {
+		req.TextColor = "#ffffff"
+	}
+	bgOpacity := 100
+	if req.BgOpacity != nil {
+		bgOpacity = *req.BgOpacity
+		if bgOpacity < 0 {
+			bgOpacity = 0
+		} else if bgOpacity > 100 {
+			bgOpacity = 100
+		}
 	}
 
 	if req.Title == "" || req.Content == "" || req.StartDate == "" || req.EndDate == "" {
@@ -170,12 +200,12 @@ func (h *NewsHandler) UpdateNews(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if !hexColorRE.MatchString(req.BgColor) {
+	if !hexColorRE.MatchString(req.BgColor) || !hexColorRE.MatchString(req.TextColor) {
 		jsonError(w, "news.error.invalid_color", http.StatusBadRequest)
 		return
 	}
 
-	if err := h.DB.UpdateNewsMessage(id, req.Title, req.Content, req.StartDate, req.EndDate, req.BgColor, req.Recurring); err != nil {
+	if err := h.DB.UpdateNewsMessage(id, req.Title, req.Content, req.StartDate, req.EndDate, req.BgColor, bgOpacity, req.TextColor, req.Recurring); err != nil {
 		slog.Error("admin.news.update_error", "id", id, "error", err)
 		jsonError(w, "Server error", http.StatusInternalServerError)
 		return

@@ -97,7 +97,7 @@ func TestExtraDB_News_Coverage(t *testing.T) {
 	tomorrow := now.AddDate(0, 0, 1).Format("2006-01-02")
 
 	// Create active non-recurring news
-	nID1, err := d.CreateNewsMessage("Notice 1", "Message body", yesterday, tomorrow, "#3b82f6", false)
+	nID1, err := d.CreateNewsMessage("Notice 1", "Message body", yesterday, tomorrow, "#3b82f6", 100, "#ffffff", false)
 	if err != nil {
 		t.Fatalf("CreateNewsMessage: %v", err)
 	}
@@ -105,13 +105,13 @@ func TestExtraDB_News_Coverage(t *testing.T) {
 	// Create active recurring news
 	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
 	endOfMonth := time.Date(now.Year(), now.Month(), 28, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
-	nID2, err := d.CreateNewsMessage("Recurring Notice", "Recurring body", startOfMonth, endOfMonth, "#dc2626", true)
+	nID2, err := d.CreateNewsMessage("Recurring Notice", "Recurring body", startOfMonth, endOfMonth, "#dc2626", 100, "#ffffff", true)
 	if err != nil {
 		t.Fatalf("CreateNewsMessage recurring: %v", err)
 	}
 
 	// UpdateNewsMessage
-	if err := d.UpdateNewsMessage(nID1, "Updated Notice", "Updated body", today, tomorrow, "#10b981", false); err != nil {
+	if err := d.UpdateNewsMessage(nID1, "Updated Notice", "Updated body", today, tomorrow, "#10b981", 100, "#ffffff", false); err != nil {
 		t.Fatalf("UpdateNewsMessage: %v", err)
 	}
 

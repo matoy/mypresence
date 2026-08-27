@@ -42,8 +42,11 @@
                 <template x-for="msg in messages" :key="msg.id">
                     <tr class="hover:bg-gray-50 transition">
                         <td class="px-4 py-3">
-                            <div class="flex items-center gap-2">
-                                <span class="inline-block w-3 h-3 rounded-full flex-shrink-0" :style="'background-color:' + msg.bg_color"></span>
+                            <div class="flex items-center gap-2.5">
+                                <span class="inline-flex items-center justify-center w-6 h-6 rounded-full flex-shrink-0 text-[10px] font-bold shadow-sm border border-gray-200/50"
+                                      :style="'background-color:' + hexToRgba(msg.bg_color, msg.bg_opacity) + '; color:' + (msg.text_color || '#ffffff')">
+                                    Aa
+                                </span>
                                 <span class="text-sm font-medium text-gray-800" x-text="msg.title"></span>
                             </div>
                         </td>
@@ -84,7 +87,7 @@
          x-cloak
          class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
          @click.self="showModal = false">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg" @click.stop>
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden" @click.stop>
             <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
                 <h2 class="text-base font-semibold text-gray-800"
                     x-text="editingId ? _t['admin.edit'] : _t['news.add']"></h2>
@@ -94,7 +97,7 @@
                     </svg>
                 </button>
             </div>
-            <div class="px-6 py-4 space-y-4">
+            <div class="px-6 py-4 space-y-4 max-h-[80vh] overflow-y-auto">
                 <!-- Error -->
                 <p x-show="formError" class="text-red-600 text-sm" x-text="formError"></p>
 
@@ -138,25 +141,72 @@
                     <span class="text-xs text-gray-400" x-show="form.recurring" x-text="_t['news.recurring_hint']"></span>
                 </div>
 
-                <!-- Color -->
+                <!-- Background Color & Opacity -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- Background Color -->
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1" x-text="_t['news.col_color']"></label>
+                        <div class="flex items-center gap-2">
+                            <input type="color" x-model="form.bg_color"
+                                   class="h-9 w-10 rounded border border-gray-300 cursor-pointer p-0.5">
+                            <input type="text" x-model="form.bg_color"
+                                   :placeholder="_t['news.col_color_hint']"
+                                   pattern="#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?"
+                                   class="flex-1 px-2.5 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm font-mono">
+                        </div>
+                    </div>
+
+                    <!-- Background Opacity -->
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="block text-xs font-medium text-gray-500" x-text="_t['news.col_opacity']"></label>
+                            <span class="text-xs font-semibold px-2 py-0.5 rounded bg-gray-100 text-gray-700 font-mono" x-text="(form.bg_opacity || 100) + '%'"></span>
+                        </div>
+                        <input type="range" min="10" max="100" step="5" x-model.number="form.bg_opacity"
+                               class="w-full h-2 mt-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary">
+                        <p class="mt-1 text-[11px] text-gray-400" x-text="_t['news.col_opacity_hint']"></p>
+                    </div>
+                </div>
+
+                <!-- Text Color -->
                 <div>
-                    <label class="block text-xs font-medium text-gray-500 mb-1" x-text="_t['news.col_color']"></label>
+                    <label class="block text-xs font-medium text-gray-500 mb-1" x-text="_t['news.col_text_color']"></label>
                     <div class="flex items-center gap-3">
-                        <input type="color" x-model="form.bg_color"
-                               class="h-9 w-12 rounded border border-gray-300 cursor-pointer p-0.5">
-                        <input type="text" x-model="form.bg_color"
-                               :placeholder="_t['news.col_color_hint']"
+                        <input type="color" x-model="form.text_color"
+                               class="h-9 w-10 rounded border border-gray-300 cursor-pointer p-0.5">
+                        <input type="text" x-model="form.text_color"
+                               :placeholder="_t['news.col_text_color_hint']"
                                pattern="#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?"
-                               class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm font-mono">
-                        <!-- Preview -->
-                        <div class="h-9 w-20 rounded-lg border border-gray-200 overflow-hidden flex items-center justify-center text-white text-xs font-medium"
-                             :style="'background-color:' + form.bg_color">
-                            <span>{{index $.T "news.active_badge"}}</span>
+                               class="flex-1 px-2.5 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm font-mono">
+                        <!-- Presets -->
+                        <div class="flex items-center gap-1.5">
+                            <button type="button" @click="form.text_color = '#ffffff'" title="Blanc"
+                                    class="w-6 h-6 rounded-full bg-white border-2 transition"
+                                    :class="form.text_color.toLowerCase() === '#ffffff' ? 'border-primary ring-2 ring-primary/40' : 'border-gray-300'"></button>
+                            <button type="button" @click="form.text_color = '#1f2937'" title="Gris foncé"
+                                    class="w-6 h-6 rounded-full bg-gray-800 border-2 transition"
+                                    :class="form.text_color.toLowerCase() === '#1f2937' ? 'border-primary ring-2 ring-primary/40' : 'border-gray-400'"></button>
+                            <button type="button" @click="form.text_color = '#000000'" title="Noir"
+                                    class="w-6 h-6 rounded-full bg-black border-2 transition"
+                                    :class="form.text_color.toLowerCase() === '#000000' ? 'border-primary ring-2 ring-primary/40' : 'border-gray-400'"></button>
+                            <button type="button" @click="form.text_color = '#facc15'" title="Jaune"
+                                    class="w-6 h-6 rounded-full bg-yellow-400 border-2 transition"
+                                    :class="form.text_color.toLowerCase() === '#facc15' ? 'border-primary ring-2 ring-primary/40' : 'border-gray-300'"></button>
                         </div>
                     </div>
                 </div>
+
+                <!-- Live Preview -->
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1" x-text="_t['news.preview']"></label>
+                    <div class="w-full rounded-xl overflow-hidden shadow-sm border border-gray-200 p-2.5 text-center transition-all"
+                         :style="'background-color: ' + hexToRgba(form.bg_color, form.bg_opacity) + '; color: ' + (form.text_color || '#ffffff')">
+                        <div class="text-sm font-medium truncate"
+                             x-text="form.content ? form.content.slice(0, 80) : (form.title || _t['news.preview'])"></div>
+                    </div>
+                </div>
             </div>
-            <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-2">
+            <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-2 bg-gray-50/50">
                 <button @click="showModal = false"
                         class="text-xs px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium"
                         x-text="_t['admin.cancel']"></button>
@@ -184,6 +234,26 @@ function newsAdmin(initialMessages) {
             start_date: today,
             end_date: today,
             bg_color: '#dc2626',
+            bg_opacity: 100,
+            text_color: '#ffffff',
+            recurring: false,
+        },
+
+        hexToRgba(hex, opacity) {
+            if (!hex) return 'transparent';
+            if (opacity === undefined || opacity === null || opacity === '' || opacity >= 100) {
+                return hex;
+            }
+            let c = hex.replace('#', '');
+            if (c.length === 3) {
+                c = c.split('').map(x => x + x).join('');
+            }
+            if (c.length !== 6) return hex;
+            const r = parseInt(c.slice(0, 2), 16);
+            const g = parseInt(c.slice(2, 4), 16);
+            const b = parseInt(c.slice(4, 6), 16);
+            const a = Math.max(0, Math.min(1, (parseInt(opacity, 10) || 100) / 100));
+            return `rgba(${r}, ${g}, ${b}, ${a})`;
         },
 
         isActive(msg) {
@@ -205,6 +275,8 @@ function newsAdmin(initialMessages) {
                 start_date: today,
                 end_date: today,
                 bg_color: '#dc2626',
+                bg_opacity: 100,
+                text_color: '#ffffff',
                 recurring: false,
             };
             this.showModal = true;
@@ -219,6 +291,8 @@ function newsAdmin(initialMessages) {
                 start_date: msg.start_date,
                 end_date: msg.end_date,
                 bg_color: msg.bg_color,
+                bg_opacity: (msg.bg_opacity !== undefined && msg.bg_opacity > 0) ? msg.bg_opacity : 100,
+                text_color: msg.text_color || '#ffffff',
                 recurring: msg.recurring || false,
             };
             this.showModal = true;

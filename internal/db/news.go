@@ -21,16 +21,20 @@ func (d *DB) migrateNews() error {
   start_date %s NOT NULL,
   end_date   %s NOT NULL,
   bg_color   %s NOT NULL DEFAULT '#dc2626',
+  bg_opacity INTEGER NOT NULL DEFAULT 100,
+  text_color %s NOT NULL DEFAULT '#ffffff',
   recurring  INTEGER NOT NULL DEFAULT 0,
   created_at %s DEFAULT CURRENT_TIMESTAMP
-`, ai, dl.varcharType(200), dl.textType(), dl.varcharType(10), dl.varcharType(10), dl.varcharType(7), dt))
+`, ai, dl.varcharType(200), dl.textType(), dl.varcharType(10), dl.varcharType(10), dl.varcharType(7), dl.varcharType(7), dt))
 
 	if _, err := d.core.Exec(dl.rebind(stmt)); err != nil {
 		return err
 	}
 
-	// Migration for existing deployments that pre-date the recurring column.
+	// Migration for existing deployments that pre-date incremental columns.
 	d.core.Exec(`ALTER TABLE news_messages ADD COLUMN recurring INTEGER NOT NULL DEFAULT 0`) //nolint:errcheck
+	d.core.Exec(`ALTER TABLE news_messages ADD COLUMN bg_opacity INTEGER NOT NULL DEFAULT 100`) //nolint:errcheck
+	d.core.Exec(`ALTER TABLE news_messages ADD COLUMN text_color VARCHAR(7) NOT NULL DEFAULT '#ffffff'`) //nolint:errcheck
 	return nil
 }
 
@@ -40,7 +44,7 @@ func scanRecurring(v int) bool { return v != 0 }
 // ListNewsMessages returns all news messages ordered by start_date desc.
 func (d *DB) ListNewsMessages() ([]models.NewsMessage, error) {
 	rows, err := d.core.Query(`
-SELECT id, title, content, start_date, end_date, bg_color, recurring
+SELECT id, title, content, start_date, end_date, bg_color, bg_opacity, text_color, recurring
 FROM news_messages
 ORDER BY start_date DESC`)
 	if err != nil {
@@ -51,10 +55,16 @@ ORDER BY start_date DESC`)
 	for rows.Next() {
 		var m models.NewsMessage
 		var rec int
-		if err := rows.Scan(&m.ID, &m.Title, &m.Content, &m.StartDate, &m.EndDate, &m.BgColor, &rec); err != nil {
+		if err := rows.Scan(&m.ID, &m.Title, &m.Content, &m.StartDate, &m.EndDate, &m.BgColor, &m.BgOpacity, &m.TextColor, &rec); err != nil {
 			return nil, err
 		}
 		m.Recurring = scanRecurring(rec)
+		if m.BgOpacity <= 0 || m.BgOpacity > 100 {
+			m.BgOpacity = 100
+		}
+		if m.TextColor == "" {
+			m.TextColor = "#ffffff"
+		}
 		msgs = append(msgs, m)
 	}
 	return msgs, rows.Err()
@@ -70,7 +80,7 @@ func (d *DB) GetActiveNewsMessages() ([]models.NewsMessage, error) {
 	todayDay := now.Day()
 
 	rows, err := d.core.Query(`
-SELECT id, title, content, start_date, end_date, bg_color, recurring
+SELECT id, title, content, start_date, end_date, bg_color, bg_opacity, text_color, recurring
 FROM news_messages
 ORDER BY recurring ASC, start_date ASC`)
 	if err != nil {
@@ -82,10 +92,16 @@ ORDER BY recurring ASC, start_date ASC`)
 	for rows.Next() {
 		var m models.NewsMessage
 		var rec int
-		if err := rows.Scan(&m.ID, &m.Title, &m.Content, &m.StartDate, &m.EndDate, &m.BgColor, &rec); err != nil {
+		if err := rows.Scan(&m.ID, &m.Title, &m.Content, &m.StartDate, &m.EndDate, &m.BgColor, &m.BgOpacity, &m.TextColor, &rec); err != nil {
 			return nil, err
 		}
 		m.Recurring = scanRecurring(rec)
+		if m.BgOpacity <= 0 || m.BgOpacity > 100 {
+			m.BgOpacity = 100
+		}
+		if m.TextColor == "" {
+			m.TextColor = "#ffffff"
+		}
 
 		if m.Recurring {
 			startT, err1 := time.Parse("2006-01-02", m.StartDate)
@@ -103,23 +119,29 @@ ORDER BY recurring ASC, start_date ASC`)
 }
 
 // CreateNewsMessage inserts a new news message and returns its ID.
-func (d *DB) CreateNewsMessage(title, content, startDate, endDate, bgColor string, recurring bool) (int64, error) {
+func (d *DB) CreateNewsMessage(title, content, startDate, endDate, bgColor string, bgOpacity int, textColor string, recurring bool) (int64, error) {
 	dl := d.dialect
 	rec := 0
 	if recurring {
 		rec = 1
 	}
+	if bgOpacity <= 0 || bgOpacity > 100 {
+		bgOpacity = 100
+	}
+	if textColor == "" {
+		textColor = "#ffffff"
+	}
 	var id int64
 	if dl.isPostgres() {
 		err := d.core.QueryRow(dl.rebind(`
-INSERT INTO news_messages (title, content, start_date, end_date, bg_color, recurring)
-VALUES (?, ?, ?, ?, ?, ?)
-RETURNING id`), title, content, startDate, endDate, bgColor, rec).Scan(&id)
+INSERT INTO news_messages (title, content, start_date, end_date, bg_color, bg_opacity, text_color, recurring)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id`), title, content, startDate, endDate, bgColor, bgOpacity, textColor, rec).Scan(&id)
 		return id, err
 	}
 	res, err := d.core.Exec(dl.rebind(`
-INSERT INTO news_messages (title, content, start_date, end_date, bg_color, recurring)
-VALUES (?, ?, ?, ?, ?, ?)`), title, content, startDate, endDate, bgColor, rec)
+INSERT INTO news_messages (title, content, start_date, end_date, bg_color, bg_opacity, text_color, recurring)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)`), title, content, startDate, endDate, bgColor, bgOpacity, textColor, rec)
 	if err != nil {
 		return 0, err
 	}
@@ -127,15 +149,21 @@ VALUES (?, ?, ?, ?, ?, ?)`), title, content, startDate, endDate, bgColor, rec)
 }
 
 // UpdateNewsMessage updates an existing news message.
-func (d *DB) UpdateNewsMessage(id int64, title, content, startDate, endDate, bgColor string, recurring bool) error {
+func (d *DB) UpdateNewsMessage(id int64, title, content, startDate, endDate, bgColor string, bgOpacity int, textColor string, recurring bool) error {
 	rec := 0
 	if recurring {
 		rec = 1
 	}
+	if bgOpacity <= 0 || bgOpacity > 100 {
+		bgOpacity = 100
+	}
+	if textColor == "" {
+		textColor = "#ffffff"
+	}
 	_, err := d.core.Exec(d.dialect.rebind(`
 UPDATE news_messages
-SET title = ?, content = ?, start_date = ?, end_date = ?, bg_color = ?, recurring = ?
-WHERE id = ?`), title, content, startDate, endDate, bgColor, rec, id)
+SET title = ?, content = ?, start_date = ?, end_date = ?, bg_color = ?, bg_opacity = ?, text_color = ?, recurring = ?
+WHERE id = ?`), title, content, startDate, endDate, bgColor, bgOpacity, textColor, rec, id)
 	return err
 }
 

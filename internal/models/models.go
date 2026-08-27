@@ -427,6 +427,8 @@ type NewsMessage struct {
 	StartDate string `json:"start_date"` // YYYY-MM-DD
 	EndDate   string `json:"end_date"`   // YYYY-MM-DD
 	BgColor   string `json:"bg_color"`   // hex color, e.g. "#dc2626"
+	BgOpacity int    `json:"bg_opacity"`  // 0-100 percentage, default 100
+	TextColor string `json:"text_color"` // hex color, e.g. "#ffffff", default "#ffffff"
 	Recurring bool   `json:"recurring"`  // repeat every month using start/end day-of-month
 }
 

@@ -34,6 +34,9 @@ func renderLayoutForUser(t *testing.T, user *models.User, disableProjects bool) 
 		"safeNewsContent": func(s string) template.HTML {
 			return template.HTML(template.HTMLEscapeString(s))
 		},
+		"newsBgColor": func(hex string, opacity int) template.CSS {
+			return template.CSS(hex)
+		},
 	}
 	base := string(layoutBytes) + `{{define "content"}}content{{end}}`
 	tmpl, err := template.New("layout.html").Funcs(funcMap).Parse(base)
@@ -214,6 +217,12 @@ func TestLayoutTemplate_ActiveNewsBanner_RendersTrack(t *testing.T) {
 		"safeNewsContent": func(s string) template.HTML {
 			return template.HTML(template.HTMLEscapeString(s))
 		},
+		"newsBgColor": func(hex string, opacity int) template.CSS {
+			if opacity <= 0 || opacity >= 100 {
+				return template.CSS(hex)
+			}
+			return template.CSS("rgba(220, 38, 38, 0.80)")
+		},
 	}
 	base := string(layoutBytes) + `{{define "content"}}content{{end}}`
 	tmpl, err := template.New("layout.html").Funcs(funcMap).Parse(base)
@@ -252,6 +261,60 @@ func TestLayoutTemplate_ActiveNewsBanner_RendersTrack(t *testing.T) {
 	}
 }
 
+func TestLayoutTemplate_ActiveNewsBanner_WithOpacityAndTextColor(t *testing.T) {
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	layoutPath := filepath.Clean(filepath.Join(filepath.Dir(thisFile), "../../web/templates/layout.html"))
+	layoutBytes, err := os.ReadFile(layoutPath)
+	if err != nil {
+		t.Fatalf("read layout template: %v", err)
+	}
+
+	funcMap := template.FuncMap{
+		"json": func(v interface{}) template.JS {
+			b, _ := json.Marshal(v)
+			return template.JS(b)
+		},
+		"safeNewsContent": func(s string) template.HTML {
+			return template.HTML(template.HTMLEscapeString(s))
+		},
+		"newsBgColor": func(hex string, opacity int) template.CSS {
+			return template.CSS("rgba(59, 130, 246, 0.80)")
+		},
+	}
+	base := string(layoutBytes) + `{{define "content"}}content{{end}}`
+	tmpl, err := template.New("layout.html").Funcs(funcMap).Parse(base)
+	if err != nil {
+		t.Fatalf("parse layout template: %v", err)
+	}
+
+	data := models.PageData{
+		Config: map[string]interface{}{"AppName": "myPresence"},
+		User:   &models.User{ID: 1, Name: "Basic", Roles: models.RoleBasic},
+		Page:   "calendar",
+		T:      map[string]string{},
+		Lang:   "en",
+		ActiveNewsMessages: []models.NewsMessage{
+			{ID: 1, Title: "Notice", Content: "Styled banner", BgColor: "#3b82f6", BgOpacity: 80, TextColor: "#1f2937"},
+		},
+	}
+
+	var out bytes.Buffer
+	if err := tmpl.ExecuteTemplate(&out, "layout", data); err != nil {
+		t.Fatalf("execute layout template: %v", err)
+	}
+	html := out.String()
+
+	if !strings.Contains(html, `style="background-color: rgba(59, 130, 246, 0.80);"`) {
+		t.Fatalf("expected rgba background color in output, got: %s", html)
+	}
+	if !strings.Contains(html, `style="color: #1f2937;"`) {
+		t.Fatalf("expected text color in output, got: %s", html)
+	}
+}
+
 func TestLayoutTemplate_NotificationsToast_Renders(t *testing.T) {
 	_, thisFile, _, ok := runtime.Caller(0)
 	if !ok {
@@ -270,6 +333,9 @@ func TestLayoutTemplate_NotificationsToast_Renders(t *testing.T) {
 		},
 		"safeNewsContent": func(s string) template.HTML {
 			return template.HTML(template.HTMLEscapeString(s))
+		},
+		"newsBgColor": func(hex string, opacity int) template.CSS {
+			return template.CSS(hex)
 		},
 	}
 	base := string(layoutBytes) + `{{define "content"}}content{{end}}`

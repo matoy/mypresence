@@ -243,7 +243,7 @@ func TestUpdateNews_Success(t *testing.T) {
 	d := newExtraTestDB(t)
 	h := &NewsHandler{DB: d, Render: noRender}
 	today := time.Now().Format("2006-01-02")
-	id, _ := d.CreateNewsMessage("Original", "content", today, today, "#dc2626", false)
+	id, _ := d.CreateNewsMessage("Original", "content", today, today, "#dc2626", 100, "#ffffff", false)
 
 	body, _ := json.Marshal(map[string]interface{}{
 		"title":      "Updated",
@@ -292,7 +292,7 @@ func TestUpdateNews_MissingFields(t *testing.T) {
 	d := newExtraTestDB(t)
 	h := &NewsHandler{DB: d, Render: noRender}
 	today := time.Now().Format("2006-01-02")
-	id, _ := d.CreateNewsMessage("Orig", "content", today, today, "#dc2626", false)
+	id, _ := d.CreateNewsMessage("Orig", "content", today, today, "#dc2626", 100, "#ffffff", false)
 	body, _ := json.Marshal(map[string]interface{}{"title": ""})
 	req := createAdminReq(t, d, http.MethodPut, "/admin/news/"+strconvI64(id), body)
 	req.SetPathValue("id", strconvI64(id))
@@ -309,7 +309,7 @@ func TestUpdateNews_InvalidDates(t *testing.T) {
 	d := newExtraTestDB(t)
 	h := &NewsHandler{DB: d, Render: noRender}
 	today := time.Now().Format("2006-01-02")
-	id, _ := d.CreateNewsMessage("Orig", "content", today, today, "#dc2626", false)
+	id, _ := d.CreateNewsMessage("Orig", "content", today, today, "#dc2626", 100, "#ffffff", false)
 	body, _ := json.Marshal(map[string]interface{}{
 		"title":      "x",
 		"content":    "y",
@@ -332,7 +332,7 @@ func TestUpdateNews_InvalidColor(t *testing.T) {
 	d := newExtraTestDB(t)
 	h := &NewsHandler{DB: d, Render: noRender}
 	today := time.Now().Format("2006-01-02")
-	id, _ := d.CreateNewsMessage("Orig", "content", today, today, "#dc2626", false)
+	id, _ := d.CreateNewsMessage("Orig", "content", today, today, "#dc2626", 100, "#ffffff", false)
 	body, _ := json.Marshal(map[string]interface{}{
 		"title":      "x",
 		"content":    "y",
@@ -355,7 +355,7 @@ func TestUpdateNews_BadJSON(t *testing.T) {
 	d := newExtraTestDB(t)
 	h := &NewsHandler{DB: d, Render: noRender}
 	today := time.Now().Format("2006-01-02")
-	id, _ := d.CreateNewsMessage("Orig", "content", today, today, "#dc2626", false)
+	id, _ := d.CreateNewsMessage("Orig", "content", today, today, "#dc2626", 100, "#ffffff", false)
 	req := createAdminReq(t, d, http.MethodPut, "/admin/news/"+strconvI64(id), []byte("{bad"))
 	req.SetPathValue("id", strconvI64(id))
 	req.Header.Set("Content-Type", "application/json")
@@ -371,7 +371,7 @@ func TestUpdateNews_WithActivityViewerRole(t *testing.T) {
 	d := newExtraTestDB(t)
 	h := &NewsHandler{DB: d, Render: noRender}
 	today := time.Now().Format("2006-01-02")
-	id, _ := d.CreateNewsMessage("Orig", "content", today, today, "#dc2626", false)
+	id, _ := d.CreateNewsMessage("Orig", "content", today, today, "#dc2626", 100, "#ffffff", false)
 	body, _ := json.Marshal(map[string]interface{}{
 		"title":      "Updated",
 		"content":    "New",
@@ -399,7 +399,7 @@ func TestDeleteNews_Success(t *testing.T) {
 	d := newExtraTestDB(t)
 	h := &NewsHandler{DB: d, Render: noRender}
 	today := time.Now().Format("2006-01-02")
-	id, _ := d.CreateNewsMessage("To delete", "content", today, today, "#dc2626", false)
+	id, _ := d.CreateNewsMessage("To delete", "content", today, today, "#dc2626", 100, "#ffffff", false)
 
 	req := createAdminReq(t, d, http.MethodDelete, "/admin/news/"+strconvI64(id), nil)
 	req.SetPathValue("id", strconvI64(id))
@@ -432,7 +432,7 @@ func TestDeleteNews_WithActivityViewerRole(t *testing.T) {
 	d := newExtraTestDB(t)
 	h := &NewsHandler{DB: d, Render: noRender}
 	today := time.Now().Format("2006-01-02")
-	id, _ := d.CreateNewsMessage("Audit delete", "content", today, today, "#dc2626", false)
+	id, _ := d.CreateNewsMessage("Audit delete", "content", today, today, "#dc2626", 100, "#ffffff", false)
 	req := createAuthedReq(t, d, http.MethodDelete, "/admin/news/"+strconvI64(id),
 		"actmgr3@test.com", "Act Mgr3", "password1", models.RoleActivityViewer, nil)
 	req.SetPathValue("id", strconvI64(id))
@@ -542,7 +542,7 @@ func TestUpdateNews_ToggleRecurring(t *testing.T) {
 	d := newExtraTestDB(t)
 	h := &NewsHandler{DB: d, Render: noRender}
 	today := time.Now().Format("2006-01-02")
-	id, _ := d.CreateNewsMessage("Monthly", "content", today, today, "#7c3aed", true)
+	id, _ := d.CreateNewsMessage("Monthly", "content", today, today, "#7c3aed", 100, "#ffffff", true)
 
 	body, _ := json.Marshal(map[string]interface{}{
 		"title":      "Monthly",
@@ -625,11 +625,11 @@ func TestGetActiveNewsAPI_ReturnsOnlyActive(t *testing.T) {
 	tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
 
 	// Active message (today is within range)
-	if _, err := d.CreateNewsMessage("Active", "Active content", today, tomorrow, "#dc2626", false); err != nil {
+	if _, err := d.CreateNewsMessage("Active", "Active content", today, tomorrow, "#dc2626", 100, "#ffffff", false); err != nil {
 		t.Fatal(err)
 	}
 	// Expired message
-	if _, err := d.CreateNewsMessage("Expired", "Old content", yesterday, yesterday, "#dc2626", false); err != nil {
+	if _, err := d.CreateNewsMessage("Expired", "Old content", yesterday, yesterday, "#dc2626", 100, "#ffffff", false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -694,10 +694,10 @@ func TestListNewsAPI_ReturnsAll(t *testing.T) {
 	today := time.Now().Format("2006-01-02")
 	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
 
-	if _, err := d.CreateNewsMessage("Msg1", "Content1", today, today, "#dc2626", false); err != nil {
+	if _, err := d.CreateNewsMessage("Msg1", "Content1", today, today, "#dc2626", 100, "#ffffff", false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.CreateNewsMessage("Msg2", "Content2", yesterday, yesterday, "#1d4ed8", false); err != nil {
+	if _, err := d.CreateNewsMessage("Msg2", "Content2", yesterday, yesterday, "#1d4ed8", 100, "#ffffff", false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -803,7 +803,7 @@ func TestUpdateNewsAPI_Success(t *testing.T) {
 	d := newExtraTestDB(t)
 	h := &NewsHandler{DB: d, Render: noRender}
 	today := time.Now().Format("2006-01-02")
-	id, _ := d.CreateNewsMessage("Original", "Content", today, today, "#dc2626", false)
+	id, _ := d.CreateNewsMessage("Original", "Content", today, today, "#dc2626", 100, "#ffffff", false)
 
 	body, _ := json.Marshal(map[string]interface{}{
 		"title": "Updated API", "content": "New content", "start_date": today, "end_date": today, "bg_color": "#dc2626",
@@ -831,7 +831,7 @@ func TestUpdateNewsAPI_RequiresActivityViewer(t *testing.T) {
 	d := newExtraTestDB(t)
 	h := &NewsHandler{DB: d, Render: noRender}
 	today := time.Now().Format("2006-01-02")
-	id, _ := d.CreateNewsMessage("X", "Y", today, today, "#dc2626", false)
+	id, _ := d.CreateNewsMessage("X", "Y", today, today, "#dc2626", 100, "#ffffff", false)
 	body, _ := json.Marshal(map[string]interface{}{
 		"title": "X", "content": "Y", "start_date": today, "end_date": today, "bg_color": "#dc2626",
 	})
@@ -856,7 +856,7 @@ func TestDeleteNewsAPI_Success(t *testing.T) {
 	d := newExtraTestDB(t)
 	h := &NewsHandler{DB: d, Render: noRender}
 	today := time.Now().Format("2006-01-02")
-	id, _ := d.CreateNewsMessage("ToDelete", "Content", today, today, "#dc2626", false)
+	id, _ := d.CreateNewsMessage("ToDelete", "Content", today, today, "#dc2626", 100, "#ffffff", false)
 
 	req := createAuthedReq(t, d, http.MethodDelete, "/api/admin/news/"+strconvI64(id),
 		"deler@test.com", "Deler", "pass", models.RoleActivityViewer, nil)
@@ -878,7 +878,7 @@ func TestDeleteNewsAPI_RequiresActivityViewer(t *testing.T) {
 	d := newExtraTestDB(t)
 	h := &NewsHandler{DB: d, Render: noRender}
 	today := time.Now().Format("2006-01-02")
-	id, _ := d.CreateNewsMessage("ToDelete", "Content", today, today, "#dc2626", false)
+	id, _ := d.CreateNewsMessage("ToDelete", "Content", today, today, "#dc2626", 100, "#ffffff", false)
 
 	req := createAuthedReq(t, d, http.MethodDelete, "/api/admin/news/"+strconvI64(id),
 		"nobody2@test.com", "Nobody", "pass", models.RoleBasic, nil)
@@ -889,5 +889,101 @@ func TestDeleteNewsAPI_RequiresActivityViewer(t *testing.T) {
 	protected.ServeHTTP(w, req)
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d", w.Code)
+	}
+}
+
+func TestCreateNews_WithOpacityAndTextColor(t *testing.T) {
+	d := newExtraTestDB(t)
+	h := &NewsHandler{DB: d, Render: noRender}
+	today := time.Now().Format("2006-01-02")
+
+	opacity := 70
+	body, _ := json.Marshal(map[string]interface{}{
+		"title":      "Custom Styled",
+		"content":    "Transparent banner",
+		"start_date": today,
+		"end_date":   today,
+		"bg_color":   "#3b82f6",
+		"bg_opacity": opacity,
+		"text_color": "#1f2937",
+		"recurring":  false,
+	})
+	req := createAdminReq(t, d, http.MethodPost, "/admin/news", body)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	w.Body = new(bytes.Buffer)
+	middleware.Auth(d, http.HandlerFunc(h.CreateNews)).ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	msgs, err := d.ListNewsMessages()
+	if err != nil || len(msgs) != 1 {
+		t.Fatalf("expected 1 message, got %v (err: %v)", msgs, err)
+	}
+	if msgs[0].BgOpacity != 70 {
+		t.Errorf("expected bg_opacity 70, got %d", msgs[0].BgOpacity)
+	}
+	if msgs[0].TextColor != "#1f2937" {
+		t.Errorf("expected text_color #1f2937, got %s", msgs[0].TextColor)
+	}
+}
+
+func TestUpdateNews_WithOpacityAndTextColor(t *testing.T) {
+	d := newExtraTestDB(t)
+	h := &NewsHandler{DB: d, Render: noRender}
+	today := time.Now().Format("2006-01-02")
+	id, _ := d.CreateNewsMessage("Original", "content", today, today, "#dc2626", 100, "#ffffff", false)
+
+	opacity := 50
+	body, _ := json.Marshal(map[string]interface{}{
+		"title":      "Updated Styled",
+		"content":    "New content",
+		"start_date": today,
+		"end_date":   today,
+		"bg_color":   "#10b981",
+		"bg_opacity": opacity,
+		"text_color": "#facc15",
+		"recurring":  false,
+	})
+	req := createAdminReq(t, d, http.MethodPut, "/admin/news/"+strconvI64(id), body)
+	req.SetPathValue("id", strconvI64(id))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	w.Body = new(bytes.Buffer)
+	middleware.Auth(d, http.HandlerFunc(h.UpdateNews)).ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	msgs, _ := d.ListNewsMessages()
+	if msgs[0].BgOpacity != 50 {
+		t.Errorf("expected bg_opacity 50, got %d", msgs[0].BgOpacity)
+	}
+	if msgs[0].TextColor != "#facc15" {
+		t.Errorf("expected text_color #facc15, got %s", msgs[0].TextColor)
+	}
+}
+
+func TestCreateNews_InvalidTextColor(t *testing.T) {
+	d := newExtraTestDB(t)
+	h := &NewsHandler{DB: d, Render: noRender}
+	today := time.Now().Format("2006-01-02")
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"title":      "Invalid Text Color",
+		"content":    "Content",
+		"start_date": today,
+		"end_date":   today,
+		"bg_color":   "#3b82f6",
+		"text_color": "not-a-color",
+	})
+	req := createAdminReq(t, d, http.MethodPost, "/admin/news", body)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	w.Body = new(bytes.Buffer)
+	middleware.Auth(d, http.HandlerFunc(h.CreateNews)).ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
 	}
 }

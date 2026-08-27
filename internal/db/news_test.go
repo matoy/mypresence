@@ -18,9 +18,9 @@ func TestCreateAndListNewsMessages(t *testing.T) {
 		t.Fatalf("expected 0 messages, got %d", len(msgs))
 	}
 
-	// Create one.
+	// Create one with custom opacity and text color.
 	today := time.Now().Format("2006-01-02")
-	id, err := d.CreateNewsMessage("Test Title", "Hello world", today, today, "#dc2626", false)
+	id, err := d.CreateNewsMessage("Test Title", "Hello world", today, today, "#dc2626", 80, "#ffffff", false)
 	if err != nil {
 		t.Fatalf("CreateNewsMessage: %v", err)
 	}
@@ -46,6 +46,12 @@ func TestCreateAndListNewsMessages(t *testing.T) {
 	if m.BgColor != "#dc2626" {
 		t.Errorf("bg_color: got %q", m.BgColor)
 	}
+	if m.BgOpacity != 80 {
+		t.Errorf("bg_opacity: got %d, want 80", m.BgOpacity)
+	}
+	if m.TextColor != "#ffffff" {
+		t.Errorf("text_color: got %q, want #ffffff", m.TextColor)
+	}
 }
 
 // TestGetActiveNewsMessages checks that only in-range messages are returned.
@@ -58,25 +64,25 @@ func TestGetActiveNewsMessages(t *testing.T) {
 	lastMonth := time.Now().AddDate(0, -1, 0).Format("2006-01-02")
 
 	// Active: today is within range.
-	_, err := d.CreateNewsMessage("Active", "content", yesterday, tomorrow, "#dc2626", false)
+	_, err := d.CreateNewsMessage("Active", "content", yesterday, tomorrow, "#dc2626", 100, "#ffffff", false)
 	if err != nil {
 		t.Fatalf("CreateNewsMessage active: %v", err)
 	}
 
 	// Expired: ended yesterday.
-	_, err = d.CreateNewsMessage("Expired", "content", lastMonth, yesterday, "#aabbcc", false)
+	_, err = d.CreateNewsMessage("Expired", "content", lastMonth, yesterday, "#aabbcc", 100, "#ffffff", false)
 	if err != nil {
 		t.Fatalf("CreateNewsMessage expired: %v", err)
 	}
 
 	// Future: starts tomorrow.
-	_, err = d.CreateNewsMessage("Future", "content", tomorrow, tomorrow, "#123456", false)
+	_, err = d.CreateNewsMessage("Future", "content", tomorrow, tomorrow, "#123456", 100, "#ffffff", false)
 	if err != nil {
 		t.Fatalf("CreateNewsMessage future: %v", err)
 	}
 
 	// Single-day active (starts and ends today).
-	_, err = d.CreateNewsMessage("Today only", "content", today, today, "#ffffff", false)
+	_, err = d.CreateNewsMessage("Today only", "content", today, today, "#ffffff", 100, "#000000", false)
 	if err != nil {
 		t.Fatalf("CreateNewsMessage today: %v", err)
 	}
@@ -100,12 +106,12 @@ func TestUpdateNewsMessage(t *testing.T) {
 	d := newTestDB(t)
 	today := time.Now().Format("2006-01-02")
 
-	id, err := d.CreateNewsMessage("Original", "Original content", today, today, "#dc2626", false)
+	id, err := d.CreateNewsMessage("Original", "Original content", today, today, "#dc2626", 100, "#ffffff", false)
 	if err != nil {
 		t.Fatalf("CreateNewsMessage: %v", err)
 	}
 
-	err = d.UpdateNewsMessage(id, "Updated", "Updated content", today, today, "#aabbcc", false)
+	err = d.UpdateNewsMessage(id, "Updated", "Updated content", today, today, "#aabbcc", 75, "#1f2937", false)
 	if err != nil {
 		t.Fatalf("UpdateNewsMessage: %v", err)
 	}
@@ -127,6 +133,12 @@ func TestUpdateNewsMessage(t *testing.T) {
 	if m.BgColor != "#aabbcc" {
 		t.Errorf("bg_color: got %q", m.BgColor)
 	}
+	if m.BgOpacity != 75 {
+		t.Errorf("bg_opacity: got %d, want 75", m.BgOpacity)
+	}
+	if m.TextColor != "#1f2937" {
+		t.Errorf("text_color: got %q, want #1f2937", m.TextColor)
+	}
 }
 
 // TestDeleteNewsMessage verifies removal.
@@ -134,7 +146,7 @@ func TestDeleteNewsMessage(t *testing.T) {
 	d := newTestDB(t)
 	today := time.Now().Format("2006-01-02")
 
-	id, err := d.CreateNewsMessage("To delete", "content", today, today, "#dc2626", false)
+	id, err := d.CreateNewsMessage("To delete", "content", today, today, "#dc2626", 100, "#ffffff", false)
 	if err != nil {
 		t.Fatalf("CreateNewsMessage: %v", err)
 	}
@@ -157,7 +169,7 @@ func TestGetNewsMessageTitle(t *testing.T) {
 	d := newTestDB(t)
 	today := time.Now().Format("2006-01-02")
 
-	id, err := d.CreateNewsMessage("My Title", "content", today, today, "#dc2626", false)
+	id, err := d.CreateNewsMessage("My Title", "content", today, today, "#dc2626", 100, "#ffffff", false)
 	if err != nil {
 		t.Fatalf("CreateNewsMessage: %v", err)
 	}
@@ -191,7 +203,7 @@ func TestListNewsMessages_OrderedByStartDateDesc(t *testing.T) {
 		{"2026-02-01", "2026-02-28"},
 	}
 	for _, dt := range dates {
-		if _, err := d.CreateNewsMessage("msg "+dt.start, "c", dt.start, dt.end, "#000000", false); err != nil {
+		if _, err := d.CreateNewsMessage("msg "+dt.start, "c", dt.start, dt.end, "#000000", 100, "#ffffff", false); err != nil {
 			t.Fatalf("CreateNewsMessage: %v", err)
 		}
 	}
@@ -216,7 +228,7 @@ func TestCreateNewsMessage_Recurring(t *testing.T) {
 	d := newTestDB(t)
 	today := time.Now().Format("2006-01-02")
 
-	id, err := d.CreateNewsMessage("Monthly", "content", today, today, "#7c3aed", true)
+	id, err := d.CreateNewsMessage("Monthly", "content", today, today, "#7c3aed", 100, "#ffffff", true)
 	if err != nil {
 		t.Fatalf("CreateNewsMessage recurring: %v", err)
 	}
@@ -232,7 +244,7 @@ func TestCreateNewsMessage_Recurring(t *testing.T) {
 	}
 
 	// UpdateNewsMessage can toggle recurring off.
-	if err := d.UpdateNewsMessage(id, "Monthly", "content", today, today, "#7c3aed", false); err != nil {
+	if err := d.UpdateNewsMessage(id, "Monthly", "content", today, today, "#7c3aed", 100, "#ffffff", false); err != nil {
 		t.Fatalf("UpdateNewsMessage: %v", err)
 	}
 	msgs, _ = d.ListNewsMessages()
@@ -249,8 +261,6 @@ func TestGetActiveNewsMessages_Recurring(t *testing.T) {
 	todayDay := now.Day()
 
 	// Build start/end dates that bracket today's day-of-month.
-	// Use two days before and two days after today to ensure we're in range,
-	// regardless of the current month/year.
 	startDay := todayDay - 2
 	if startDay < 1 {
 		startDay = 1
@@ -264,7 +274,7 @@ func TestGetActiveNewsMessages_Recurring(t *testing.T) {
 	endDate := time.Date(2026, 1, endDay, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
 
 	// Recurring, active (today in range).
-	if _, err := d.CreateNewsMessage("Monthly active", "content", startDate, endDate, "#7c3aed", true); err != nil {
+	if _, err := d.CreateNewsMessage("Monthly active", "content", startDate, endDate, "#7c3aed", 100, "#ffffff", true); err != nil {
 		t.Fatalf("CreateNewsMessage: %v", err)
 	}
 
@@ -275,13 +285,13 @@ func TestGetActiveNewsMessages_Recurring(t *testing.T) {
 		inactiveStart = "2026-01-27"
 		inactiveEnd = "2026-01-28"
 	}
-	if _, err := d.CreateNewsMessage("Monthly inactive", "content", inactiveStart, inactiveEnd, "#dc2626", true); err != nil {
+	if _, err := d.CreateNewsMessage("Monthly inactive", "content", inactiveStart, inactiveEnd, "#dc2626", 100, "#ffffff", true); err != nil {
 		t.Fatalf("CreateNewsMessage: %v", err)
 	}
 
 	// Non-recurring, expired — should not appear.
 	past := time.Now().AddDate(0, -1, 0).Format("2006-01-02")
-	if _, err := d.CreateNewsMessage("Expired", "content", past, past, "#dc2626", false); err != nil {
+	if _, err := d.CreateNewsMessage("Expired", "content", past, past, "#dc2626", 100, "#ffffff", false); err != nil {
 		t.Fatalf("CreateNewsMessage: %v", err)
 	}
 
