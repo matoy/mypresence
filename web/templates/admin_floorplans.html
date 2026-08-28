@@ -20,7 +20,7 @@
                 </div>
 
                 <!-- Create form -->
-                <div x-show="showCreate" x-transition class="px-4 py-3 border-b border-gray-100 bg-gray-50">
+                <div x-show="showCreate" x-cloak x-transition class="px-4 py-3 border-b border-gray-100 bg-gray-50">
                     <form @submit.prevent="createFloorplan()">
                         <div class="flex gap-2">
                         <input x-model="newName" type="text" placeholder="{{index $.T "fp.plan_name_ph"}}" required

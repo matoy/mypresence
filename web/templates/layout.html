@@ -145,6 +145,7 @@
                             </svg>
                         </button>
                         <div x-show="adminMenuOpen"
+                             x-cloak
                              x-transition:enter="transition ease-out duration-150"
                              x-transition:enter-start="opacity-0 -translate-y-1"
                              x-transition:enter-end="opacity-100 translate-y-0"
@@ -225,6 +226,7 @@
                             </svg>
                         </button>
                         <div x-show="userMenuOpen"
+                             x-cloak
                              x-transition:enter="transition ease-out duration-150"
                              x-transition:enter-start="opacity-0 -translate-y-1"
                              x-transition:enter-end="opacity-100 translate-y-0"
@@ -304,7 +306,7 @@
         </div>
 
         <!-- Mobile menu -->
-        <div x-show="mobileMenu" x-transition class="md:hidden bg-primary/95 border-t border-white/10">
+        <div x-show="mobileMenu" x-cloak x-transition class="md:hidden bg-primary/95 border-t border-white/10">
             <div class="px-4 py-3 space-y-2 overflow-y-auto max-h-[calc(100svh-5rem)]">
                 <a href="/" class="block text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">{{index .T "nav.calendar"}}</a>
                 {{if not .DisableFloorplans}}
