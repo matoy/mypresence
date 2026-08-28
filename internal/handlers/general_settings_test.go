@@ -335,3 +335,26 @@ func TestDeleteLogo_FileNotExist(t *testing.T) {
 		t.Fatalf("expected 200 when file doesn't exist, got %d: %s", w.Code, w.Body.String())
 	}
 }
+
+func TestMaskEnvValue(t *testing.T) {
+	tests := []struct {
+		key      string
+		val      string
+		expected string
+	}{
+		{"APP_NAME", "myPresence", "myPresence"},
+		{"EMPTY_VAR", "", ""},
+		{"ADMIN_PASSWORD", "secret12345", "••••••••345"},
+		{"JIRA_TOKEN", "my-secret-token", "••••••••ken"},
+		{"SECRET_KEY", "abc", "••••••••abc"},
+		{"SMTP_URL", "smtp://user:pass@host:587", "••••••••587"},
+		{"API_TOKEN", "ab", "••••••••ab"},
+	}
+
+	for _, tc := range tests {
+		got := maskEnvValue(tc.key, tc.val)
+		if got != tc.expected {
+			t.Errorf("maskEnvValue(%q, %q) = %q; want %q", tc.key, tc.val, got, tc.expected)
+		}
+	}
+}

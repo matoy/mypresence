@@ -1197,7 +1197,7 @@ function envVarsAdmin(initialVars) {
 
         startEdit(v) {
             this.editingKey = v.Key;
-            this.editValue = (v.Value === '••••••••') ? '' : v.Value;
+            this.editValue = this.isSensitive(v.Key) ? '' : v.Value;
             this.envError = '';
         },
 
@@ -1214,7 +1214,12 @@ function envVarsAdmin(initialVars) {
                 body: JSON.stringify({ key: v.Key, value: this.editValue })
             });
             if (r.ok) {
-                v.Value = this.isSensitive(v.Key) && this.editValue !== '' ? '••••••••' : this.editValue;
+                if (this.isSensitive(v.Key) && this.editValue !== '') {
+                    const last3 = this.editValue.length <= 3 ? this.editValue : this.editValue.slice(-3);
+                    v.Value = '••••••••' + last3;
+                } else {
+                    v.Value = this.editValue;
+                }
                 this.editingKey = null;
                 return;
             }

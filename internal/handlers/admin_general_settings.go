@@ -41,13 +41,18 @@ func isSensitiveEnvKey(key string) bool {
 		upper == "SMTP_URL"
 }
 
-// maskEnvValue masks the value with bullet points if key is sensitive and value is non-empty.
+// maskEnvValue masks the value with bullet points if key is sensitive and value is non-empty,
+// but reveals the last 3 characters.
 func maskEnvValue(key, value string) string {
 	if value == "" {
 		return ""
 	}
 	if isSensitiveEnvKey(key) {
-		return "••••••••"
+		runes := []rune(value)
+		if len(runes) <= 3 {
+			return "••••••••" + string(runes)
+		}
+		return "••••••••" + string(runes[len(runes)-3:])
 	}
 	return value
 }
