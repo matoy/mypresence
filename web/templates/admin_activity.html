@@ -163,9 +163,9 @@
             <p class="text-sm text-gray-500">{{index $.T "activity.working_days"}}</p>
             <p class="text-3xl font-bold text-gray-800 mt-1">{{.WorkingDays}}{{if .HolidayCount}} <span class="text-lg font-medium text-gray-400">({{.HolidayCount}} {{if eq .HolidayCount 1}}{{index $.T "activity.holiday_s"}}{{else}}{{index $.T "activity.holiday_p"}}{{end}})</span>{{end}}</p>
         </div>
-        <div class="bg-gradient-to-r from-green-50 to-green-100 rounded-xl shadow-md p-5 border border-green-200">
-            <p class="text-sm text-green-600 font-medium">{{index $.T "activity.total_billable_kpi"}}</p>
-            <p class="text-3xl font-bold text-green-700 mt-1">{{fmtF .TotalBillable}}</p>
+        <div class="bg-white rounded-xl shadow-md p-5">
+            <p class="text-sm text-gray-500">{{index $.T "activity.total_billable_kpi"}}</p>
+            <p class="text-3xl font-bold text-gray-800 mt-1">{{fmtF .TotalBillable}}</p>
         </div>
     </div>
 
