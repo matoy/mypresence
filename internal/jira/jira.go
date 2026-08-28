@@ -16,21 +16,25 @@ import (
 	"github.com/matoy/mypresence/internal/models"
 )
 
-// Client is a minimal Jira Cloud REST API v3 client using Basic auth
-// (email + API token).
+// Client is a Jira Cloud REST API v3 client supporting:
+// 1. Scoped Bearer auth via Atlassian Cloud gateway (https://api.atlassian.com/ex/jira/{cloudId}/...)
+// 2. Legacy Basic auth (email + personal API token) via direct instance URL.
 type Client struct {
 	BaseURL    string
 	Email      string
+	CloudID    string
 	Token      string
 	HTTPClient *http.Client
 }
 
-// NewClient returns a Jira client. baseURL should not have a trailing slash
-// (e.g. "https://your-domain.atlassian.net").
-func NewClient(baseURL, email, token string) *Client {
+// NewClient returns a Jira client.
+// In scoped mode, cloudID and token are provided (baseURL and email may be empty).
+// In legacy mode, baseURL, email, and token are provided.
+func NewClient(baseURL, email, cloudID, token string) *Client {
 	return &Client{
 		BaseURL:    strings.TrimRight(baseURL, "/"),
 		Email:      email,
+		CloudID:    strings.TrimSpace(cloudID),
 		Token:      token,
 		HTTPClient: &http.Client{Timeout: 10 * time.Second},
 	}
@@ -86,17 +90,32 @@ func (c *Client) searchPage(jql, pageToken string) (*searchResponse, error) {
 	if pageToken != "" {
 		params.Set("nextPageToken", pageToken)
 	}
-	// The legacy GET /rest/api/3/search endpoint was removed by Atlassian
-	// (see https://developer.atlassian.com/changelog/#CHANGE-2046); use its
-	// replacement, /rest/api/3/search/jql, instead.
-	reqURL := c.BaseURL + "/rest/api/3/search/jql?" + params.Encode()
+
+	var reqURL string
+	if c.CloudID != "" {
+		base := c.BaseURL
+		if base == "" {
+			base = "https://api.atlassian.com"
+		}
+		reqURL = base + "/ex/jira/" + url.PathEscape(c.CloudID) + "/rest/api/3/search/jql?" + params.Encode()
+	} else {
+		// The legacy GET /rest/api/3/search endpoint was removed by Atlassian
+		// (see https://developer.atlassian.com/changelog/#CHANGE-2046); use its
+		// replacement, /rest/api/3/search/jql, instead.
+		reqURL = c.BaseURL + "/rest/api/3/search/jql?" + params.Encode()
+	}
 
 	req, err := http.NewRequest(http.MethodGet, reqURL, nil)
 	if err != nil {
 		return nil, err
 	}
-	auth := base64.StdEncoding.EncodeToString([]byte(c.Email + ":" + c.Token))
-	req.Header.Set("Authorization", "Basic "+auth)
+
+	if c.CloudID != "" {
+		req.Header.Set("Authorization", "Bearer "+c.Token)
+	} else {
+		auth := base64.StdEncoding.EncodeToString([]byte(c.Email + ":" + c.Token))
+		req.Header.Set("Authorization", "Basic "+auth)
+	}
 	req.Header.Set("Accept", "application/json")
 
 	slog.Info("jira.request", "method", req.Method, "url", reqURL)

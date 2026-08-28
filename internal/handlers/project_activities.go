@@ -418,7 +418,7 @@ func (h *ProjectsHandler) ListJiraTicketsAPI(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	client := jira.NewClient(h.Config.JiraBaseURL, h.Config.JiraEmail, h.Config.JiraToken)
+	client := jira.NewClient(h.Config.JiraBaseURL, h.Config.JiraEmail, h.Config.JiraCloudID, h.Config.JiraToken)
 	tickets, err := client.SearchRecentTickets(team.JiraSpaceKey)
 	if err != nil {
 		slog.Error("jira.search_tickets", "error", err, "team", team.Name)

@@ -98,10 +98,11 @@ type Config struct {
 	PasskeyRPOrigin string `env:"PASSKEY_RP_ORIGIN" live:"true"` // Full origin (e.g. "https://presence.example.com")
 
 	// Jira integration (used for team Jira space linkage)
-	JiraEnabled bool   // true when JiraBaseURL, JiraEmail and JiraToken are all set
-	JiraBaseURL string `env:"JIRA_BASE_URL" live:"true"` // e.g. "https://your-domain.atlassian.net"
-	JiraEmail   string `env:"JIRA_EMAIL" live:"true"`    // Atlassian account email used for API auth
-	JiraToken   string `env:"JIRA_TOKEN" live:"true"`    // Atlassian API token
+	JiraEnabled bool   // true when JiraCloudID+JiraToken or JiraBaseURL+JiraEmail+JiraToken are set
+	JiraCloudID string `env:"JIRA_CLOUD_ID" live:"true"` // Atlassian Cloud ID for scoped API token mode
+	JiraBaseURL string `env:"JIRA_BASE_URL" live:"true"` // e.g. "https://your-domain.atlassian.net" (Legacy mode)
+	JiraEmail   string `env:"JIRA_EMAIL" live:"true"`    // Atlassian account email used for API auth (Legacy mode)
+	JiraToken   string `env:"JIRA_TOKEN" live:"true"`    // Atlassian API token or Scoped Bearer token
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -169,12 +170,13 @@ func Load() *Config {
 		PasskeyRPID:     getEnv("PASSKEY_RP_ID", ""),
 		PasskeyRPOrigin: getEnv("PASSKEY_RP_ORIGIN", ""),
 
+		JiraCloudID: getEnv("JIRA_CLOUD_ID", ""),
 		JiraBaseURL: getEnv("JIRA_BASE_URL", ""),
 		JiraEmail:   getEnv("JIRA_EMAIL", ""),
 		JiraToken:   getEnv("JIRA_TOKEN", ""),
 	}
 	c.SAMLEnabled = c.SAMLIDPMetadataURL != "" && c.SAMLEntityID != ""
-	c.JiraEnabled = c.JiraBaseURL != "" && c.JiraEmail != "" && c.JiraToken != ""
+	c.JiraEnabled = (c.JiraCloudID != "" && c.JiraToken != "") || (c.JiraBaseURL != "" && c.JiraEmail != "" && c.JiraToken != "")
 	return c
 }
 
@@ -223,8 +225,8 @@ func (c *Config) ApplyEnvOverride(key, value string) bool {
 			fv.SetInt(int64(i))
 		}
 	}
-	if key == "JIRA_BASE_URL" || key == "JIRA_EMAIL" || key == "JIRA_TOKEN" {
-		c.JiraEnabled = c.JiraBaseURL != "" && c.JiraEmail != "" && c.JiraToken != ""
+	if key == "JIRA_BASE_URL" || key == "JIRA_EMAIL" || key == "JIRA_TOKEN" || key == "JIRA_CLOUD_ID" {
+		c.JiraEnabled = (c.JiraCloudID != "" && c.JiraToken != "") || (c.JiraBaseURL != "" && c.JiraEmail != "" && c.JiraToken != "")
 	}
 	return true
 }
