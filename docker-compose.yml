@@ -304,6 +304,12 @@ services:
       # - SAML_SP_CERT_FILE=/data/saml/sp-cert.pem
       # - SAML_SP_KEY_FILE=/data/saml/sp-key.pem
 
+      # Automatic SSO (Zero-Click login)
+      # Enabled by default (true) when SAML is configured: automatically redirects unauthenticated
+      # users to the corporate IdP. Local admin login remains accessible via /login?local=1.
+      # Set to false to keep the manual login page with the "Enterprise authentication" button.
+      # - SAML_AUTO_LOGIN=true
+
       # ── STEP 5 (optional): RBAC — Map Entra ID groups to application roles ──
       #
       # By default all SSO users receive the "basic" role.
