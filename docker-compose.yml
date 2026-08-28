@@ -346,14 +346,25 @@ services:
       # Used to link a team to its Jira space (e.g. for the team's
       # "Jira space key" property). Leave unset if you don't use Jira.
       #
+      # ── Recommended: Scoped Token via Atlassian Cloud Gateway ───────────
+      # Uses a restricted token (with scope "read:jira-work") via Bearer auth
+      # calling: https://api.atlassian.com/ex/jira/{cloudId}/rest/api/3/search/jql
+      #
+      # To find your Jira Cloud ID, run:
+      #   curl -s https://<your-site>.atlassian.net/_edge/tenant_info
+      # or:
+      #   curl -H "Authorization: Bearer <token>" https://api.atlassian.com/oauth/token/accessible-resources
+      #
+      # - JIRA_CLOUD_ID=your-jira-cloud-id-uuid
+      # - JIRA_TOKEN=your-scoped-token
+      #
+      # ── Legacy: Basic Auth with personal / service API token ─────────────
       # Base URL of your Jira / Atlassian instance (no trailing slash)
       # Example: https://your-domain.atlassian.net
       # - JIRA_BASE_URL=https://your-domain.atlassian.net
-
       # Atlassian account email used to authenticate against the Jira REST API
       # Example: jira-integration@your-domain.com
       # - JIRA_EMAIL=jira-integration@your-domain.com
-
       # Atlassian API token for the account above.
       # Generate one at: https://id.atlassian.com/manage-profile/security/api-tokens
       # - JIRA_TOKEN=your-atlassian-api-token
