@@ -154,9 +154,11 @@ func (h *ProjectsHandler) validateActivityRequest(userID int64, date, activityTy
 	if activityType == models.ActivityTypeJira && strings.TrimSpace(jiraKey) == "" {
 		return fmt.Errorf("a Jira ticket is required")
 	}
-	if team := h.resolveManualTeam(userID); team != nil && team.RequireActivityComment {
-		if strings.TrimSpace(comment) == "" {
-			return fmt.Errorf("comment is required")
+	if activityType != models.ActivityTypeJira {
+		if team := h.resolveManualTeam(userID); team != nil && team.RequireActivityComment {
+			if strings.TrimSpace(comment) == "" {
+				return fmt.Errorf("comment is required")
+			}
 		}
 	}
 	if percentage <= 0 || percentage > 100 {
@@ -319,7 +321,7 @@ func (h *ProjectsHandler) SetDayActivities(w http.ResponseWriter, r *http.Reques
 			jsonError(w, "a Jira ticket is required", http.StatusUnprocessableEntity)
 			return
 		}
-		if team != nil && team.RequireActivityComment && strings.TrimSpace(a.Comment) == "" {
+		if a.ActivityType != models.ActivityTypeJira && team != nil && team.RequireActivityComment && strings.TrimSpace(a.Comment) == "" {
 			metrics.ProjectOpsTotal.WithLabelValues("activity_day_save", "failure").Inc()
 			jsonError(w, "comment is required", http.StatusUnprocessableEntity)
 			return

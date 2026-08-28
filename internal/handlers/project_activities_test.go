@@ -155,13 +155,16 @@ func TestValidateActivityRequest_RequireComment(t *testing.T) {
 	d.SetPresences(uid, []string{"2026-05-04"}, statusID, "full") //nolint:errcheck
 
 	if err := h.validateActivityRequest(uid, "2026-05-04", models.ActivityTypeOther, "", "", 50, 0); err == nil || !strings.Contains(err.Error(), "comment is required") {
-		t.Errorf("expected comment required error, got %v", err)
+		t.Errorf("expected comment required error for Other, got %v", err)
 	}
-	if err := h.validateActivityRequest(uid, "2026-05-04", models.ActivityTypeOther, "", "  ", 50, 0); err == nil || !strings.Contains(err.Error(), "comment is required") {
-		t.Errorf("expected comment required error on whitespace, got %v", err)
+	if err := h.validateActivityRequest(uid, "2026-05-04", models.ActivityTypeServiceNow, "", "  ", 50, 0); err == nil || !strings.Contains(err.Error(), "comment is required") {
+		t.Errorf("expected comment required error for ServiceNow, got %v", err)
 	}
 	if err := h.validateActivityRequest(uid, "2026-05-04", models.ActivityTypeOther, "", "Done some work", 50, 0); err != nil {
 		t.Errorf("expected success with comment, got %v", err)
+	}
+	if err := h.validateActivityRequest(uid, "2026-05-04", models.ActivityTypeJira, "PROJ-1", "", 50, 0); err != nil {
+		t.Errorf("expected Jira activity without comment to succeed even when team requires comments, got %v", err)
 	}
 }
 
@@ -672,18 +675,51 @@ func TestSetDayActivities_RequireCommentValidation(t *testing.T) {
 	statusID, _ := d.CreateStatus(models.Status{Name: "Billable", Color: "#22c55e", Billable: true, SortOrder: 1})
 	d.SetPresences(uid, []string{"2026-05-04"}, statusID, "full") //nolint:errcheck
 
-	body := map[string]interface{}{
+	// 1. Other activity without comment fails
+	bodyOther := map[string]interface{}{
 		"date": "2026-05-04",
 		"activities": []map[string]interface{}{
 			{"activity_type": models.ActivityTypeOther, "comment": "", "percentage": 50.0},
 		},
 	}
-	bodyBytes, _ := json.Marshal(body)
+	bodyBytes, _ := json.Marshal(bodyOther)
 	req := httptest.NewRequest(http.MethodPost, "/api/project-activities/day", bytes.NewReader(bodyBytes))
 	req.AddCookie(&http.Cookie{Name: "session", Value: tok})
 	w := httptest.NewRecorder()
 	middleware.Auth(d, http.HandlerFunc(h.SetDayActivities)).ServeHTTP(w, req)
 	if w.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("expected 422 for missing required comment, got %d", w.Code)
+		t.Fatalf("expected 422 for missing required comment on other activity, got %d", w.Code)
+	}
+
+	// 2. ServiceNow activity without comment fails
+	bodySN := map[string]interface{}{
+		"date": "2026-05-04",
+		"activities": []map[string]interface{}{
+			{"activity_type": models.ActivityTypeServiceNow, "comment": "", "percentage": 50.0},
+		},
+	}
+	bodyBytes, _ = json.Marshal(bodySN)
+	req = httptest.NewRequest(http.MethodPost, "/api/project-activities/day", bytes.NewReader(bodyBytes))
+	req.AddCookie(&http.Cookie{Name: "session", Value: tok})
+	w = httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.SetDayActivities)).ServeHTTP(w, req)
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422 for missing required comment on servicenow activity, got %d", w.Code)
+	}
+
+	// 3. Jira activity with ticket key but empty comment succeeds
+	bodyJira := map[string]interface{}{
+		"date": "2026-05-04",
+		"activities": []map[string]interface{}{
+			{"activity_type": models.ActivityTypeJira, "jira_key": "RCT-123", "jira_title": "Fix bug", "comment": "", "percentage": 50.0},
+		},
+	}
+	bodyBytes, _ = json.Marshal(bodyJira)
+	req = httptest.NewRequest(http.MethodPost, "/api/project-activities/day", bytes.NewReader(bodyBytes))
+	req.AddCookie(&http.Cookie{Name: "session", Value: tok})
+	w = httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.SetDayActivities)).ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for Jira activity with empty comment, got %d: %s", w.Code, w.Body.String())
 	}
 }
