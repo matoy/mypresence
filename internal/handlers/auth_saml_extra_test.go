@@ -248,3 +248,79 @@ func TestClientIP(t *testing.T) {
 		t.Errorf("expected first forwarded IP 10.0.0.1, got %q", ip)
 	}
 }
+
+func TestSAML_AutoLogin_And_Bypass(t *testing.T) {
+	d := newCRUDTestDB(t)
+
+	var renderedPage string
+	renderFn := func(w http.ResponseWriter, r *http.Request, p string, d interface{}) {
+		renderedPage = p
+	}
+
+	cfg := &config.Config{
+		SAMLEnabled:   true,
+		SAMLAutoLogin: true,
+	}
+	h := &AuthHandler{
+		DB:     d,
+		Config: cfg,
+		Render: renderFn,
+	}
+
+	// 1. Default request to /login should auto-redirect to /saml/login
+	renderedPage = ""
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/login", nil)
+	h.LoginPage(rec, req)
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/saml/login" {
+		t.Fatalf("expected 303 redirect to /saml/login, got code=%d loc=%q", rec.Code, rec.Header().Get("Location"))
+	}
+	if renderedPage != "" {
+		t.Errorf("expected no render on auto-redirect, got page=%q", renderedPage)
+	}
+
+	// 2. Request with return_to should auto-redirect to /saml/login?return_to=...
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/login?return_to=%2Fprojects", nil)
+	h.LoginPage(rec, req)
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/saml/login?return_to=%2Fprojects" {
+		t.Fatalf("expected 303 redirect to /saml/login?return_to=%%2Fprojects, got code=%d loc=%q", rec.Code, rec.Header().Get("Location"))
+	}
+
+	// 3. Request with ?local=1 bypasses auto-redirect and renders login page
+	renderedPage = ""
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/login?local=1", nil)
+	h.LoginPage(rec, req)
+	if rec.Code != http.StatusOK && renderedPage != "login" {
+		t.Fatalf("expected render login page on ?local=1, got code=%d page=%q", rec.Code, renderedPage)
+	}
+
+	// 4. Request with ?logged_out=1 bypasses auto-redirect and renders login page
+	renderedPage = ""
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/login?logged_out=1", nil)
+	h.LoginPage(rec, req)
+	if renderedPage != "login" {
+		t.Fatalf("expected render login page on ?logged_out=1, got page=%q", renderedPage)
+	}
+
+	// 5. Request with ?error=... bypasses auto-redirect and renders login page
+	renderedPage = ""
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/login?error=Failed", nil)
+	h.LoginPage(rec, req)
+	if renderedPage != "login" {
+		t.Fatalf("expected render login page on ?error=..., got page=%q", renderedPage)
+	}
+
+	// 6. When SAMLAutoLogin is false, renders login page
+	cfg.SAMLAutoLogin = false
+	renderedPage = ""
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/login", nil)
+	h.LoginPage(rec, req)
+	if renderedPage != "login" {
+		t.Fatalf("expected render login page when SAMLAutoLogin=false, got page=%q", renderedPage)
+	}
+}

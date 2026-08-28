@@ -55,6 +55,7 @@ type Config struct {
 
 	// SAML
 	SAMLEnabled        bool
+	SAMLAutoLogin      bool `env:"SAML_AUTO_LOGIN" live:"true"`
 	SAMLIDPMetadataURL string
 	SAMLEntityID       string
 	SAMLRootURL        string
@@ -135,6 +136,7 @@ func Load() *Config {
 		AdminUser:     getEnv("ADMIN_USER", "admin"),
 		AdminPassword: getEnv("ADMIN_PASSWORD", "admin"),
 
+		SAMLAutoLogin:      getEnvBool("SAML_AUTO_LOGIN", true),
 		SAMLIDPMetadataURL: getEnv("SAML_IDP_METADATA_URL", ""),
 		SAMLEntityID:       getEnv("SAML_ENTITY_ID", ""),
 		SAMLRootURL:        getEnv("SAML_ROOT_URL", ""),

@@ -112,6 +112,17 @@ func (h *AuthHandler) InitSAML() error {
 	return nil
 }
 
+// sanitizeReturnURL ensures returnTo is a safe relative path.
+func sanitizeReturnURL(target string) string {
+	if target == "" {
+		return ""
+	}
+	if strings.HasPrefix(target, "/") && !strings.HasPrefix(target, "//") {
+		return target
+	}
+	return ""
+}
+
 // LoginPage renders the login page.
 func (h *AuthHandler) LoginPage(w http.ResponseWriter, r *http.Request) {
 	// If already logged in, redirect to home
@@ -122,6 +133,24 @@ func (h *AuthHandler) LoginPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	flash := r.URL.Query().Get("error")
+	local := r.URL.Query().Get("local")
+	loggedOut := r.URL.Query().Get("logged_out")
+
+	// If SAML is enabled and auto-login is active, and no bypass/error query parameters are present:
+	// automatically initiate the SSO flow!
+	if h.Config != nil && h.Config.SAMLEnabled && h.Config.SAMLAutoLogin && flash == "" && local == "" && loggedOut == "" {
+		returnTo := sanitizeReturnURL(r.URL.Query().Get("return_to"))
+		if returnTo == "" {
+			returnTo = sanitizeReturnURL(r.URL.Query().Get("next"))
+		}
+		target := "/saml/login"
+		if returnTo != "" {
+			target += "?return_to=" + url.QueryEscape(returnTo)
+		}
+		http.Redirect(w, r, target, http.StatusSeeOther)
+		return
+	}
+
 	h.Render(w, r, "login", map[string]interface{}{
 		"Flash": flash,
 	})
@@ -216,7 +245,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	}
 	metrics.AuthLogoutsTotal.Inc()
 	http.SetCookie(w, &http.Cookie{Name: "session", MaxAge: -1, Path: "/"})
-	http.Redirect(w, r, "/login", http.StatusSeeOther)
+	http.Redirect(w, r, "/login?logged_out=1", http.StatusSeeOther)
 }
 
 // SAMLMetadata serves the SP metadata XML.
@@ -236,6 +265,11 @@ func (h *AuthHandler) SAMLLogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "SAML not configured", http.StatusNotFound)
 		return
 	}
+	relayState := sanitizeReturnURL(r.URL.Query().Get("return_to"))
+	if relayState == "" {
+		relayState = sanitizeReturnURL(r.URL.Query().Get("next"))
+	}
+
 	authReq, err := h.SP.MakeAuthenticationRequest(
 		h.SP.GetSSOBindingLocation(saml.HTTPRedirectBinding),
 		saml.HTTPRedirectBinding,
@@ -247,7 +281,7 @@ func (h *AuthHandler) SAMLLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redirectURL, err := authReq.Redirect("", h.SP)
+	redirectURL, err := authReq.Redirect(relayState, h.SP)
 	if err != nil {
 		slog.Error("auth.saml.redirect", "error", err)
 		http.Redirect(w, r, "/login?error=Erreur+SSO", http.StatusSeeOther)
@@ -314,7 +348,12 @@ func (h *AuthHandler) SAMLACS(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   86400 * 30,
 	})
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	relayState := sanitizeReturnURL(r.FormValue("RelayState"))
+	target := "/"
+	if relayState != "" {
+		target = relayState
+	}
+	http.Redirect(w, r, target, http.StatusSeeOther)
 }
 
 // collectPendingSAMLIDs returns all non-expired pending SAML request IDs and

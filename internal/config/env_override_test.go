@@ -289,3 +289,33 @@ func TestApplyEnvOverride_FloatField(t *testing.T) {
 		t.Errorf("OnsiteRatioThreshold should keep previous value 80.5, got %v", c.OnsiteRatioThreshold)
 	}
 }
+
+func TestLoad_SAMLAutoLogin_DefaultAndOverride(t *testing.T) {
+	os.Unsetenv("SAML_AUTO_LOGIN") //nolint:errcheck
+	c := Load()
+	if !c.SAMLAutoLogin {
+		t.Error("SAMLAutoLogin should default to true")
+	}
+
+	t.Setenv("SAML_AUTO_LOGIN", "false")
+	c = Load()
+	if c.SAMLAutoLogin {
+		t.Error("SAMLAutoLogin should be false when SAML_AUTO_LOGIN=false")
+	}
+}
+
+func TestApplyEnvOverride_SAMLAutoLogin(t *testing.T) {
+	c := Load()
+	if !c.ApplyEnvOverride("SAML_AUTO_LOGIN", "false") {
+		t.Fatal("ApplyEnvOverride(SAML_AUTO_LOGIN) returned false")
+	}
+	if c.SAMLAutoLogin {
+		t.Error("SAMLAutoLogin: want false after override")
+	}
+	if !c.ApplyEnvOverride("SAML_AUTO_LOGIN", "true") {
+		t.Fatal("ApplyEnvOverride(SAML_AUTO_LOGIN) returned false")
+	}
+	if !c.SAMLAutoLogin {
+		t.Error("SAMLAutoLogin: want true after override")
+	}
+}

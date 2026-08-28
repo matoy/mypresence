@@ -86,8 +86,8 @@ func TestLogoutClearsSession(t *testing.T) {
 	w := httptest.NewRecorder()
 	wrapped.ServeHTTP(w, req)
 
-	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/login" {
-		t.Fatalf("expected redirect to /login, got code=%d location=%q", w.Code, w.Header().Get("Location"))
+	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/login?logged_out=1" {
+		t.Fatalf("expected redirect to /login?logged_out=1, got code=%d location=%q", w.Code, w.Header().Get("Location"))
 	}
 	if _, err := database.GetSessionUser(tok); err == nil {
 		t.Fatal("expected session to be deleted")

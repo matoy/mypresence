@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -41,16 +42,26 @@ func AuthWithOptions(database *db.DB, bearerEnabled bool, next http.Handler) htt
 			}
 		}
 
+		loginTarget := func() string {
+			if r.Method == http.MethodGet && r.URL != nil && r.URL.Path != "" && r.URL.Path != "/" && r.URL.Path != "/login" {
+				reqURI := r.URL.RequestURI()
+				if strings.HasPrefix(reqURI, "/") && !strings.HasPrefix(reqURI, "//") {
+					return "/login?return_to=" + url.QueryEscape(reqURI)
+				}
+			}
+			return "/login"
+		}
+
 		// --- Session cookie ---
 		cookie, err := r.Cookie("session")
 		if err != nil {
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			http.Redirect(w, r, loginTarget(), http.StatusSeeOther)
 			return
 		}
 		user, err := database.GetSessionUser(cookie.Value)
 		if err != nil {
 			http.SetCookie(w, &http.Cookie{Name: "session", MaxAge: -1, Path: "/"})
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			http.Redirect(w, r, loginTarget(), http.StatusSeeOther)
 			return
 		}
 		ctx := context.WithValue(r.Context(), userContextKey, user)
