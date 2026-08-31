@@ -380,6 +380,7 @@ name %s NOT NULL,
 role %s NOT NULL DEFAULT 'basic',
 password_hash %s,
 disabled %s NOT NULL DEFAULT %s,
+site_id BIGINT NOT NULL DEFAULT 0,
 created_at %s DEFAULT CURRENT_TIMESTAMP
 `, ai, emailType, nameType, dl.varcharType(128), text, bool_, dl.boolDefault(false), dt)),
 
@@ -470,6 +471,7 @@ FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	// Additive migrations (safe to run multiple times — errors ignored)
 	d.core.Exec(`UPDATE users SET role = 'global' WHERE role = 'admin'`)                                                                                         //nolint:errcheck
 	d.core.Exec(dl.rebind(dl.addColumnIfNotExists("users", "disabled", fmt.Sprintf("%s NOT NULL DEFAULT %s", bool_, dl.boolDefault(false)))))                    //nolint:errcheck
+	d.core.Exec(dl.rebind(dl.addColumnIfNotExists("users", "site_id", "BIGINT NOT NULL DEFAULT 0")))                                                            //nolint:errcheck
 	d.core.Exec(`UPDATE users SET role = REPLACE(role, 'stats_viewer', 'activity_viewer') WHERE role LIKE '%stats_viewer%'`)                                     //nolint:errcheck
 	d.core.Exec(`UPDATE users SET role = REPLACE(role, 'cra_viewer', 'activity_viewer') WHERE role LIKE '%cra_viewer%'`)                                         //nolint:errcheck
 	d.core.Exec(`UPDATE users SET role = REPLACE(role, 'projects_admin', 'projects_manager') WHERE role LIKE '%projects_admin%'`)                                //nolint:errcheck
@@ -714,10 +716,17 @@ func (d *DB) migrateLegacy(legacyPath string) error {
 		dstInsert string
 	}
 
+	userSrc := "SELECT id, email, name, role, COALESCE(password_hash,''), COALESCE(disabled,0), COALESCE(site_id,0), created_at FROM users"
+	userDst := "INSERT OR IGNORE INTO users (id,email,name,role,password_hash,disabled,site_id,created_at) VALUES (?,?,?,?,?,?,?,?)"
+	var hasSiteID int
+	_ = legacy.QueryRow("SELECT COUNT(*) FROM pragma_table_info('users') WHERE name='site_id'").Scan(&hasSiteID)
+	if hasSiteID == 0 {
+		userSrc = "SELECT id, email, name, role, COALESCE(password_hash,''), COALESCE(disabled,0), created_at FROM users"
+		userDst = "INSERT OR IGNORE INTO users (id,email,name,role,password_hash,disabled,created_at) VALUES (?,?,?,?,?,?,?)"
+	}
+
 	jobs := []tableJob{
-		{d.core,
-			"SELECT id, email, name, role, COALESCE(password_hash,''), COALESCE(disabled,0), created_at FROM users",
-			"INSERT OR IGNORE INTO users (id,email,name,role,password_hash,disabled,created_at) VALUES (?,?,?,?,?,?,?)"},
+		{d.core, userSrc, userDst},
 		{d.core,
 			"SELECT id, name, created_at FROM teams",
 			"INSERT OR IGNORE INTO teams (id,name,created_at) VALUES (?,?,?)"},
@@ -1157,26 +1166,38 @@ func (d *DB) CleanExpiredResetTokens() {
 func (d *DB) GetUserByEmail(email string) (*models.User, error) {
 	var u models.User
 	err := d.core.QueryRow(
-		"SELECT id, email, name, role, COALESCE(password_hash,''), disabled, created_at FROM users WHERE email = ?",
+		"SELECT id, email, name, role, COALESCE(password_hash,''), disabled, created_at, COALESCE(site_id, 0) FROM users WHERE email = ?",
 		email,
-	).Scan(&u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt)
+	).Scan(&u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt, &u.SiteID)
 	if err != nil {
 		return nil, err
 	}
 	u.IsLocal = u.PasswordHash != ""
+	if u.SiteID > 0 {
+		if s, sErr := d.GetSite(u.SiteID); sErr == nil && s != nil {
+			u.SiteName = s.Name
+			u.SiteCountryCode = s.CountryCode
+		}
+	}
 	return &u, nil
 }
 
 func (d *DB) GetUserByID(id int64) (*models.User, error) {
 	var u models.User
 	err := d.core.QueryRow(
-		"SELECT id, email, name, role, COALESCE(password_hash,''), disabled, created_at FROM users WHERE id = ?",
+		"SELECT id, email, name, role, COALESCE(password_hash,''), disabled, created_at, COALESCE(site_id, 0) FROM users WHERE id = ?",
 		id,
-	).Scan(&u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt)
+	).Scan(&u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt, &u.SiteID)
 	if err != nil {
 		return nil, err
 	}
 	u.IsLocal = u.PasswordHash != ""
+	if u.SiteID > 0 {
+		if s, sErr := d.GetSite(u.SiteID); sErr == nil && s != nil {
+			u.SiteName = s.Name
+			u.SiteCountryCode = s.CountryCode
+		}
+	}
 	return &u, nil
 }
 
@@ -1198,7 +1219,7 @@ func (d *DB) UpsertUser(email, name string) (*models.User, error) {
 }
 
 func (d *DB) ListUsers() ([]models.User, error) {
-	rows, err := d.core.Query("SELECT id, email, name, role, COALESCE(password_hash,''), disabled, created_at FROM users ORDER BY name")
+	rows, err := d.core.Query("SELECT id, email, name, role, COALESCE(password_hash,''), disabled, created_at, COALESCE(site_id, 0) FROM users ORDER BY name")
 	if err != nil {
 		return nil, err
 	}
@@ -1207,13 +1228,60 @@ func (d *DB) ListUsers() ([]models.User, error) {
 	var users []models.User
 	for rows.Next() {
 		var u models.User
-		if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt, &u.SiteID); err != nil {
 			return nil, err
 		}
 		u.IsLocal = u.PasswordHash != ""
 		users = append(users, u)
 	}
-	return users, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return d.HydrateUsersSites(users), nil
+}
+
+// UpdateUserSite updates a user's assigned site.
+func (d *DB) UpdateUserSite(userID, siteID int64) error {
+	_, err := d.core.Exec("UPDATE users SET site_id = ? WHERE id = ?", siteID, userID)
+	return err
+}
+
+// HydrateUsersSites populates SiteName and SiteCountryCode on the given users using ListSites.
+func (d *DB) HydrateUsersSites(users []models.User) []models.User {
+	sites, err := d.ListSites()
+	if err != nil || len(sites) == 0 {
+		return users
+	}
+	siteMap := make(map[int64]*models.Site, len(sites))
+	for _, s := range sites {
+		siteMap[s.ID] = s
+	}
+	for i := range users {
+		if s, ok := siteMap[users[i].SiteID]; ok && s != nil {
+			users[i].SiteName = s.Name
+			users[i].SiteCountryCode = s.CountryCode
+		}
+	}
+	return users
+}
+
+// HydrateTeamMembersSites populates SiteName and SiteCountryCode on the given team members using ListSites.
+func (d *DB) HydrateTeamMembersSites(members []models.TeamMember) []models.TeamMember {
+	sites, err := d.ListSites()
+	if err != nil || len(sites) == 0 {
+		return members
+	}
+	siteMap := make(map[int64]*models.Site, len(sites))
+	for _, s := range sites {
+		siteMap[s.ID] = s
+	}
+	for i := range members {
+		if s, ok := siteMap[members[i].SiteID]; ok && s != nil {
+			members[i].SiteName = s.Name
+			members[i].SiteCountryCode = s.CountryCode
+		}
+	}
+	return members
 }
 
 func (d *DB) UpdateUserRoles(id int64, roles string) error {
@@ -1385,7 +1453,7 @@ func (d *DB) DeleteTeam(id int64) error {
 // GetTeamMembers returns currently active members of a team (left_at IS NULL).
 func (d *DB) GetTeamMembers(teamID int64) ([]models.User, error) {
 	rows, err := d.core.Query(`
-SELECT u.id, u.email, u.name, u.role, COALESCE(u.password_hash,''), u.disabled, u.created_at
+SELECT u.id, u.email, u.name, u.role, COALESCE(u.password_hash,''), u.disabled, u.created_at, COALESCE(u.site_id, 0)
 FROM users u
 JOIN user_teams ut ON u.id = ut.user_id
 WHERE ut.team_id = ? AND ut.left_at IS NULL
@@ -1399,19 +1467,22 @@ ORDER BY u.name
 	var users []models.User
 	for rows.Next() {
 		var u models.User
-		if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt, &u.SiteID); err != nil {
 			return nil, err
 		}
 		u.IsLocal = u.PasswordHash != ""
 		users = append(users, u)
 	}
-	return users, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return d.HydrateUsersSites(users), nil
 }
 
 // GetAllTeamMembers returns all members of a team (active and departed), active first.
 func (d *DB) GetAllTeamMembers(teamID int64) ([]models.TeamMember, error) {
 	rows, err := d.core.Query(`
-SELECT u.id, u.email, u.name, u.role, COALESCE(u.password_hash,''), u.disabled, u.created_at, ut.left_at
+SELECT u.id, u.email, u.name, u.role, COALESCE(u.password_hash,''), u.disabled, u.created_at, COALESCE(u.site_id, 0), ut.left_at
 FROM users u
 JOIN user_teams ut ON u.id = ut.user_id
 WHERE ut.team_id = ?
@@ -1425,20 +1496,23 @@ ORDER BY CASE WHEN ut.left_at IS NULL THEN 0 ELSE 1 END, u.name
 	var members []models.TeamMember
 	for rows.Next() {
 		var m models.TeamMember
-		if err := rows.Scan(&m.ID, &m.Email, &m.Name, &m.Roles, &m.PasswordHash, &m.Disabled, &m.CreatedAt, &m.LeftAt); err != nil {
+		if err := rows.Scan(&m.ID, &m.Email, &m.Name, &m.Roles, &m.PasswordHash, &m.Disabled, &m.CreatedAt, &m.SiteID, &m.LeftAt); err != nil {
 			return nil, err
 		}
 		m.IsLocal = m.PasswordHash != ""
 		members = append(members, m)
 	}
-	return members, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return d.HydrateTeamMembersSites(members), nil
 }
 
 // GetTeamMembersAt returns members who were active at any point from startDate onwards
 // (left_at IS NULL, meaning still active, or left_at >= startDate, meaning they left during or after the period).
 func (d *DB) GetTeamMembersAt(teamID int64, startDate string) ([]models.User, error) {
 	rows, err := d.core.Query(`
-SELECT u.id, u.email, u.name, u.role, COALESCE(u.password_hash,''), u.disabled, u.created_at
+SELECT u.id, u.email, u.name, u.role, COALESCE(u.password_hash,''), u.disabled, u.created_at, COALESCE(u.site_id, 0)
 FROM users u
 JOIN user_teams ut ON u.id = ut.user_id
 WHERE ut.team_id = ? AND (ut.left_at IS NULL OR ut.left_at >= ?)
@@ -1452,13 +1526,16 @@ ORDER BY u.name
 	var users []models.User
 	for rows.Next() {
 		var u models.User
-		if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt, &u.SiteID); err != nil {
 			return nil, err
 		}
 		u.IsLocal = u.PasswordHash != ""
 		users = append(users, u)
 	}
-	return users, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return d.HydrateUsersSites(users), nil
 }
 
 // SetTeamMemberLeftAt sets or clears the departure date for a team member.
@@ -1531,7 +1608,7 @@ func (d *DB) GetTeamLeaderIDs(teamID int64) ([]int64, error) {
 // ListTeamLeaders returns the users designated as leaders of a team.
 func (d *DB) ListTeamLeaders(teamID int64) ([]models.User, error) {
 	rows, err := d.core.Query(`
-SELECT u.id, u.email, u.name, u.role, COALESCE(u.password_hash,''), u.disabled, u.created_at
+SELECT u.id, u.email, u.name, u.role, COALESCE(u.password_hash,''), u.disabled, u.created_at, COALESCE(u.site_id, 0)
 FROM users u
 JOIN team_leaders tl ON u.id = tl.user_id
 WHERE tl.team_id = ?
@@ -1545,13 +1622,16 @@ ORDER BY u.name
 	var users []models.User
 	for rows.Next() {
 		var u models.User
-		if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt, &u.SiteID); err != nil {
 			return nil, err
 		}
 		u.IsLocal = u.PasswordHash != ""
 		users = append(users, u)
 	}
-	return users, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return d.HydrateUsersSites(users), nil
 }
 
 // SetTeamLeaders atomically replaces the full leader list of a team.
@@ -1951,14 +2031,19 @@ func (d *DB) GetHolidayMap(startDate, endDate string) (map[string]models.Holiday
 	return result, rows.Err()
 }
 
-// GetUserHolidayMap returns the map of holidays applicable to a given user based on their team country assignments.
+// GetUserHolidayMap returns the map of holidays applicable to a given user based on their assigned site's country.
 // Global holidays (CountryCode == "") apply to all users.
-// A country-specific holiday applies only if at least one of the user's active teams is fully covered by the holiday
-// (i.e. ALL countries of the team are included in the holiday's country list).
+// A country-specific holiday applies if the user is assigned to a site located in one of the holiday's countries.
 func (d *DB) GetUserHolidayMap(userID int64, startDate, endDate string) (map[string]models.Holiday, error) {
-	userTeams, err := d.GetUserTeams(userID)
+	user, err := d.GetUserByID(userID)
 	if err != nil {
 		return nil, err
+	}
+	var userCountry string
+	if user.SiteID > 0 {
+		if site, err := d.GetSite(user.SiteID); err == nil && site != nil {
+			userCountry = strings.TrimSpace(site.CountryCode)
+		}
 	}
 
 	rows, err := d.presence.Query(
@@ -1976,16 +2061,7 @@ func (d *DB) GetUserHolidayMap(userID int64, startDate, endDate string) (map[str
 		if err := rows.Scan(&h.ID, &h.Date, &h.Name, &h.AllowImputed, &h.CountryCode); err != nil {
 			return nil, err
 		}
-		applies := len(h.CountryList()) == 0
-		if !applies && len(userTeams) > 0 {
-			for _, t := range userTeams {
-				if models.TeamMatchesHoliday(t.CountryList(), h) {
-					applies = true
-					break
-				}
-			}
-		}
-		if applies {
+		if models.UserMatchesHoliday(userCountry, h) {
 			if _, ok := result[h.Date]; ok {
 				if !h.AllowImputed {
 					result[h.Date] = h
@@ -1998,15 +2074,25 @@ func (d *DB) GetUserHolidayMap(userID int64, startDate, endDate string) (map[str
 	return result, rows.Err()
 }
 
-// GetTeamHolidayMap returns the map of holidays applicable to a team based on its configured country codes.
-// A country-specific holiday applies to a team if and only if ALL of the team's countries are covered by the holiday.
+// GetTeamHolidayMap returns the map of holidays applicable to a team based on the assigned site countries of its members.
 func (d *DB) GetTeamHolidayMap(teamID int64, startDate, endDate string) (map[string]models.Holiday, error) {
-	team, err := d.GetTeam(teamID)
+	members, err := d.GetTeamMembersAt(teamID, startDate)
 	if err != nil {
 		return d.GetHolidayMap(startDate, endDate)
 	}
 
-	teamCountries := team.CountryList()
+	countryMap := make(map[string]bool)
+	for _, m := range members {
+		if m.SiteID > 0 {
+			if site, err := d.GetSite(m.SiteID); err == nil && site != nil && site.CountryCode != "" {
+				countryMap[site.CountryCode] = true
+			}
+		}
+	}
+	var countries []string
+	for c := range countryMap {
+		countries = append(countries, c)
+	}
 
 	rows, err := d.presence.Query(
 		"SELECT id, date, name, allow_imputed, COALESCE(country_code, '') FROM holidays WHERE date >= ? AND date <= ? ORDER BY date",
@@ -2023,7 +2109,7 @@ func (d *DB) GetTeamHolidayMap(teamID int64, startDate, endDate string) (map[str
 		if err := rows.Scan(&h.ID, &h.Date, &h.Name, &h.AllowImputed, &h.CountryCode); err != nil {
 			return nil, err
 		}
-		if models.TeamMatchesHoliday(teamCountries, h) {
+		if models.CountriesMatchHoliday(countries, h) {
 			if _, ok := result[h.Date]; ok {
 				if !h.AllowImputed {
 					result[h.Date] = h
@@ -2567,7 +2653,8 @@ func (d *DB) UpdateSite(s models.Site) error {
 }
 
 func (d *DB) DeleteSite(id int64) error {
-	// Detach floorplans first
+	// Detach floorplans and users first
+	_, _ = d.core.Exec("UPDATE users SET site_id = 0 WHERE site_id = ?", id)
 	_, _ = d.floorplan.Exec("UPDATE floorplans SET site_id = 0 WHERE site_id = ?", id)
 	_, err := d.floorplan.Exec("DELETE FROM sites WHERE id = ?", id)
 	return err

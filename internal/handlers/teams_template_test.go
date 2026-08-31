@@ -33,6 +33,7 @@ func TestAdminTeamsTemplate_RendersCleanly(t *testing.T) {
 		"add": func(a, b int) int {
 			return a + b
 		},
+		"flagFor": models.FlagForCountry,
 	}
 
 	tmpl, err := template.New("admin_teams.html").Funcs(funcMap).Parse(string(teamsBytes))

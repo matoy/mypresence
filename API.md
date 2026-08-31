@@ -746,10 +746,9 @@ Create a new team. Requires `team_manager` or `global`.
 
 **Request**
 ```json
-{ "name": "Engineering", "jira_space_key": "", "timesheets_managed_manually": false, "domain_id": 0, "country_codes": "FR, MA" }
+{ "name": "Engineering", "jira_space_key": "", "timesheets_managed_manually": false, "domain_id": 0 }
 ```
-`domain_id` is optional; omit or set to `0` to leave the team unattached to a domain.  
-`country_codes` is optional; comma-separated ISO country codes (e.g. `"FR, MA, CZ"`) whose holidays apply to members of this team.
+`domain_id` is optional; omit or set to `0` to leave the team unattached to a domain.
 
 **Response 200**
 ```json
@@ -760,11 +759,11 @@ Create a new team. Requires `team_manager` or `global`.
 **Error 500** — name already exists (unique constraint)
 
 #### `PUT /admin/teams/{id}`
-Rename a team, and optionally change its properties, including its domain and country codes. Requires `team_manager` or `global`.
+Rename a team, and optionally change its properties (domain, Jira space, manual timesheets). Requires `team_manager` or `global`.
 
 **Request**
 ```json
-{ "name": "Platform Engineering", "jira_space_key": "", "timesheets_managed_manually": false, "domain_id": 2, "country_codes": "FR, MA" }
+{ "name": "Platform Engineering", "jira_space_key": "", "timesheets_managed_manually": false, "domain_id": 2 }
 ```
 
 **Response 200**
@@ -795,6 +794,32 @@ Add a user to a team. Requires `team_manager`, `global`, or designated team lead
 
 #### `DELETE /admin/teams/{id}/members/{userId}`
 Remove a user from a team. Same role requirements as adding a member.
+
+**Response 200**
+```json
+{ "status": "ok" }
+```
+
+#### `PUT /admin/teams/{id}/members/{userId}/site`
+Assign a team member to a physical site (or `0` for none). Country and applicable public holidays are deduced from the site's country. Requires `team_manager`, `global`, or designated team leader of that team.
+
+**Request**
+```json
+{ "site_id": 2 }
+```
+
+**Response 200**
+```json
+{ "status": "ok" }
+```
+
+#### `PUT /api/admin/users/{id}/site`
+Assign any user to a physical site (or `0` for none). Requires `global` role.
+
+**Request**
+```json
+{ "site_id": 2 }
+```
 
 **Response 200**
 ```json

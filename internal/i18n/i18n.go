@@ -336,6 +336,10 @@ var en = map[string]string{
 	"teams.leaders_none":      "No users found",
 	"teams.leaders_empty":     "No leader assigned",
 	"teams.leaders_assigned":  "leader(s) assigned",
+	"teams.member_site":       "Site",
+	"teams.no_site":           "— No site —",
+	"teams.search_site":       "Search site…",
+	"teams.site_updated":      "Site updated",
 
 	// Domains
 	"domains.title":             "🏢 Domains",
@@ -1085,6 +1089,10 @@ var fr = map[string]string{
 	"teams.leaders_none":      "Aucun utilisateur trouvé",
 	"teams.leaders_empty":     "Aucun responsable assigné",
 	"teams.leaders_assigned":  "responsable(s) assigné(s)",
+	"teams.member_site":       "Site de rattachement",
+	"teams.no_site":           "— Aucun site —",
+	"teams.search_site":       "Rechercher un site…",
+	"teams.site_updated":      "Site mis à jour",
 
 	// Domaines
 	"domains.title":             "🏢 Domaines",
@@ -1827,6 +1835,10 @@ var de = map[string]string{
 	"teams.leaders_none":      "Keine Benutzer gefunden",
 	"teams.leaders_empty":     "Kein Leiter zugewiesen",
 	"teams.leaders_assigned":  "Leiter zugewiesen",
+	"teams.member_site":       "Standort",
+	"teams.no_site":           "— Kein Standort —",
+	"teams.search_site":       "Standort suchen…",
+	"teams.site_updated":      "Standort aktualisiert",
 
 	// Bereiche
 	"domains.title":             "🏢 Bereiche",
@@ -2564,6 +2576,10 @@ var es = map[string]string{
 	"teams.leaders_none":      "No se encontraron usuarios",
 	"teams.leaders_empty":     "Ningún líder asignado",
 	"teams.leaders_assigned":  "líder(es) asignado(s)",
+	"teams.member_site":       "Sede",
+	"teams.no_site":           "— Sin sede —",
+	"teams.search_site":       "Buscar sede…",
+	"teams.site_updated":      "Sede actualizada",
 
 	// Dominios
 	"domains.title":             "🏢 Dominios",
@@ -3305,6 +3321,10 @@ var it = map[string]string{
 	"teams.leaders_none":      "Nessun utente trovato",
 	"teams.leaders_empty":     "Nessun responsabile assegnato",
 	"teams.leaders_assigned":  "responsabile/i assegnato/i",
+	"teams.member_site":       "Sede",
+	"teams.no_site":           "— Nessuna sede —",
+	"teams.search_site":       "Cerca sede…",
+	"teams.site_updated":      "Sede aggiornata",
 
 	// Domini
 	"domains.title":             "🏢 Domini",

@@ -26,7 +26,7 @@ A web application for managing employee presence and absences, built with Go and
 - **Activity Report**: summary of billable days per team
 - **Project time tracking**: per-user monthly declaration of days spent per project, with billable-days enforcement, plus a per-team **"Timesheets managed manually"** mode where users declare daily activities (Jira ticket, ServiceNow request, or other) instead of monthly project percentages
 - **Jira integration**: link a team to a Jira Cloud project; users pick from that project's recently updated tickets when declaring a Jira-type activity, and can open the ticket directly from the team activities report
-- **Public holidays & localized multi-country teams**: assign public holidays to specific countries or globally; configure member country ISO codes on teams (e.g. France `FR`, Morocco `MA`, Czech Republic `CZ`, etc.) to adapt calendars, presence validation, and activity reporting statistics automatically per collaborator
+- **Public holidays & localized physical sites**: organize office and remote locations into physical sites with assigned countries; attach users to their site to automatically derive their country, adapt personal calendars, enforce holiday presence validation, and aggregate team statistics.
 - **Role management**: granular per-user permissions
 - **REST API with Personal Access Tokens**: every feature is accessible via authenticated HTTP requests; users generate tokens with a chosen description and expiry; tokens carry no more permissions than the issuing user
 - **Multilingual UI**: full interface available in English 🇺🇸, French 🇫🇷, German 🇩🇪, Spanish 🇪🇸, and Italian 🇮🇹; language preference stored in a cookie

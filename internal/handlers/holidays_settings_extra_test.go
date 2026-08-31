@@ -180,20 +180,22 @@ func TestCalendar_MultiCountryValidation(t *testing.T) {
 	d := newExtraTestDB(t)
 	calH := &CalendarHandler{DB: d, Render: noRender}
 
+	// Sites
+	sFrID, _ := d.CreateSite(models.Site{Name: "Site France", CountryCode: "FR"})
+	sMaID, _ := d.CreateSite(models.Site{Name: "Site Morocco", CountryCode: "MA"})
+	sCzID, _ := d.CreateSite(models.Site{Name: "Site Czech", CountryCode: "CZ"})
+
 	// User FR
 	uFrID, _ := d.CreateLocalUser("user.fr@example.com", "User FR", "pass1234")
-	tFrID, _ := d.CreateTeamWithDetails("Team FR", "", false, false, "FR")
-	d.AddTeamMember(tFrID, uFrID) //nolint:errcheck
+	d.UpdateUserSite(uFrID, sFrID) //nolint:errcheck
 
 	// User MA
 	uMaID, _ := d.CreateLocalUser("user.ma@example.com", "User MA", "pass1234")
-	tMaID, _ := d.CreateTeamWithDetails("Team MA", "", false, false, "MA")
-	d.AddTeamMember(tMaID, uMaID) //nolint:errcheck
+	d.UpdateUserSite(uMaID, sMaID) //nolint:errcheck
 
 	// User CZ
 	uCzID, _ := d.CreateLocalUser("user.cz@example.com", "User CZ", "pass1234")
-	tCzID, _ := d.CreateTeamWithDetails("Team CZ", "", false, false, "CZ")
-	d.AddTeamMember(tCzID, uCzID) //nolint:errcheck
+	d.UpdateUserSite(uCzID, sCzID) //nolint:errcheck
 
 	// French holiday on 2026-07-14 (non-imputable)
 	d.CreateHoliday("2026-07-14", "Bastille Day", false, "FR") //nolint:errcheck
@@ -318,56 +320,52 @@ func TestCalendar_MultiCountryValidation(t *testing.T) {
 		t.Fatalf("expected 200 for CZ user on shared FR+MA holiday, got %d: %s", w7.Code, w7.Body.String())
 	}
 
-	// Mixed team (FR, MA):
-	uMixedID, _ := d.CreateLocalUser("user.mixed@example.com", "User Mixed", "pass1234")
-	tMixedID, _ := d.CreateTeamWithDetails("Team Mixed", "", false, false, "FR, MA")
-	d.AddTeamMember(tMixedID, uMixedID) //nolint:errcheck
-
-	// Mixed team on FR-only holiday (2026-07-14) -> SUCCEEDS (200) because not all team countries are on holiday
-	mixedReqFR, _ := json.Marshal(map[string]interface{}{
-		"user_id":   uMixedID,
-		"dates":     []string{"2026-07-14"},
-		"status_id": statusID,
-		"half":      "full",
-	})
-	r8 := createAdminReq(t, d, http.MethodPost, "/api/presences", mixedReqFR)
-	r8.Header.Set("Content-Type", "application/json")
-	w8 := httptest.NewRecorder()
-	w8.Body = new(bytes.Buffer)
-	middleware.Auth(d, http.HandlerFunc(calH.SetPresences)).ServeHTTP(w8, r8)
-	if w8.Code != http.StatusOK {
-		t.Fatalf("expected 200 for Mixed team user on FR-only holiday, got %d: %s", w8.Code, w8.Body.String())
-	}
-
-	// Mixed team on MA-only holiday (2026-07-30) -> SUCCEEDS (200) because not all team countries are on holiday
-	mixedReqMA, _ := json.Marshal(map[string]interface{}{
-		"user_id":   uMixedID,
-		"dates":     []string{"2026-07-30"},
-		"status_id": statusID,
-		"half":      "full",
-	})
-	r9 := createAdminReq(t, d, http.MethodPost, "/api/presences", mixedReqMA)
-	r9.Header.Set("Content-Type", "application/json")
-	w9 := httptest.NewRecorder()
-	w9.Body = new(bytes.Buffer)
-	middleware.Auth(d, http.HandlerFunc(calH.SetPresences)).ServeHTTP(w9, r9)
-	if w9.Code != http.StatusOK {
-		t.Fatalf("expected 200 for Mixed team user on MA-only holiday, got %d: %s", w9.Code, w9.Body.String())
-	}
-
-	// Mixed team on shared FR+MA holiday (2026-05-08) -> FAILS (422) because all team countries are on holiday
-	mixedReqShared, _ := json.Marshal(map[string]interface{}{
-		"user_id":   uMixedID,
+	// FR user on shared FR+MA holiday (2026-05-08) -> FAILS (422)
+	frReqShared, _ := json.Marshal(map[string]interface{}{
+		"user_id":   uFrID,
 		"dates":     []string{"2026-05-08"},
 		"status_id": statusID,
 		"half":      "full",
 	})
-	r10 := createAdminReq(t, d, http.MethodPost, "/api/presences", mixedReqShared)
+	r8 := createAdminReq(t, d, http.MethodPost, "/api/presences", frReqShared)
+	r8.Header.Set("Content-Type", "application/json")
+	w8 := httptest.NewRecorder()
+	w8.Body = new(bytes.Buffer)
+	middleware.Auth(d, http.HandlerFunc(calH.SetPresences)).ServeHTTP(w8, r8)
+	if w8.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422 for FR user on shared FR+MA holiday, got %d: %s", w8.Code, w8.Body.String())
+	}
+
+	// MA user on shared FR+MA holiday (2026-05-08) -> FAILS (422)
+	maReqShared, _ := json.Marshal(map[string]interface{}{
+		"user_id":   uMaID,
+		"dates":     []string{"2026-05-08"},
+		"status_id": statusID,
+		"half":      "full",
+	})
+	r9 := createAdminReq(t, d, http.MethodPost, "/api/presences", maReqShared)
+	r9.Header.Set("Content-Type", "application/json")
+	w9 := httptest.NewRecorder()
+	w9.Body = new(bytes.Buffer)
+	middleware.Auth(d, http.HandlerFunc(calH.SetPresences)).ServeHTTP(w9, r9)
+	if w9.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422 for MA user on shared FR+MA holiday, got %d: %s", w9.Code, w9.Body.String())
+	}
+
+	// User with no site on FR-only holiday (2026-07-14) -> SUCCEEDS (200)
+	uNoSiteID, _ := d.CreateLocalUser("user.nosite@example.com", "User NoSite", "pass1234")
+	noSiteReq, _ := json.Marshal(map[string]interface{}{
+		"user_id":   uNoSiteID,
+		"dates":     []string{"2026-07-14"},
+		"status_id": statusID,
+		"half":      "full",
+	})
+	r10 := createAdminReq(t, d, http.MethodPost, "/api/presences", noSiteReq)
 	r10.Header.Set("Content-Type", "application/json")
 	w10 := httptest.NewRecorder()
 	w10.Body = new(bytes.Buffer)
 	middleware.Auth(d, http.HandlerFunc(calH.SetPresences)).ServeHTTP(w10, r10)
-	if w10.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("expected 422 for Mixed team user on shared FR+MA holiday, got %d: %s", w10.Code, w10.Body.String())
+	if w10.Code != http.StatusOK {
+		t.Fatalf("expected 200 for user with no site on country holiday, got %d: %s", w10.Code, w10.Body.String())
 	}
 }

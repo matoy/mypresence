@@ -525,3 +525,65 @@ func seedUserInHandlers(t *testing.T, d interface {
 	}
 	return id
 }
+
+func TestUpdateUserSite_ViaTeamMemberRoute(t *testing.T) {
+	d := newExtraTestDB(t)
+	h := &AdminHandler{DB: d, Render: noRender}
+
+	// Create Site
+	siteID, _ := d.CreateSite(models.Site{Name: "Site Paris", CountryCode: "FR"})
+
+	// User 1 (e.g. admin or team 1 ID)
+	u1ID := seedUserInHandlers(t, d, "user1_site@test.com")
+	// User 2 (member)
+	u2ID := seedUserInHandlers(t, d, "user2_site@test.com")
+
+	teamID, _ := d.CreateTeam("SiteTeam1") // teamID = 1 (same as u1ID if 1st entity)
+	d.AddTeamMember(teamID, u1ID)          //nolint:errcheck
+	d.AddTeamMember(teamID, u2ID)          //nolint:errcheck
+
+	// Update user 2's site via PUT /admin/teams/{id}/members/{userId}/site
+	body, _ := json.Marshal(map[string]interface{}{"site_id": siteID})
+	req := createAdminReq(t, d, http.MethodPut, "/admin/teams/"+strconvI64(teamID)+"/members/"+strconvI64(u2ID)+"/site", body)
+	req.SetPathValue("id", strconvI64(teamID))
+	req.SetPathValue("userId", strconvI64(u2ID))
+	w := httptest.NewRecorder()
+	w.Body = new(bytes.Buffer)
+	middleware.Auth(d, http.HandlerFunc(h.UpdateUserSite)).ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Verify User 2 has siteID, and User 1 STILL has site_id = 0
+	u2, err := d.GetUserByID(u2ID)
+	if err != nil || u2.SiteID != siteID {
+		t.Fatalf("expected user 2 to have siteID=%d, got siteID=%d (err: %v)", siteID, u2.SiteID, err)
+	}
+	u1, err := d.GetUserByID(u1ID)
+	if err != nil || u1.SiteID != 0 {
+		t.Fatalf("expected user 1 to remain siteID=0, got siteID=%d (err: %v)", u1.SiteID, err)
+	}
+}
+
+func TestUpdateUserSite_ViaUserRoute(t *testing.T) {
+	d := newExtraTestDB(t)
+	h := &AdminHandler{DB: d, Render: noRender}
+
+	siteID, _ := d.CreateSite(models.Site{Name: "Site Casablanca", CountryCode: "MA"})
+	uID := seedUserInHandlers(t, d, "user_direct_site@test.com")
+
+	body, _ := json.Marshal(map[string]interface{}{"site_id": siteID})
+	req := createAdminReq(t, d, http.MethodPut, "/api/admin/users/"+strconvI64(uID)+"/site", body)
+	req.SetPathValue("id", strconvI64(uID))
+	w := httptest.NewRecorder()
+	w.Body = new(bytes.Buffer)
+	middleware.Auth(d, http.HandlerFunc(h.UpdateUserSite)).ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	u, err := d.GetUserByID(uID)
+	if err != nil || u.SiteID != siteID {
+		t.Fatalf("expected user to have siteID=%d, got %d", siteID, u.SiteID)
+	}
+}

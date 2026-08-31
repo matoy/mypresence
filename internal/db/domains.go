@@ -69,7 +69,7 @@ func (d *DB) GetDomainName(id int64) string {
 // ListDomainManagers returns the users assigned as managers of a domain.
 func (d *DB) ListDomainManagers(domainID int64) ([]models.User, error) {
 	rows, err := d.core.Query(`
-SELECT u.id, u.email, u.name, u.role, COALESCE(u.password_hash,''), u.disabled, u.created_at
+SELECT u.id, u.email, u.name, u.role, COALESCE(u.password_hash,''), u.disabled, u.created_at, COALESCE(u.site_id, 0)
 FROM users u
 JOIN domain_managers dmg ON u.id = dmg.user_id
 WHERE dmg.domain_id = ?
@@ -83,13 +83,16 @@ ORDER BY u.name
 	var users []models.User
 	for rows.Next() {
 		var u models.User
-		if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt, &u.SiteID); err != nil {
 			return nil, err
 		}
 		u.IsLocal = u.PasswordHash != ""
 		users = append(users, u)
 	}
-	return users, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return d.HydrateUsersSites(users), nil
 }
 
 // SetDomainManagers replaces the full set of managers for a domain.

@@ -217,6 +217,8 @@ func buildAppMux(cfg *config.Config, database *db.DB) http.Handler {
 	teamMux.HandleFunc("POST /admin/teams/{id}/members", adminHandler.AddTeamMember)
 	teamMux.HandleFunc("DELETE /admin/teams/{id}/members/{userId}", adminHandler.RemoveTeamMember)
 	teamMux.HandleFunc("PATCH /admin/teams/{id}/members/{userId}/left-at", adminHandler.SetTeamMemberLeftAt)
+	teamMux.HandleFunc("PUT /admin/teams/{id}/members/{userId}/site", adminHandler.UpdateUserSite)
+	teamMux.HandleFunc("PUT /api/admin/users/{id}/site", adminHandler.UpdateUserSite)
 
 	statusMux := http.NewServeMux()
 	statusMux.HandleFunc("GET /admin/statuses", adminHandler.StatusesPage)

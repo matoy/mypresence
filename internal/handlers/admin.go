@@ -30,6 +30,7 @@ func (h *AdminHandler) TeamsPage(w http.ResponseWriter, r *http.Request) {
 	currentUser := middleware.GetUser(r)
 	teams, _ := h.DB.ListTeams()
 	users, _ := h.DB.ListUsers()
+	sites, _ := h.DB.ListSites()
 	domains, _ := h.DB.ListDomains()
 
 	canManageTeams := currentUser != nil && currentUser.HasAnyRole(models.RoleTeamManager, models.RoleGlobal)
@@ -77,6 +78,7 @@ func (h *AdminHandler) TeamsPage(w http.ResponseWriter, r *http.Request) {
 	h.Render(w, r, "admin_teams", map[string]interface{}{
 		"Teams":          teamsList,
 		"Users":          users,
+		"Sites":          sites,
 		"Domains":        domains,
 		"Countries":      models.AllCountries,
 		"CanManageTeams": canManageTeams,
@@ -257,6 +259,78 @@ func (h *AdminHandler) isUserInTeam(userID, teamID int64) bool {
 		}
 	}
 	return false
+}
+
+// UpdateUserSite updates a user's assigned site.
+func (h *AdminHandler) UpdateUserSite(w http.ResponseWriter, r *http.Request) {
+	currentUser := middleware.GetUser(r)
+	targetUserID, _ := strconv.ParseInt(r.PathValue("userId"), 10, 64)
+	if targetUserID == 0 {
+		targetUserID, _ = strconv.ParseInt(r.PathValue("id"), 10, 64)
+	}
+
+	canManage := currentUser != nil && currentUser.HasAnyRole(models.RoleTeamManager, models.RoleGlobal)
+	if !canManage && currentUser != nil {
+		// Check if currentUser is a leader of any team that targetUserID belongs to
+		ledTeams, _ := h.DB.GetLedTeamIDs(currentUser.ID)
+		if len(ledTeams) > 0 {
+			userTeams, _ := h.DB.GetUserTeams(targetUserID)
+			for _, ut := range userTeams {
+				for _, lt := range ledTeams {
+					if ut.ID == lt {
+						canManage = true
+						break
+					}
+				}
+				if canManage {
+					break
+				}
+			}
+		}
+	}
+
+	if !canManage {
+		metrics.AdminOpsTotal.WithLabelValues("user", "update_site", "failure").Inc()
+		jsonError(w, "Access denied", http.StatusForbidden)
+		return
+	}
+
+	var req struct {
+		SiteID int64 `json:"site_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.DB.UpdateUserSite(targetUserID, req.SiteID); err != nil {
+		slog.Error("admin.user.update_site", "error", err)
+		metrics.AdminOpsTotal.WithLabelValues("user", "update_site", "failure").Inc()
+		jsonError(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
+	siteName := ""
+	siteCountry := ""
+	if req.SiteID > 0 {
+		if s, _ := h.DB.GetSite(req.SiteID); s != nil {
+			siteName = s.Name
+			siteCountry = s.CountryCode
+		}
+	}
+
+	if currentUser != nil {
+		h.DB.LogAdminAction(currentUser.ID, "user", targetUserID, "update_site", fmt.Sprintf("site_id=%d", req.SiteID))
+		slog.Info("admin.user.update_site", "actor", currentUser.Email, "target_user_id", targetUserID, "site_id", req.SiteID)
+	}
+
+	metrics.AdminOpsTotal.WithLabelValues("user", "update_site", "success").Inc()
+	jsonOK(w, map[string]interface{}{
+		"status":            "ok",
+		"site_id":           req.SiteID,
+		"site_name":         siteName,
+		"site_country_code": siteCountry,
+	})
 }
 
 // SetTeamMemberLeftAt sets or clears the departure date for a team member.

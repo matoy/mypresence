@@ -897,14 +897,21 @@ function teamCalendarApp(statuses, currentUserId, canEdit, allPresences) {
 // ============================================================
 // Admin: Teams management
 // ============================================================
-function teamsAdmin(initialTeams, countriesCatalog, allUsers) {
+function teamsAdmin(initialTeams, countriesCatalog, allUsers, initialSites) {
     let teams = initialTeams;
     let countries = countriesCatalog;
     let users = allUsers;
+    let sites = initialSites;
     if (!teams) {
         const el = document.getElementById('teams-json-data');
         if (el && el.textContent) {
             try { teams = JSON.parse(el.textContent); } catch (e) { teams = []; }
+        }
+    }
+    if (!sites) {
+        const el = document.getElementById('sites-json-data');
+        if (el && el.textContent) {
+            try { sites = JSON.parse(el.textContent); } catch (e) { sites = []; }
         }
     }
     if (!countries) {
@@ -921,6 +928,7 @@ function teamsAdmin(initialTeams, countriesCatalog, allUsers) {
     }
     return {
         teams: teams || [],
+        sites: sites || [],
         countriesCatalog: countries || [],
         allUsers: users || [],
         newTeamName: '',
@@ -928,7 +936,6 @@ function teamsAdmin(initialTeams, countriesCatalog, allUsers) {
         newTeamManual: false,
         newTeamRequireComment: false,
         newTeamDomainId: 0,
-        newTeamCountryCodes: '',
         newTeamLeaderSearch: '',
         newTeamLeaderIds: [],
         createError: '',
@@ -962,22 +969,51 @@ function teamsAdmin(initialTeams, countriesCatalog, allUsers) {
             return true;
         },
 
-        isCountryInList(listStr, code) {
-            if (!listStr || !code) return false;
-            const codes = listStr.split(',').map(s => s.trim().toUpperCase());
-            return codes.includes(code.toUpperCase());
+        getGroupedSites(searchText) {
+            const q = (searchText || '').trim().toLowerCase();
+            const filtered = (this.sites || []).filter(s => {
+                if (!q) return true;
+                const name = (s.name || '').toLowerCase();
+                const code = (s.country_code || '').toLowerCase();
+                const country = (this.countriesCatalog || []).find(c => c.code.toLowerCase() === code);
+                const countryName = country ? (country.name || '').toLowerCase() : '';
+                return name.includes(q) || code.includes(q) || countryName.includes(q);
+            });
+
+            const groups = {};
+            for (const s of filtered) {
+                const code = (s.country_code || '').toUpperCase().trim();
+                if (!groups[code]) {
+                    const country = (this.countriesCatalog || []).find(c => c.code.toUpperCase() === code);
+                    groups[code] = {
+                        country: code,
+                        countryName: country ? country.name : (code || 'Autres'),
+                        flag: country ? country.flag : '',
+                        sites: []
+                    };
+                }
+                groups[code].sites.push(s);
+            }
+
+            return Object.values(groups).sort((a, b) => {
+                if (!a.country) return 1;
+                if (!b.country) return -1;
+                return (a.countryName || a.country).localeCompare(b.countryName || b.country);
+            });
         },
 
-        toggleCountryInList(currentStr, code) {
-            if (!code) return currentStr || '';
-            let codes = (currentStr || '').split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
-            const target = code.toUpperCase();
-            if (codes.includes(target)) {
-                codes = codes.filter(c => c !== target);
+        async setMemberSite(teamId, userId, siteId) {
+            const r = await fetch(`/admin/teams/${teamId}/members/${userId}/site`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ site_id: parseInt(siteId) || 0 })
+            });
+            if (r.ok) {
+                window.location.reload();
             } else {
-                codes.push(target);
+                const d = await r.json().catch(() => ({}));
+                alert(d.error || 'Erreur');
             }
-            return codes.join(', ');
         },
 
         async createTeam() {
@@ -994,8 +1030,7 @@ function teamsAdmin(initialTeams, countriesCatalog, allUsers) {
                     jira_space_key: this.newTeamJiraKey.trim(),
                     timesheets_managed_manually: this.newTeamManual,
                     require_activity_comment: this.newTeamRequireComment,
-                    domain_id: parseInt(this.newTeamDomainId) || 0,
-                    country_codes: this.newTeamCountryCodes.trim()
+                    domain_id: parseInt(this.newTeamDomainId) || 0
                 })
             });
             if (r.ok) {
@@ -1019,7 +1054,7 @@ function teamsAdmin(initialTeams, countriesCatalog, allUsers) {
             }
         },
 
-        async saveTeamDetails(id, name, jiraSpaceKey, timesheetsManagedManually, requireActivityComment, domainId, countryCodes, leaderIds) {
+        async saveTeamDetails(id, name, jiraSpaceKey, timesheetsManagedManually, requireActivityComment, domainId, leaderIds) {
             await fetch(`/admin/teams/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
@@ -1028,8 +1063,7 @@ function teamsAdmin(initialTeams, countriesCatalog, allUsers) {
                     jira_space_key: (jiraSpaceKey || '').trim(),
                     timesheets_managed_manually: !!timesheetsManagedManually,
                     require_activity_comment: !!requireActivityComment,
-                    domain_id: parseInt(domainId) || 0,
-                    country_codes: (countryCodes || '').trim()
+                    domain_id: parseInt(domainId) || 0
                 })
             });
             if (Array.isArray(leaderIds)) {

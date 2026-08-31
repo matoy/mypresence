@@ -34,14 +34,17 @@ var AllRoles = []struct {
 
 // User represents an application user.
 type User struct {
-	ID           int64     `json:"id"`
-	Email        string    `json:"email"`
-	Name         string    `json:"name"`
-	Roles        string    `json:"roles"`
-	PasswordHash string    `json:"-"`
-	IsLocal      bool      `json:"is_local"`
-	Disabled     bool      `json:"disabled"`
-	CreatedAt    time.Time `json:"created_at"`
+	ID              int64     `json:"id"`
+	Email           string    `json:"email"`
+	Name            string    `json:"name"`
+	Roles           string    `json:"roles"`
+	PasswordHash    string    `json:"-"`
+	IsLocal         bool      `json:"is_local"`
+	Disabled        bool      `json:"disabled"`
+	SiteID          int64     `json:"site_id"`
+	SiteName        string    `json:"site_name,omitempty"`
+	SiteCountryCode string    `json:"site_country_code,omitempty"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 // HasRole checks if the user has the given role, or the global role.
@@ -197,6 +200,11 @@ func FindCountry(code string) Country {
 	return Country{Code: code, Name: code, Flag: "🌐"}
 }
 
+// FlagForCountry returns the flag emoji for a given ISO code.
+func FlagForCountry(code string) string {
+	return FindCountry(code).Flag
+}
+
 // TeamMember is a User enriched with their departure date from a team.
 // LeftAt is nil when the member is currently active.
 type TeamMember struct {
@@ -299,6 +307,49 @@ func (h Holiday) CountryList() []string {
 		}
 	}
 	return list
+}
+
+// UserMatchesHoliday returns true if a holiday applies to a user with the given site country code.
+//   - Global holidays (no country specified) apply to all users.
+//   - If the user has no site country, only global holidays apply.
+//   - If the user has a site country, a country-specific holiday applies if the user's country is in the holiday's countries.
+func UserMatchesHoliday(userCountry string, hol Holiday) bool {
+	hCountries := hol.CountryList()
+	if len(hCountries) == 0 {
+		return true
+	}
+	userCountry = strings.ToUpper(strings.TrimSpace(userCountry))
+	if userCountry == "" {
+		return false
+	}
+	for _, c := range hCountries {
+		if c == userCountry {
+			return true
+		}
+	}
+	return false
+}
+
+// CountriesMatchHoliday returns true if all of the given country codes are covered by the holiday.
+// For a multi-country team (e.g. [MA, CZ]), a holiday applies to the whole team only if both MA and CZ are covered.
+func CountriesMatchHoliday(countries []string, hol Holiday) bool {
+	hCountries := hol.CountryList()
+	if len(hCountries) == 0 {
+		return true
+	}
+	if len(countries) == 0 {
+		return false
+	}
+	hMap := make(map[string]bool, len(hCountries))
+	for _, c := range hCountries {
+		hMap[c] = true
+	}
+	for _, c := range countries {
+		if !hMap[strings.ToUpper(strings.TrimSpace(c))] {
+			return false
+		}
+	}
+	return true
 }
 
 // TeamMatchesHoliday returns true if a holiday applies to a team with the given country codes.

@@ -99,36 +99,38 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 	totalBillable, totalSetDays, statusTotals := computeStatusTotals(stats)
 
 	// Build daily breakdown data
-	var holidays []models.Holiday
+	holidayMap := make(map[string]models.Holiday)
 	if teamID > 0 {
 		thm, _ := h.DB.GetTeamHolidayMap(teamID, startDate, endDate)
-		for _, hol := range thm {
-			holidays = append(holidays, hol)
+		for k, hol := range thm {
+			holidayMap[k] = hol
 		}
 	} else if domainID > 0 {
-		allHols, _ := h.DB.ListHolidays()
-		for _, hol := range allHols {
-			for _, t := range domainTeams {
-				if models.TeamMatchesHoliday(t.CountryList(), hol) {
-					holidays = append(holidays, hol)
-					break
-				}
+		for _, t := range domainTeams {
+			thm, _ := h.DB.GetTeamHolidayMap(t.ID, startDate, endDate)
+			for k, hol := range thm {
+				holidayMap[k] = hol
 			}
 		}
 	} else {
-		allHols, _ := h.DB.ListHolidays()
-		for _, hol := range allHols {
-			if len(allTeams) == 0 && len(hol.CountryList()) == 0 {
-				holidays = append(holidays, hol)
-			} else {
-				for _, t := range allTeams {
-					if models.TeamMatchesHoliday(t.CountryList(), hol) {
-						holidays = append(holidays, hol)
-						break
-					}
+		for _, t := range allTeams {
+			thm, _ := h.DB.GetTeamHolidayMap(t.ID, startDate, endDate)
+			for k, hol := range thm {
+				holidayMap[k] = hol
+			}
+		}
+		if len(allTeams) == 0 {
+			ghm, _ := h.DB.GetHolidayMap(startDate, endDate)
+			for k, hol := range ghm {
+				if len(hol.CountryList()) == 0 {
+					holidayMap[k] = hol
 				}
 			}
 		}
+	}
+	var holidays []models.Holiday
+	for _, hol := range holidayMap {
+		holidays = append(holidays, hol)
 	}
 	days := getDaysInMonth(year, month)
 	markHolidaysOnDays(days, holidays)

@@ -1,6 +1,7 @@
 {{define "content"}}
 {{with .Data}}
 {{$allUsers := .Users}}
+{{$allSites := .Sites}}
 {{$canManageTeams := .CanManageTeams}}
 {{$jiraEnabled := .JiraEnabled}}
 {{$domains := .Domains}}
@@ -8,6 +9,7 @@
 
 <!-- Safe JSON data payloads for Alpine component -->
 <script id="teams-json-data" type="application/json">{{json .Teams}}</script>
+<script id="sites-json-data" type="application/json">{{json .Sites}}</script>
 <script id="countries-json-data" type="application/json">{{json .Countries}}</script>
 <script id="users-json-data" type="application/json">{{json .Users}}</script>
 
@@ -17,7 +19,7 @@
         <div class="flex items-center gap-3">
             <span class="text-sm text-gray-400" x-text="filteredCount + ' / ' + totalCount"></span>
             {{if $canManageTeams}}
-            <button @click="showCreateModal = true; createError = ''; newTeamName = ''; newTeamJiraKey = ''; newTeamManual = false; newTeamRequireComment = false; newTeamDomainId = 0; newTeamCountryCodes = ''; newTeamLeaderSearch = ''; newTeamLeaderIds = []"
+            <button @click="showCreateModal = true; createError = ''; newTeamName = ''; newTeamJiraKey = ''; newTeamManual = false; newTeamRequireComment = false; newTeamDomainId = 0; newTeamLeaderSearch = ''; newTeamLeaderIds = []"
                     type="button"
                     class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
                 + {{index $.T "teams.create"}}
@@ -62,7 +64,6 @@
          data-manual="{{if .Team.TimesheetsManagedManually}}true{{else}}false{{end}}"
          data-comment="{{if .Team.RequireActivityComment}}true{{else}}false{{end}}"
          data-domain-id="{{.Team.DomainID}}"
-         data-country-codes="{{.Team.CountryCodes}}"
          data-active-members="{{$activeCount}}"
          data-leader-ids="{{range $i, $id := .LeaderIDs}}{{if $i}},{{end}}{{$id}}{{end}}"
          x-data="{
@@ -72,7 +73,6 @@
             editManual: false,
             editRequireComment: false,
             editDomainId: 0,
-            editCountryCodes: '',
             editLeaderSearch: '',
             editLeaderIds: [],
             showAddMember: false,
@@ -85,7 +85,6 @@
             editManual = $el.dataset.manual === 'true';
             editRequireComment = $el.dataset.comment === 'true';
             editDomainId = parseInt($el.dataset.domainId) || 0;
-            editCountryCodes = $el.dataset.countryCodes || '';
             editLeaderIds = ($el.dataset.leaderIds ? $el.dataset.leaderIds.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n)) : []);
          "
          x-show="matchesTeam($el.dataset.teamName, parseInt($el.dataset.activeMembers) || 0)"
@@ -107,9 +106,6 @@
                             {{end}}
                             {{if .Team.RequireActivityComment}}
                             <span class="text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full">{{index $.T "teams.require_comment"}}</span>
-                            {{end}}
-                            {{if .Team.CountryCodes}}
-                            <span class="text-xs bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full font-medium">🌍 {{.Team.CountryCodes}}</span>
                             {{end}}
                             {{range $domains}}{{if eq .ID $teamItem.Team.DomainID}}
                             <span class="text-xs bg-purple-50 text-purple-700 px-2 py-0.5 rounded-full">{{.Name}}</span>
@@ -159,22 +155,6 @@
                                 {{end}}
                             </select>
                         </div>
-                        <div>
-                            <label class="block text-xs font-medium text-gray-500 mb-0.5">{{index $.T "teams.countries"}}</label>
-                            <p class="text-xs text-gray-400 mb-1">{{index $.T "teams.countries_hint"}}</p>
-                            <input type="text" x-model="editCountryCodes"
-                                   placeholder="FR, MA, CZ..."
-                                   class="w-full px-3 py-1 border border-gray-300 rounded-lg text-sm uppercase focus:ring-2 focus:ring-primary/50">
-                            <div class="flex flex-wrap gap-1 mt-1.5">
-                                <template x-for="c in countriesCatalog" :key="c.code">
-                                    <button type="button" @click="editCountryCodes = toggleCountryInList(editCountryCodes, c.code)"
-                                            class="text-xs px-2 py-0.5 rounded-full border transition"
-                                            :class="isCountryInList(editCountryCodes, c.code) ? 'bg-primary text-white border-primary' : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'"
-                                            x-text="(c.flag ? c.flag + ' ' : '') + c.code">
-                                    </button>
-                                </template>
-                            </div>
-                        </div>
                         {{if $canManageTeams}}
                         <div class="mt-2">
                             <label class="block text-xs font-medium text-gray-500 mb-0.5">{{index $.T "teams.leaders"}}</label>
@@ -202,7 +182,7 @@
                         </div>
                         {{end}}
                         <div class="flex gap-2 mt-1">
-                            <button @click="saveTeamDetails({{.Team.ID}}, editNameValue, editJiraKey, editManual, editRequireComment, editDomainId, editCountryCodes, editLeaderIds); editTeam = false"
+                            <button @click="saveTeamDetails({{.Team.ID}}, editNameValue, editJiraKey, editManual, editRequireComment, editDomainId, editLeaderIds); editTeam = false"
                                     type="button"
                                     class="text-xs px-2.5 py-1.5 bg-primary text-white rounded-lg font-medium hover:opacity-90 transition">
                                 {{index $.T "admin.save"}}
@@ -275,12 +255,12 @@
         <div class="space-y-2">
             {{if .Members}}
             {{range .Members}}
-            <div class="flex items-center justify-between py-2 px-3 {{if .LeftAt}}bg-gray-100{{else}}bg-gray-50{{end}} rounded-lg {{if .LeftAt}}opacity-70{{end}}">
-                <div class="flex items-center gap-2">
-                    <div class="h-8 w-8 rounded-full {{if .LeftAt}}bg-gray-300{{else}}bg-primary/20{{end}} flex items-center justify-center text-xs font-bold {{if .LeftAt}}text-gray-500{{else}}text-primary{{end}}">
+            <div class="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 py-2 px-3 {{if .LeftAt}}bg-gray-100{{else}}bg-gray-50{{end}} rounded-lg {{if .LeftAt}}opacity-70{{end}}">
+                <div class="flex items-center gap-2 min-w-0 flex-1">
+                    <div class="h-8 w-8 rounded-full {{if .LeftAt}}bg-gray-300{{else}}bg-primary/20{{end}} flex items-center justify-center text-xs font-bold {{if .LeftAt}}text-gray-500{{else}}text-primary{{end}} shrink-0">
                         {{slice .Name 0 1}}
                     </div>
-                    <div>
+                    <div class="truncate">
                         <span class="text-sm font-medium {{if .LeftAt}}text-gray-400 line-through{{else}}text-gray-800{{end}}">{{.Name}}</span>
                         <span class="text-xs text-gray-500 ml-2">{{.Email}}</span>
                         {{if .LeftAt}}
@@ -290,43 +270,112 @@
                         {{end}}
                     </div>
                     {{if .HasRole "global"}}
-                    <span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">Global</span>
+                    <span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full shrink-0">Global</span>
                     {{end}}
                 </div>
-                {{if $teamItem.CanEdit}}
-                <div class="flex items-center gap-1">
-                    {{if .LeftAt}}
-                    <button @click="clearLeftAt({{$teamItem.Team.ID}}, {{.ID}})"
-                            type="button"
-                            class="text-xs px-2 py-1 bg-green-100 hover:bg-green-200 text-green-700 rounded transition"
-                            title="{{index $.T "teams.clear_left_at"}}">
-                        ↩ {{index $.T "teams.clear_left_at"}}
-                    </button>
-                    {{else}}
-                    <div x-data="{ showDep: false }" class="flex items-center gap-1">
-                        <button @click="showDep = !showDep"
-                                type="button"
-                                class="text-gray-400 hover:text-orange-500 transition p-1"
-                                :title="_t['teams.set_left_at']">
-                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+
+                <!-- Member Site Selector / Badge -->
+                <div class="flex items-center gap-3 shrink-0">
+                    <div class="relative" x-data="{ openSite: false, siteSearch: '', memberId: {{.ID}}, memberSiteId: {{.SiteID}}, teamId: {{$teamItem.Team.ID}} }">
+                        {{if $teamItem.CanEdit}}
+                        <button type="button" @click="openSite = !openSite; siteSearch = ''"
+                                class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border transition cursor-pointer"
+                                :class="memberSiteId > 0 ? 'bg-indigo-50 border-indigo-200 text-indigo-800 hover:bg-indigo-100' : 'bg-white border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-50'"
+                                title="{{index $.T "teams.member_site"}}">
+                            <span>🏢</span>
+                            {{if .SiteID}}
+                            <span class="font-semibold">{{if .SiteCountryCode}}{{flagFor .SiteCountryCode}} {{end}}{{.SiteName}}</span>
+                            {{else}}
+                            <span class="italic text-gray-400">{{index $.T "teams.no_site"}}</span>
+                            {{end}}
+                            <svg class="h-3 w-3 opacity-60 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                             </svg>
                         </button>
-                        <input x-show="showDep" x-transition type="date"
-                               class="text-xs border border-orange-300 rounded px-2 py-1 text-gray-600 focus:ring-1 focus:ring-orange-400"
-                               @change="if($el.value) setLeftAt({{$teamItem.Team.ID}}, {{.ID}}, $el.value)"
-                               @keydown.escape="showDep = false">
+                        <div x-show="openSite" @click.outside="openSite = false" x-cloak
+                             class="absolute right-0 z-30 mt-1 w-64 bg-white border border-gray-200 rounded-xl shadow-xl py-1 text-xs max-h-64 overflow-y-auto">
+                            <div class="px-2 py-1.5 border-b border-gray-100 sticky top-0 bg-white z-10">
+                                <input type="text" x-model="siteSearch"
+                                       placeholder="{{index $.T "teams.search_site"}}"
+                                       @keydown.escape="openSite = false"
+                                       x-init="$watch('openSite', v => { if (v) $nextTick(() => $el.focus()); })"
+                                       class="w-full px-2.5 py-1 border border-gray-200 rounded-lg text-xs focus:ring-1 focus:ring-primary focus:outline-none">
+                            </div>
+                            <!-- No site option -->
+                            <div @click="setMemberSite(teamId, memberId, 0); openSite = false"
+                                 class="px-3 py-1.5 hover:bg-gray-100 cursor-pointer text-gray-500 italic flex items-center justify-between border-b border-gray-100">
+                                <span>{{index $.T "teams.no_site"}}</span>
+                                <span x-show="memberSiteId === 0" class="text-primary font-bold">✓</span>
+                            </div>
+                            <!-- Grouped sites by country with indentation -->
+                            <template x-for="grp in getGroupedSites(siteSearch)" :key="'m_' + memberId + '_grp_' + grp.country">
+                                <div class="py-1">
+                                    <div class="px-3 py-1 text-[11px] font-bold text-gray-400 uppercase tracking-wider bg-gray-50/80 sticky top-9"
+                                         x-text="(grp.flag ? grp.flag + ' ' : '') + grp.countryName + (grp.country ? ' (' + grp.country + ')' : '')">
+                                    </div>
+                                    <template x-for="st in grp.sites" :key="'m_' + memberId + '_st_' + st.id">
+                                        <div @click="setMemberSite(teamId, memberId, st.id); openSite = false"
+                                             class="pl-6 pr-3 py-1.5 hover:bg-indigo-50 cursor-pointer flex items-center justify-between transition"
+                                             :class="st.id === memberSiteId ? 'bg-indigo-50/70 text-primary font-semibold' : 'text-gray-700'">
+                                            <span class="truncate flex items-center gap-1.5">
+                                                <span>🏢</span>
+                                                <span x-text="st.name"></span>
+                                                <span x-show="st.not_corporate_site" class="text-[9px] bg-amber-100 text-amber-700 px-1 py-0.2 rounded font-normal">Ext</span>
+                                            </span>
+                                            <span x-show="st.id === memberSiteId" class="text-primary font-bold">✓</span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                            <div x-show="getGroupedSites(siteSearch).length === 0" class="px-3 py-3 text-center text-gray-400 italic">
+                                {{index $.T "sites.none"}}
+                            </div>
+                        </div>
+                        {{else}}
+                        {{if .SiteID}}
+                        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-indigo-50 text-indigo-700">
+                            <span>🏢</span>
+                            <span>{{if .SiteCountryCode}}{{flagFor .SiteCountryCode}} {{end}}{{.SiteName}}</span>
+                        </span>
+                        {{end}}
+                        {{end}}
                     </div>
-                    <button @click="removeMember({{$teamItem.Team.ID}}, {{.ID}})"
-                            type="button"
-                            class="text-red-400 hover:text-red-600 transition p-1" title="Remove">
-                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                        </svg>
-                    </button>
+
+                    {{if $teamItem.CanEdit}}
+                    <div class="flex items-center gap-1">
+                        {{if .LeftAt}}
+                        <button @click="clearLeftAt({{$teamItem.Team.ID}}, {{.ID}})"
+                                type="button"
+                                class="text-xs px-2 py-1 bg-green-100 hover:bg-green-200 text-green-700 rounded transition"
+                                title="{{index $.T "teams.clear_left_at"}}">
+                            ↩ {{index $.T "teams.clear_left_at"}}
+                        </button>
+                        {{else}}
+                        <div x-data="{ showDep: false }" class="flex items-center gap-1">
+                            <button @click="showDep = !showDep"
+                                    type="button"
+                                    class="text-gray-400 hover:text-orange-500 transition p-1"
+                                    :title="_t['teams.set_left_at']">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                </svg>
+                            </button>
+                            <input x-show="showDep" x-transition type="date"
+                                   class="text-xs border border-orange-300 rounded px-2 py-1 text-gray-600 focus:ring-1 focus:ring-orange-400"
+                                   @change="if($el.value) setLeftAt({{$teamItem.Team.ID}}, {{.ID}}, $el.value)"
+                                   @keydown.escape="showDep = false">
+                        </div>
+                        <button @click="removeMember({{$teamItem.Team.ID}}, {{.ID}})"
+                                type="button"
+                                class="text-red-400 hover:text-red-600 transition p-1" title="Remove">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                        {{end}}
+                    </div>
                     {{end}}
                 </div>
-                {{end}}
             </div>
             {{end}}
             {{else}}
@@ -384,22 +433,6 @@
                     <option value="{{.ID}}">{{.Name}}</option>
                     {{end}}
                 </select>
-            </div>
-            <div class="mt-3">
-                <label class="block text-xs font-medium text-gray-500 mb-0.5">{{index $.T "teams.countries"}}</label>
-                <p class="text-xs text-gray-400 mb-1">{{index $.T "teams.countries_hint"}}</p>
-                <input type="text" x-model="newTeamCountryCodes"
-                       placeholder="FR, MA, CZ..."
-                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm uppercase">
-                <div class="flex flex-wrap gap-1 mt-1.5">
-                    <template x-for="c in countriesCatalog" :key="c.code">
-                        <button type="button" @click="newTeamCountryCodes = toggleCountryInList(newTeamCountryCodes, c.code)"
-                                class="text-xs px-2 py-0.5 rounded-full border transition"
-                                :class="isCountryInList(newTeamCountryCodes, c.code) ? 'bg-primary text-white border-primary' : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'"
-                                x-text="(c.flag ? c.flag + ' ' : '') + c.code">
-                        </button>
-                    </template>
-                </div>
             </div>
             <!-- Team Leaders Assignment -->
             <div class="mt-3">

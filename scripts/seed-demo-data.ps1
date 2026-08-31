@@ -329,14 +329,38 @@ if ($teamIDs.Count -lt 4) {
 # their members declare daily activities (Jira ticket / ServiceNow / other)
 # instead of monthly per-project day allocations.
 $manualTeams = @(
-    @{ name="Sales"; jiraKey="SCRM"; country_codes="FR, CZ" },
-    @{ name="HR";    jiraKey="HRXP"; country_codes="FR" }
+    @{ name="Sales"; jiraKey="SCRM" },
+    @{ name="HR";    jiraKey="HRXP" }
 )
 foreach ($mt in $manualTeams) {
     $tid = $teamIDs[$mt.name]
     if (-not $tid) { Write-Warning "  Team '$($mt.name)' not found, cannot enable manual timesheets"; continue }
-    PutJSON "$Base/admin/teams/$tid" @{ name=$mt.name; jira_space_key=$mt.jiraKey; timesheets_managed_manually=$true; country_codes=$mt.country_codes }
-    Write-Host "  '$($mt.name)' -> timesheets managed manually (Jira space: $($mt.jiraKey), countries: $($mt.country_codes))"
+    PutJSON "$Base/admin/teams/$tid" @{ name=$mt.name; jira_space_key=$mt.jiraKey; timesheets_managed_manually=$true }
+    Write-Host "  '$($mt.name)' -> timesheets managed manually (Jira space: $($mt.jiraKey))"
+}
+
+# ── 4b. Assign users to sites ────────────────────────────────────────────────
+Write-Host "`nAssigning user sites..."
+$userSiteMap = @{
+    admin  = $parisSiteId
+    alice  = $parisSiteId
+    bob    = $parisSiteId
+    claire = $parisSiteId
+    david  = if ($siteIDs["Site Logistique Troyes"]) { $siteIDs["Site Logistique Troyes"] } else { $parisSiteId }
+    emma   = $parisSiteId
+    felix  = if ($siteIDs["Hub Régional Casablanca"]) { $siteIDs["Hub Régional Casablanca"] } else { $parisSiteId }
+    grace  = $parisSiteId
+    hugo   = if ($siteIDs["Site Logistique Troyes"]) { $siteIDs["Site Logistique Troyes"] } else { $parisSiteId }
+    iris   = if ($siteIDs["Hub Régional Casablanca"]) { $siteIDs["Hub Régional Casablanca"] } else { $parisSiteId }
+    julien = if ($siteIDs["Espace Coworking Lyon"]) { $siteIDs["Espace Coworking Lyon"] } else { $parisSiteId }
+}
+foreach ($k in $userSiteMap.Keys) {
+    $uid = $U[$k]
+    $sid = $userSiteMap[$k]
+    if ($uid -and $sid) {
+        PutJSON "$Base/api/admin/users/$uid/site" @{ site_id=[int]$sid }
+        Write-Host "  $k (id=$uid) -> site id=$sid"
+    }
 }
 
 # ── 5. Team members ───────────────────────────────────────────────────────────

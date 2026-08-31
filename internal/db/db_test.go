@@ -1354,33 +1354,35 @@ func TestHoliday_CountryCode_CRUD(t *testing.T) {
 func TestGetUserHolidayMap_MultiCountryResolution(t *testing.T) {
 	d := newTestDB(t)
 
+	// Sites
+	sFR, _ := d.CreateSite(models.Site{Name: "Paris HQ", CountryCode: "FR"})
+	sMA, _ := d.CreateSite(models.Site{Name: "Casablanca Hub", CountryCode: "MA"})
+	sCZ, _ := d.CreateSite(models.Site{Name: "Prague Office", CountryCode: "CZ"})
+
 	// Users
 	uFR, _ := d.CreateLocalUser("user.fr@example.com", "User FR", "pass")
 	uMA, _ := d.CreateLocalUser("user.ma@example.com", "User MA", "pass")
+	uCZ, _ := d.CreateLocalUser("user.cz@example.com", "User CZ", "pass")
 	uGlobal, _ := d.CreateLocalUser("user.global@example.com", "User Global", "pass")
 
-	// Teams
-	teamFR, _ := d.CreateTeamWithDetails("Team France", "", false, false, "FR")
-	teamMA, _ := d.CreateTeamWithDetails("Team Morocco", "", false, false, "MA,CZ")
-	teamNone, _ := d.CreateTeamWithDetails("Team None", "", false, false, "")
-
-	_ = d.AddTeamMember(teamFR, uFR)
-	_ = d.AddTeamMember(teamMA, uMA)
-	_ = d.AddTeamMember(teamNone, uGlobal)
+	_ = d.UpdateUserSite(uFR, sFR)
+	_ = d.UpdateUserSite(uMA, sMA)
+	_ = d.UpdateUserSite(uCZ, sCZ)
+	// uGlobal has no site assigned (site_id = 0)
 
 	// Holidays:
-	// - Global (New Year): applies to all teams
-	// - FR only (14 Juillet): applies to teamFR ("FR"), but NOT to teamMA ("MA,CZ")
-	// - MA only (Fête du Trône): applies only if team is MA-only; does NOT apply to teamMA ("MA,CZ") because CZ is not covered!
-	// - Shared FR+MA (Victory Day): applies to teamFR ("FR"), but NOT to teamMA ("MA,CZ") because CZ is not covered!
-	// - Shared MA+CZ (St Wenceslas): applies to teamMA ("MA,CZ") because ALL its countries (MA and CZ) are covered!
+	// - Global (New Year): applies to all users
+	// - FR only (14 Juillet): applies to uFR ("FR"), but NOT to uMA ("MA") or uGlobal
+	// - MA only (Fête du Trône): applies to uMA ("MA"), but NOT to uFR ("FR") or uGlobal
+	// - Shared FR+MA (Victory Day): applies to both uFR and uMA, but NOT to uGlobal
+	// - Shared MA+CZ (St Wenceslas): applies to uMA and uCZ, but NOT to uFR or uGlobal
 	_, _ = d.CreateHoliday("2026-01-01", "New Year", false, "")
 	_, _ = d.CreateHoliday("2026-07-14", "Bastille Day", false, "FR")
 	_, _ = d.CreateHoliday("2026-07-30", "Throne Day", false, "MA")
 	_, _ = d.CreateHoliday("2026-05-08", "Shared FR+MA", false, "FR, MA")
 	_, _ = d.CreateHoliday("2026-09-28", "Shared MA+CZ", false, "MA, CZ")
 
-	// 1. User FR (teamFR = "FR")
+	// 1. User FR (site = "FR")
 	frMap, err := d.GetUserHolidayMap(uFR, "2026-01-01", "2026-12-31")
 	if err != nil {
 		t.Fatalf("GetUserHolidayMap(FR): %v", err)
@@ -1401,9 +1403,7 @@ func TestGetUserHolidayMap_MultiCountryResolution(t *testing.T) {
 		t.Error("User FR should NOT have MA+CZ holiday 2026-09-28")
 	}
 
-	// 2. User MA in mixed team (teamMA = "MA,CZ")
-	// If a holiday is only MA (2026-07-30) or FR+MA (2026-05-08), it does NOT cover CZ, so teamMA can impute!
-	// If a holiday covers both MA and CZ (2026-09-28), it applies!
+	// 2. User MA (site = "MA")
 	maMap, err := d.GetUserHolidayMap(uMA, "2026-01-01", "2026-12-31")
 	if err != nil {
 		t.Fatalf("GetUserHolidayMap(MA): %v", err)
@@ -1414,17 +1414,17 @@ func TestGetUserHolidayMap_MultiCountryResolution(t *testing.T) {
 	if _, ok := maMap["2026-07-14"]; ok {
 		t.Error("User MA should NOT have French holiday 2026-07-14")
 	}
-	if _, ok := maMap["2026-07-30"]; ok {
-		t.Error("User in mixed team MA,CZ should NOT be blocked on MA-only holiday (CZ is working)")
+	if _, ok := maMap["2026-07-30"]; !ok {
+		t.Error("User MA should have Moroccan holiday 2026-07-30")
 	}
-	if _, ok := maMap["2026-05-08"]; ok {
-		t.Error("User in mixed team MA,CZ should NOT be blocked on FR,MA holiday (CZ is working)")
+	if _, ok := maMap["2026-05-08"]; !ok {
+		t.Error("User MA should have shared FR,MA holiday 2026-05-08")
 	}
 	if _, ok := maMap["2026-09-28"]; !ok {
-		t.Error("User in mixed team MA,CZ should have shared MA+CZ holiday 2026-09-28")
+		t.Error("User MA should have shared MA+CZ holiday 2026-09-28")
 	}
 
-	// 3. User Global (team with no countries specified)
+	// 3. User Global (no site assigned)
 	globalMap, err := d.GetUserHolidayMap(uGlobal, "2026-01-01", "2026-12-31")
 	if err != nil {
 		t.Fatalf("GetUserHolidayMap(Global): %v", err)
@@ -1445,25 +1445,29 @@ func TestGetUserHolidayMap_MultiCountryResolution(t *testing.T) {
 		t.Error("User Global should NOT have MA+CZ holiday 2026-09-28")
 	}
 
-	// 4. Team Holiday Map for Team MA ("MA,CZ")
-	teamMAMap, err := d.GetTeamHolidayMap(teamMA, "2026-01-01", "2026-12-31")
+	// 4. Team Holiday Map for Team with members from MA and CZ sites
+	teamMulti, _ := d.CreateTeam("Team Multi")
+	_ = d.AddTeamMember(teamMulti, uMA) // member with site in MA
+	_ = d.AddTeamMember(teamMulti, uCZ) // member with site in CZ
+
+	teamMultiMap, err := d.GetTeamHolidayMap(teamMulti, "2026-01-01", "2026-12-31")
 	if err != nil {
-		t.Fatalf("GetTeamHolidayMap(teamMA): %v", err)
+		t.Fatalf("GetTeamHolidayMap(teamMulti): %v", err)
 	}
-	if _, ok := teamMAMap["2026-01-01"]; !ok {
-		t.Error("Team MA map should have global holiday 2026-01-01")
+	if _, ok := teamMultiMap["2026-01-01"]; !ok {
+		t.Error("Team Multi map should have global holiday 2026-01-01")
 	}
-	if _, ok := teamMAMap["2026-07-30"]; ok {
-		t.Error("Team MA map should NOT have MA-only 2026-07-30 because CZ is not covered")
+	if _, ok := teamMultiMap["2026-07-30"]; ok {
+		t.Error("Team Multi map should NOT have MA-only 2026-07-30 because CZ member is working")
 	}
-	if _, ok := teamMAMap["2026-05-08"]; ok {
-		t.Error("Team MA map should NOT have FR+MA 2026-05-08 because CZ is not covered")
+	if _, ok := teamMultiMap["2026-05-08"]; ok {
+		t.Error("Team Multi map should NOT have FR+MA 2026-05-08 because CZ member is working")
 	}
-	if _, ok := teamMAMap["2026-09-28"]; !ok {
-		t.Error("Team MA map should have MA+CZ 2026-09-28 because ALL its countries are covered")
+	if _, ok := teamMultiMap["2026-09-28"]; !ok {
+		t.Error("Team Multi map should have MA+CZ 2026-09-28 because ALL member countries are covered")
 	}
-	if _, ok := teamMAMap["2026-07-14"]; ok {
-		t.Error("Team MA map should NOT have 2026-07-14")
+	if _, ok := teamMultiMap["2026-07-14"]; ok {
+		t.Error("Team Multi map should NOT have FR-only 2026-07-14")
 	}
 }
 
