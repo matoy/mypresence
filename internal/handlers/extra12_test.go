@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/matoy/mypresence/internal/middleware"
-	"github.com/matoy/mypresence/internal/models"
 )
 
 // -----------------------------------------------------------------------
@@ -39,9 +38,9 @@ func TestActivityPage_TeamLeaderWrongTeam(t *testing.T) {
 
 	// Create team leader
 	uid, _ := d.CreateLocalUser("tlwrongteam@test.com", "TLWrongTeam", "password1")
-	d.UpdateUserRoles(uid, string(models.RoleTeamLeader)) //nolint:errcheck
 	myTeamID, _ := d.CreateTeam("MyTeam")
-	d.AddTeamMember(myTeamID, uid) //nolint:errcheck
+	d.AddTeamMember(myTeamID, uid)             //nolint:errcheck
+	d.SetTeamLeaders(myTeamID, []int64{uid}) //nolint:errcheck
 
 	otherTeamID, _ := d.CreateTeam("OtherTeam")
 
@@ -69,9 +68,8 @@ func TestActivityPage_TeamLeaderNoTeams(t *testing.T) {
 	d.SetBcryptCost(4)
 	h := &ActivityHandler{DB: d, Render: noRender}
 
-	// Team leader not in any team
+	// User not in any team and not leading any team
 	uid, _ := d.CreateLocalUser("tlnoteams@test.com", "TLNoTeams", "password1")
-	d.UpdateUserRoles(uid, string(models.RoleTeamLeader)) //nolint:errcheck
 	tok, _ := d.CreateSession(uid)
 
 	// Request with a specific team they don't belong to

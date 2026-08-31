@@ -33,30 +33,45 @@ func (h *AdminHandler) TeamsPage(w http.ResponseWriter, r *http.Request) {
 	domains, _ := h.DB.ListDomains()
 
 	canManageTeams := currentUser != nil && currentUser.HasAnyRole(models.RoleTeamManager, models.RoleGlobal)
-	isTeamLeader := currentUser != nil && currentUser.HasRole(models.RoleTeamLeader) && !canManageTeams
-
-	myTeamIDs := map[int64]bool{}
-	if isTeamLeader {
-		myTeams, _ := h.DB.GetUserTeams(currentUser.ID)
-		for _, t := range myTeams {
-			myTeamIDs[t.ID] = true
+	var ledTeamIDs map[int64]bool
+	if !canManageTeams && currentUser != nil {
+		ids, _ := h.DB.GetLedTeamIDs(currentUser.ID)
+		ledTeamIDs = make(map[int64]bool, len(ids))
+		for _, id := range ids {
+			ledTeamIDs[id] = true
 		}
 	}
 
 	type TeamWithMembers struct {
-		Team    models.Team
-		Members []models.TeamMember
-		CanEdit bool
+		Team      models.Team
+		Members   []models.TeamMember
+		LeaderIDs []int64
+		Leaders   []models.User
+		CanEdit   bool
 	}
 
 	var teamsList []TeamWithMembers
 	for _, t := range teams {
-		if isTeamLeader && !myTeamIDs[t.ID] {
+		if !canManageTeams && !ledTeamIDs[t.ID] {
 			continue
 		}
 		members, _ := h.DB.GetAllTeamMembers(t.ID)
-		canEdit := canManageTeams || myTeamIDs[t.ID]
-		teamsList = append(teamsList, TeamWithMembers{Team: t, Members: members, CanEdit: canEdit})
+		leaderIDs, _ := h.DB.GetTeamLeaderIDs(t.ID)
+		leaders, _ := h.DB.ListTeamLeaders(t.ID)
+		if leaderIDs == nil {
+			leaderIDs = []int64{}
+		}
+		if leaders == nil {
+			leaders = []models.User{}
+		}
+		canEdit := canManageTeams || ledTeamIDs[t.ID]
+		teamsList = append(teamsList, TeamWithMembers{
+			Team:      t,
+			Members:   members,
+			LeaderIDs: leaderIDs,
+			Leaders:   leaders,
+			CanEdit:   canEdit,
+		})
 	}
 
 	h.Render(w, r, "admin_teams", map[string]interface{}{
@@ -168,8 +183,9 @@ func (h *AdminHandler) UpdateTeam(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) AddTeamMember(w http.ResponseWriter, r *http.Request) {
 	teamID, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	currentUser := middleware.GetUser(r)
-	if currentUser != nil && currentUser.HasRole(models.RoleTeamLeader) && !currentUser.HasAnyRole(models.RoleTeamManager, models.RoleGlobal) {
-		if !h.isUserInTeam(currentUser.ID, teamID) {
+	if currentUser != nil && !currentUser.HasAnyRole(models.RoleTeamManager, models.RoleGlobal) {
+		isLeader, _ := h.DB.IsLeaderOfTeam(currentUser.ID, teamID)
+		if !isLeader {
 			metrics.AdminOpsTotal.WithLabelValues("team", "add_member", "failure").Inc()
 			jsonError(w, "Access denied", http.StatusForbidden)
 			return
@@ -210,8 +226,9 @@ func (h *AdminHandler) AddTeamMember(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) RemoveTeamMember(w http.ResponseWriter, r *http.Request) {
 	teamID, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	currentUser := middleware.GetUser(r)
-	if currentUser != nil && currentUser.HasRole(models.RoleTeamLeader) && !currentUser.HasAnyRole(models.RoleTeamManager, models.RoleGlobal) {
-		if !h.isUserInTeam(currentUser.ID, teamID) {
+	if currentUser != nil && !currentUser.HasAnyRole(models.RoleTeamManager, models.RoleGlobal) {
+		isLeader, _ := h.DB.IsLeaderOfTeam(currentUser.ID, teamID)
+		if !isLeader {
 			metrics.AdminOpsTotal.WithLabelValues("team", "remove_member", "failure").Inc()
 			jsonError(w, "Access denied", http.StatusForbidden)
 			return
@@ -250,7 +267,11 @@ func (h *AdminHandler) SetTeamMemberLeftAt(w http.ResponseWriter, r *http.Reques
 
 	canManageTeams := currentUser != nil && currentUser.HasAnyRole(models.RoleTeamManager, models.RoleGlobal)
 	if !canManageTeams {
-		if currentUser == nil || !currentUser.HasRole(models.RoleTeamLeader) || !h.isUserInTeam(currentUser.ID, teamID) {
+		isLeader := false
+		if currentUser != nil {
+			isLeader, _ = h.DB.IsLeaderOfTeam(currentUser.ID, teamID)
+		}
+		if !isLeader {
 			metrics.AdminOpsTotal.WithLabelValues("team", "set_left_at", "failure").Inc()
 			jsonError(w, "Access denied", http.StatusForbidden)
 			return
@@ -294,6 +315,60 @@ func (h *AdminHandler) SetTeamMemberLeftAt(w http.ResponseWriter, r *http.Reques
 		slog.Info("admin.team."+action, "actor", currentUser.Email, "team_id", teamID, "member", memberName)
 	}
 	metrics.AdminOpsTotal.WithLabelValues("team", "set_left_at", "success").Inc()
+	jsonOK(w, map[string]string{"status": "ok"})
+}
+
+// GetTeamLeadersAPI returns the user IDs designated as leaders of a team.
+// GET /api/admin/teams/{id}/leaders
+func (h *AdminHandler) GetTeamLeadersAPI(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		jsonError(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+	userIDs, err := h.DB.GetTeamLeaderIDs(id)
+	if err != nil {
+		slog.Error("admin.team.leaders.get", "error", err)
+		jsonError(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	if userIDs == nil {
+		userIDs = []int64{}
+	}
+	jsonOK(w, map[string]interface{}{"user_ids": userIDs})
+}
+
+// SetTeamLeadersAPI replaces the full leader list of a team.
+// PUT /api/admin/teams/{id}/leaders
+func (h *AdminHandler) SetTeamLeadersAPI(w http.ResponseWriter, r *http.Request) {
+	currentUser := middleware.GetUser(r)
+	if currentUser != nil && !currentUser.HasAnyRole(models.RoleTeamManager, models.RoleGlobal) {
+		metrics.AdminOpsTotal.WithLabelValues("team", "set_leaders", "failure").Inc()
+		jsonError(w, "Access denied", http.StatusForbidden)
+		return
+	}
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		jsonError(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		UserIDs []int64 `json:"user_ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+	if err := h.DB.SetTeamLeaders(id, req.UserIDs); err != nil {
+		slog.Error("admin.team.leaders.set", "error", err)
+		jsonError(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	if currentUser != nil {
+		h.DB.LogAdminAction(currentUser.ID, "team", id, "set_leaders", fmt.Sprintf("count=%d", len(req.UserIDs)))
+		slog.Info("admin.team.leaders.set", "actor", currentUser.Email, "team_id", id, "count", len(req.UserIDs))
+	}
+	metrics.AdminOpsTotal.WithLabelValues("team", "set_leaders", "success").Inc()
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 

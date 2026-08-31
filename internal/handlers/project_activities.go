@@ -492,10 +492,10 @@ func (h *ProjectsHandler) accessibleManualTeams(currentUser *models.User) []mode
 	if err != nil {
 		return nil
 	}
-	if currentUser.HasAnyRole(models.RoleProjectsManager, models.RoleProjectsViewer) {
+	if currentUser.HasAnyRole(models.RoleProjectsManager, models.RoleProjectsViewer, models.RoleGlobal) {
 		return manualTeamsForUser(allTeams, nil)
 	}
-	ids, _ := h.DB.GetTeamIDsForUser(currentUser.ID)
+	ids, _ := h.DB.GetLedTeamIDs(currentUser.ID)
 	myTeamIDs := make(map[int64]bool, len(ids))
 	for _, id := range ids {
 		myTeamIDs[id] = true

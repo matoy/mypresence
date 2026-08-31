@@ -21,9 +21,9 @@ func TestTeamsPage_AsTeamLeader(t *testing.T) {
 	h := &AdminHandler{DB: d, Render: noRender}
 
 	uid, _ := d.CreateLocalUser("teamleader@test.com", "Team Leader", "password1")
-	d.UpdateUserRoles(uid, string(models.RoleTeamLeader)) //nolint:errcheck
 	tid, _ := d.CreateTeam("Leader's Team")
-	d.AddTeamMember(tid, uid) //nolint:errcheck
+	d.AddTeamMember(tid, uid)           //nolint:errcheck
+	d.SetTeamLeaders(tid, []int64{uid}) //nolint:errcheck
 	tok, _ := d.CreateSession(uid)
 
 	req := httptest.NewRequest(http.MethodGet, "/admin/teams", nil)
@@ -59,9 +59,8 @@ func TestIsUserInTeam_Forbidden(t *testing.T) {
 	d.SetBcryptCost(4)
 	h := &AdminHandler{DB: d, Render: noRender}
 
-	// Create team leader not in any team
+	// Create user not leading any team
 	uid, _ := d.CreateLocalUser("notinteam@test.com", "Not In Team", "password1")
-	d.UpdateUserRoles(uid, string(models.RoleTeamLeader)) //nolint:errcheck //nolint:errcheck
 	tok, _ := d.CreateSession(uid)
 
 	tid, _ := d.CreateTeam("Other Team")
@@ -86,9 +85,9 @@ func TestIsUserInTeam_AllowedWhenInTeam(t *testing.T) {
 	h := &AdminHandler{DB: d, Render: noRender}
 
 	uid, _ := d.CreateLocalUser("inteam@test.com", "In Team", "password1")
-	d.UpdateUserRoles(uid, string(models.RoleTeamLeader)) //nolint:errcheck
 	tid, _ := d.CreateTeam("My Team")
-	d.AddTeamMember(tid, uid) //nolint:errcheck
+	d.AddTeamMember(tid, uid)           //nolint:errcheck
+	d.SetTeamLeaders(tid, []int64{uid}) //nolint:errcheck
 	tok, _ := d.CreateSession(uid)
 
 	target, _ := d.CreateLocalUser("target2@test.com", "Target2", "password2")
@@ -115,7 +114,6 @@ func TestRemoveTeamMember_Forbidden(t *testing.T) {
 	h := &AdminHandler{DB: d, Render: noRender}
 
 	uid, _ := d.CreateLocalUser("notinteam2@test.com", "Not In Team 2", "password1")
-	d.UpdateUserRoles(uid, string(models.RoleTeamLeader)) //nolint:errcheck //nolint:errcheck
 	tok, _ := d.CreateSession(uid)
 
 	tid, _ := d.CreateTeam("Other Team 2")

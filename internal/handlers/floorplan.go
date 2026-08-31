@@ -624,7 +624,7 @@ func (h *FloorplanHandler) BulkReserveSeats(w http.ResponseWriter, r *http.Reque
 	targetUserID := user.ID
 	if req.UserID != 0 && req.UserID != user.ID {
 		if !user.HasRole(models.RoleGlobal) && !user.HasRole(models.RoleTeamManager) &&
-			(!user.HasRole(models.RoleTeamLeader) || !isTeamLeaderOf(h.DB, user.ID, req.UserID)) {
+			!h.DB.IsTeamLeaderOf(user.ID, req.UserID) {
 			metrics.FloorplanOpsTotal.WithLabelValues("bulk_reserve", "failure").Inc()
 			jsonError(w, "Non autorisé", http.StatusForbidden)
 			return
@@ -664,7 +664,7 @@ func (h *FloorplanHandler) CancelReservationsByDates(w http.ResponseWriter, r *h
 	targetUserID := user.ID
 	if req.UserID != 0 && req.UserID != user.ID {
 		if !user.HasRole(models.RoleGlobal) && !user.HasRole(models.RoleTeamManager) &&
-			(!user.HasRole(models.RoleTeamLeader) || !isTeamLeaderOf(h.DB, user.ID, req.UserID)) {
+			!h.DB.IsTeamLeaderOf(user.ID, req.UserID) {
 			metrics.FloorplanOpsTotal.WithLabelValues("bulk_cancel", "failure").Inc()
 			jsonError(w, "Non autorisé", http.StatusForbidden)
 			return

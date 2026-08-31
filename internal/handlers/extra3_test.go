@@ -23,7 +23,8 @@ func TestActivityAPI_TeamLeaderForbidden(t *testing.T) {
 	h := &ActivityHandler{DB: d, Render: noRender}
 
 	uid, _ := d.CreateLocalUser("tleader@test.com", "Team Leader", "password1")
-	d.UpdateUserRoles(uid, string(models.RoleTeamLeader)) //nolint:errcheck
+	myTid, _ := d.CreateTeam("My Team For Activity")
+	d.SetTeamLeaders(myTid, []int64{uid}) //nolint:errcheck
 	tok, _ := d.CreateSession(uid)
 
 	otherTid, _ := d.CreateTeam("Other Team For Activity")
@@ -44,9 +45,9 @@ func TestActivityAPI_TeamLeaderAllowed(t *testing.T) {
 	h := &ActivityHandler{DB: d, Render: noRender}
 
 	uid, _ := d.CreateLocalUser("tleader2@test.com", "Team Leader 2", "password1")
-	d.UpdateUserRoles(uid, string(models.RoleTeamLeader)) //nolint:errcheck
 	tid, _ := d.CreateTeam("Leader's Team 2")
-	d.AddTeamMember(tid, uid) //nolint:errcheck
+	d.AddTeamMember(tid, uid)           //nolint:errcheck
+	d.SetTeamLeaders(tid, []int64{uid}) //nolint:errcheck
 	tok, _ := d.CreateSession(uid)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/activity?team_id="+strconvI64(tid)+"&year=2026&month=1", nil)

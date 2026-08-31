@@ -85,7 +85,7 @@ func RequireRole(roles ...string) func(http.Handler) http.Handler {
 }
 
 // RequireRoleOrDomainManager restricts access to users with any of the specified
-// roles, or who manage at least one domain (see domains admin feature).
+// roles, or who manage at least one domain (see domains admin feature), or who lead at least one team.
 func RequireRoleOrDomainManager(database *db.DB, roles ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -98,12 +98,44 @@ func RequireRoleOrDomainManager(database *db.DB, roles ...string) func(http.Hand
 				next.ServeHTTP(w, r)
 				return
 			}
-			isManager, _ := database.IsDomainManager(user.ID)
-			if !isManager {
+			if isManager, _ := database.IsDomainManager(user.ID); isManager {
+				next.ServeHTTP(w, r)
+				return
+			}
+			if isLeader, _ := database.IsTeamLeader(user.ID); isLeader {
+				next.ServeHTTP(w, r)
+				return
+			}
+			http.Error(w, "Accès refusé", http.StatusForbidden)
+		})
+	}
+}
+
+// RequireRoleOrDomainOrTeamLeader restricts access to users with any of the specified
+// roles, or who manage at least one domain, or who lead at least one team.
+func RequireRoleOrDomainOrTeamLeader(database *db.DB, roles ...string) func(http.Handler) http.Handler {
+	return RequireRoleOrDomainManager(database, roles...)
+}
+
+// RequireRoleOrTeamLeader restricts access to users with any of the specified
+// roles, or who lead at least one team.
+func RequireRoleOrTeamLeader(database *db.DB, roles ...string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			user := GetUser(r)
+			if user == nil {
 				http.Error(w, "Accès refusé", http.StatusForbidden)
 				return
 			}
-			next.ServeHTTP(w, r)
+			if user.HasAnyRole(roles...) {
+				next.ServeHTTP(w, r)
+				return
+			}
+			if isLeader, _ := database.IsTeamLeader(user.ID); isLeader {
+				next.ServeHTTP(w, r)
+				return
+			}
+			http.Error(w, "Accès refusé", http.StatusForbidden)
 		})
 	}
 }

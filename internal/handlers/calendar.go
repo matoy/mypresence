@@ -122,10 +122,11 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 	statuses, _ := h.DB.ListActiveStatuses()
 
 	// Build per-team presence views for members
-	canEditTeam := user.HasAnyRole(models.RoleTeamLeader, models.RoleTeamManager, models.RoleGlobal)
 	myTeams, _ := h.DB.GetUserTeams(user.ID)
 	var teamViews []teamCalendarView
 	for _, team := range myTeams {
+		isLeader, _ := h.DB.IsLeaderOfTeam(user.ID, team.ID)
+		canEditTeam := user.HasAnyRole(models.RoleTeamManager, models.RoleGlobal) || isLeader
 		members, _ := h.DB.GetTeamMembersAt(team.ID, startDate)
 		if len(members) == 0 {
 			continue
@@ -328,7 +329,7 @@ func (h *CalendarHandler) ClearPresences(w http.ResponseWriter, r *http.Request)
 	}
 
 	if !user.HasRole(models.RoleGlobal) && !user.HasRole(models.RoleTeamManager) && req.UserID != user.ID {
-		if !user.HasRole(models.RoleTeamLeader) || !isTeamLeaderOf(h.DB, user.ID, req.UserID) {
+		if !h.DB.IsTeamLeaderOf(user.ID, req.UserID) {
 			jsonError(w, "Non autorisé", http.StatusForbidden)
 			return
 		}
@@ -511,7 +512,7 @@ func (h *CalendarHandler) CertifyMonth(w http.ResponseWriter, r *http.Request) {
 // middleware (see main.go) admits these roles, and the scope is re-checked here.
 func (h *CalendarHandler) DecertifyMonth(w http.ResponseWriter, r *http.Request) {
 	currentUser := middleware.GetUser(r)
-	if currentUser == nil || !currentUser.HasAnyRole(models.RoleGlobal, models.RoleActivityViewer, models.RoleTeamLeader) {
+	if currentUser == nil {
 		metrics.AdminOpsTotal.WithLabelValues("certification", "decertify", "failure").Inc()
 		jsonError(w, "Non autorisé", http.StatusForbidden)
 		return
@@ -528,7 +529,7 @@ func (h *CalendarHandler) DecertifyMonth(w http.ResponseWriter, r *http.Request)
 	}
 
 	// A plain team leader (without activity_viewer/global) can only decertify members of their own team(s).
-	if !currentUser.HasAnyRole(models.RoleGlobal, models.RoleActivityViewer) && !isTeamLeaderOf(h.DB, currentUser.ID, req.UserID) {
+	if !currentUser.HasAnyRole(models.RoleGlobal, models.RoleActivityViewer) && !h.DB.IsTeamLeaderOf(currentUser.ID, req.UserID) {
 		metrics.AdminOpsTotal.WithLabelValues("certification", "decertify", "failure").Inc()
 		jsonError(w, "Non autorisé", http.StatusForbidden)
 		return
@@ -546,27 +547,9 @@ func (h *CalendarHandler) DecertifyMonth(w http.ResponseWriter, r *http.Request)
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
-// isTeamLeaderOf returns true if leaderID and targetID share at least one common team.
-// The caller must verify that leaderID has the team_leader role.
+// isTeamLeaderOf returns true if leaderID is a designated leader of any team that targetID belongs to.
 func isTeamLeaderOf(database *db.DB, leaderID, targetID int64) bool {
-	leaderTeams, err := database.GetUserTeams(leaderID)
-	if err != nil || len(leaderTeams) == 0 {
-		return false
-	}
-	leaderTeamIDs := make(map[int64]bool, len(leaderTeams))
-	for _, t := range leaderTeams {
-		leaderTeamIDs[t.ID] = true
-	}
-	targetTeams, err := database.GetUserTeams(targetID)
-	if err != nil {
-		return false
-	}
-	for _, t := range targetTeams {
-		if leaderTeamIDs[t.ID] {
-			return true
-		}
-	}
-	return false
+	return database.IsTeamLeaderOf(leaderID, targetID)
 }
 
 // canEditPresenceFor reports whether user is allowed to set or clear presences for targetID.
@@ -574,7 +557,7 @@ func canEditPresenceFor(database *db.DB, user *models.User, targetID int64) bool
 	if user.HasRole(models.RoleGlobal) || user.HasRole(models.RoleTeamManager) || targetID == user.ID {
 		return true
 	}
-	return user.HasRole(models.RoleTeamLeader) && isTeamLeaderOf(database, user.ID, targetID)
+	return database.IsTeamLeaderOf(user.ID, targetID)
 }
 
 // parseYearMonth reads year and month from the request query string, falling

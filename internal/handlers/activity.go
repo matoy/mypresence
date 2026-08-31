@@ -280,7 +280,7 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 		"TotalYTDBillable":       totalYTDBillable,
 		"Certified":              certifiedUsers,
 		"ProjectCertified":       projectCertifiedUsers,
-		"CanDecertify":           currentUser != nil && currentUser.HasAnyRole(models.RoleGlobal, models.RoleActivityViewer, models.RoleTeamLeader),
+		"CanDecertify":           currentUser != nil && (currentUser.HasAnyRole(models.RoleGlobal, models.RoleActivityViewer) || len(myTeamIDs) > 0),
 	})
 }
 
@@ -349,23 +349,17 @@ func (h *ActivityHandler) ActivityAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Team leaders can only request stats for their own teams, or a team
-	// attached to a domain they manage.
-	if currentUser != nil && currentUser.HasRole(models.RoleTeamLeader) && !currentUser.HasAnyRole(models.RoleActivityViewer, models.RoleGlobal) {
-		myTeams, _ := h.DB.GetUserTeams(currentUser.ID)
-		allowed := false
-		for _, t := range myTeams {
-			if t.ID == teamID {
-				allowed = true
-				break
-			}
-		}
-		if !allowed {
+	// Team leaders and Domain managers (without global/activity_viewer role) can only
+	// request stats for their led teams or teams attached to a managed domain.
+	if currentUser != nil && !currentUser.HasAnyRole(models.RoleActivityViewer, models.RoleGlobal) {
+		isLeader, _ := h.DB.IsLeaderOfTeam(currentUser.ID, teamID)
+		if !isLeader {
 			myDomains, _ := h.DB.GetUserDomains(currentUser.ID)
 			myDomainIDs := map[int64]bool{}
 			for _, dm := range myDomains {
 				myDomainIDs[dm.ID] = true
 			}
+			allowed := false
 			if len(myDomainIDs) > 0 {
 				allTeams, _ := h.DB.ListTeams()
 				for _, t := range allTeams {
@@ -373,30 +367,6 @@ func (h *ActivityHandler) ActivityAPI(w http.ResponseWriter, r *http.Request) {
 						allowed = true
 						break
 					}
-				}
-			}
-		}
-		if !allowed {
-			jsonError(w, "Access denied", http.StatusForbidden)
-			return
-		}
-	}
-
-	// Domain managers (without a broader role) can only request stats for
-	// teams attached to one of the domains they manage.
-	if currentUser != nil && !currentUser.HasAnyRole(models.RoleActivityViewer, models.RoleGlobal, models.RoleTeamLeader) {
-		if isManager, _ := h.DB.IsDomainManager(currentUser.ID); isManager {
-			myDomains, _ := h.DB.GetUserDomains(currentUser.ID)
-			myDomainIDs := map[int64]bool{}
-			for _, dm := range myDomains {
-				myDomainIDs[dm.ID] = true
-			}
-			allTeams, _ := h.DB.ListTeams()
-			allowed := false
-			for _, t := range allTeams {
-				if t.ID == teamID && myDomainIDs[t.DomainID] {
-					allowed = true
-					break
 				}
 			}
 			if !allowed {
@@ -425,13 +395,13 @@ func filterTeamsForUser(database *db.DB, user *models.User, allTeams []models.Te
 	if user == nil || user.HasAnyRole(models.RoleActivityViewer, models.RoleGlobal) {
 		return allTeams, nil
 	}
-	if !user.HasRole(models.RoleTeamLeader) {
-		return allTeams, nil
+	ids, _ := database.GetLedTeamIDs(user.ID)
+	if len(ids) == 0 {
+		return nil, nil
 	}
-	myTeams, _ := database.GetUserTeams(user.ID)
 	myTeamIDs := map[int64]bool{}
-	for _, t := range myTeams {
-		myTeamIDs[t.ID] = true
+	for _, id := range ids {
+		myTeamIDs[id] = true
 	}
 	var filtered []models.Team
 	for _, t := range allTeams {

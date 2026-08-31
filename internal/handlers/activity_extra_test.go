@@ -99,9 +99,9 @@ func TestActivityAPI_TeamLeaderOwnTeam(t *testing.T) {
 	d := newExtraTestDB(t)
 
 	uid, _ := d.CreateLocalUser("tlapi@test.com", "TLApi", "password1")
-	d.UpdateUserRoles(uid, string(models.RoleTeamLeader)) //nolint:errcheck
 	teamID, _ := d.CreateTeam("TLApiTeam")
-	d.AddTeamMember(teamID, uid) //nolint:errcheck
+	d.AddTeamMember(teamID, uid)           //nolint:errcheck
+	d.SetTeamLeaders(teamID, []int64{uid}) //nolint:errcheck
 	tok, _ := d.CreateSession(uid)
 
 	h := &ActivityHandler{DB: d, Render: noRender}
@@ -122,7 +122,8 @@ func TestActivityAPI_TeamLeaderForbiddenTeam(t *testing.T) {
 	d := newExtraTestDB(t)
 
 	uid, _ := d.CreateLocalUser("tlapiforbid@test.com", "TLApiForbid", "password1")
-	d.UpdateUserRoles(uid, string(models.RoleTeamLeader)) //nolint:errcheck
+	myTeamID, _ := d.CreateTeam("MyTeam")
+	d.SetTeamLeaders(myTeamID, []int64{uid}) //nolint:errcheck
 	teamID, _ := d.CreateTeam("ForeignTeam")
 	tok, _ := d.CreateSession(uid)
 

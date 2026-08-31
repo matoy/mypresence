@@ -133,9 +133,9 @@ func TestProjectsReportPage_TeamLeader(t *testing.T) {
 	h := &ProjectsHandler{DB: d, Render: noRender}
 
 	uid, _ := d.CreateLocalUser("tlreport@test.com", "TLReport", "password1")
-	d.UpdateUserRoles(uid, string(models.RoleTeamLeader)) //nolint:errcheck
 	teamID, _ := d.CreateTeam("TLReportTeam")
-	d.AddTeamMember(teamID, uid) //nolint:errcheck
+	d.AddTeamMember(teamID, uid)           //nolint:errcheck
+	d.SetTeamLeaders(teamID, []int64{uid}) //nolint:errcheck
 	tok, _ := d.CreateSession(uid)
 
 	// Create some projects for filtering
@@ -157,9 +157,9 @@ func TestProjectsReportAPI_TeamLeader(t *testing.T) {
 	h := &ProjectsHandler{DB: d, Render: noRender}
 
 	uid, _ := d.CreateLocalUser("tlreportapi@test.com", "TLReportAPI", "password1")
-	d.UpdateUserRoles(uid, string(models.RoleTeamLeader)) //nolint:errcheck
 	teamID, _ := d.CreateTeam("TLReportAPITeam")
-	d.AddTeamMember(teamID, uid) //nolint:errcheck
+	d.AddTeamMember(teamID, uid)           //nolint:errcheck
+	d.SetTeamLeaders(teamID, []int64{uid}) //nolint:errcheck
 	tok, _ := d.CreateSession(uid)
 
 	d.CreateProject("TLAPIProj", "TLAP", teamID, true, "2026-01-01", "2026-12-31") //nolint:errcheck

@@ -169,7 +169,7 @@ Delete a news banner. Requires `activity_viewer` role.
 
 #### `GET /api/presences?team_id=&year=&month=`
 Returns presences for all members of a team for the given month.
-Requires `activity_viewer` or `team_leader` role (team leaders can only query their own teams).
+Requires `activity_viewer`, designated team leader (for own teams), or `global`.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -403,7 +403,7 @@ List all users.
 #### `PUT /api/users/{id}/roles`
 Update roles for a user.
 
-Valid roles: `basic`, `team_manager`, `team_leader`, `status_manager`, `activity_viewer`, `floorplan_manager`, `projects_manager`, `projects_viewer`, `global`.
+Valid roles: `basic`, `team_manager`, `status_manager`, `activity_viewer`, `floorplan_manager`, `projects_manager`, `projects_viewer`, `global`.
 
 **Request** — roles as a JSON array:
 ```json
@@ -560,7 +560,7 @@ The backend enforces the billable cap: total declared days cannot exceed billabl
 
 #### `GET /api/projects-report?q=&active=&team=`
 Returns the project report payload (same scope as `/admin/projects-report`).
-Requires `projects_manager`, `projects_viewer`, or `team_leader`.
+Requires `projects_manager`, `projects_viewer`, designated team leader, or `global`.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -568,7 +568,7 @@ Requires `projects_manager`, `projects_viewer`, or `team_leader`.
 | `active` | string | Optional: `1`, `0`, or empty |
 | `team`   | int    | Optional team filter |
 
-For `team_leader`, results are automatically restricted to their teams.
+For designated team leaders, results are automatically restricted to their led teams.
 
 **Response 200**
 ```json
@@ -609,7 +609,7 @@ For `team_leader`, results are automatically restricted to their teams.
 The "team activities" view: lists every project activity (Jira ticket,
 ServiceNow ticket or free-text entry) declared by the members of a manual-
 timesheet team for a given month. Requires `projects_manager`, `projects_viewer`,
-`team_leader`, or membership in a domain's manager list (see
+designated team leader, or membership in a domain's manager list (see
 [Domains](#domains-requires-global-role)).
 
 | Parameter | Type | Description |
@@ -721,10 +721,10 @@ Update a project.
 
 ---
 
-### Teams _(requires `team_manager`, `team_leader`, or `global`)_
+### Teams _(requires `team_manager`, designated team leader, or `global`)_
 
 #### `GET /api/teams`
-List all teams. `team_leader` users see all teams (same scope as `team_manager`).
+List all teams. Designated team leaders see only their led teams, while `team_manager` and `global` see all teams.
 
 **Response 200**
 ```json
@@ -781,7 +781,7 @@ Delete a team and all its memberships. Requires `team_manager` or `global`.
 ```
 
 #### `POST /admin/teams/{id}/members`
-Add a user to a team. Requires `team_manager`, `global`, or `team_leader` (own teams only).
+Add a user to a team. Requires `team_manager`, `global`, or designated team leader of that team.
 
 **Request**
 ```json
@@ -801,6 +801,27 @@ Remove a user from a team. Same role requirements as adding a member.
 { "status": "ok" }
 ```
 
+#### `GET /api/admin/teams/{id}/leaders`
+List user IDs of designated leaders for a team.
+
+**Response 200**
+```json
+{ "user_ids": [2, 5] }
+```
+
+#### `PUT /api/admin/teams/{id}/leaders`
+Set designated leaders for a team. Requires `team_manager` or `global`.
+
+**Request**
+```json
+{ "user_ids": [2, 5] }
+```
+
+**Response 200**
+```json
+{ "status": "ok" }
+```
+
 ---
 
 ### Domains _(requires `global` role)_
@@ -810,7 +831,7 @@ aggregated across a whole department instead of one team at a time. A team
 belongs to at most one domain (`teams.domain_id`, `0` = none).
 
 There is no dedicated "domain manager" role: any user listed as a manager of a
-domain automatically gets scoped read access to [`/admin/activity`](#activity-report-requires-activity_viewer-or-team_leader)
+domain automatically gets scoped read access to [`/admin/activity`](#activity-report-requires-activity_viewer-or-designated-team-leaders)
 and [`/admin/projects-report?view=activities`](#projects-disabled-if-disable_projectstrue) for
 that domain and its teams, even without any other role.
 
@@ -950,7 +971,7 @@ Delete a status. Existing presences that reference this status are **not** autom
 
 ---
 
-### Activity Report _(requires `activity_viewer` or `team_leader`, or membership in a domain's manager list — see [Domains](#domains-requires-global-role))_
+### Activity Report _(requires `activity_viewer` or designated team leader, or membership in a domain's manager list — see [Domains](#domains-requires-global-role))_
 
 #### `GET /api/activity?team_id=&year=&month=`
 Returns presence statistics for a team over a month.

@@ -459,16 +459,42 @@ func buildMonthKeysFromRange(dateFrom, dateTo string) []string {
 	return keys
 }
 
+func getAccessibleReportTeamIDs(database *db.DB, currentUser *models.User) []int64 {
+	ledIDs, _ := database.GetLedTeamIDs(currentUser.ID)
+	idMap := make(map[int64]bool, len(ledIDs))
+	for _, id := range ledIDs {
+		idMap[id] = true
+	}
+	if userDomains, err := database.GetUserDomains(currentUser.ID); err == nil && len(userDomains) > 0 {
+		domMap := make(map[int64]bool, len(userDomains))
+		for _, d := range userDomains {
+			domMap[d.ID] = true
+		}
+		if allTeams, err := database.ListTeams(); err == nil {
+			for _, t := range allTeams {
+				if domMap[t.DomainID] {
+					idMap[t.ID] = true
+				}
+			}
+		}
+	}
+	var res []int64
+	for id := range idMap {
+		res = append(res, id)
+	}
+	return res
+}
+
 // reportTabVisibility determines whether the "Projects view" and "Tasks view"
 // tabs should be shown on the projects report page for the given user.
-// projects_manager/projects_viewer always see both (global visibility); a plain
-// team_leader only sees the tab(s) matching the type(s) of team(s) they belong
-// to (manual-timesheet teams -> Tasks view, others -> Projects view).
+// projects_manager/projects_viewer always see both (global visibility); a
+// team leader only sees the tab(s) matching the type(s) of team(s) they lead
+// (manual-timesheet teams -> Tasks view, others -> Projects view).
 func (h *ProjectsHandler) reportTabVisibility(currentUser *models.User) (showProjects, showTasks bool) {
-	if currentUser.HasAnyRole(models.RoleProjectsManager, models.RoleProjectsViewer) {
+	if currentUser.HasAnyRole(models.RoleProjectsManager, models.RoleProjectsViewer, models.RoleGlobal) {
 		return true, true
 	}
-	ids, _ := h.DB.GetTeamIDsForUser(currentUser.ID)
+	ids := getAccessibleReportTeamIDs(h.DB, currentUser)
 	if len(ids) == 0 {
 		return true, true
 	}
@@ -725,9 +751,8 @@ func (h *ProjectsHandler) exceedsBillableCap(userID, projectID int64, year, mont
 // and set of month keys, restricting to the user's teams when they lack admin/viewer role.
 func (h *ProjectsHandler) buildProjectReportRows(currentUser *models.User, monthKeys []string) ([]models.ProjectReportRow, []models.Team) {
 	var teamIDFilter []int64
-	if !currentUser.HasAnyRole(models.RoleProjectsManager, models.RoleProjectsViewer) {
-		ids, _ := h.DB.GetTeamIDsForUser(currentUser.ID)
-		teamIDFilter = ids
+	if !currentUser.HasAnyRole(models.RoleProjectsManager, models.RoleProjectsViewer, models.RoleGlobal) {
+		teamIDFilter = getAccessibleReportTeamIDs(h.DB, currentUser)
 	}
 	allProjects, _ := h.DB.ListProjectsByTeams(teamIDFilter)
 	allTeams, _ := h.DB.ListTeams()

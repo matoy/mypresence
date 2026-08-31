@@ -149,7 +149,7 @@ In `.vscode/mcp.json` at the workspace root:
 
 | Tool | Endpoint | Required role |
 |------|----------|---------------|
-| `get_team_presences` | `GET /api/presences` | `activity_viewer` or `team_leader` |
+| `get_team_presences` | `GET /api/presences` | `activity_viewer`, team leader, or `global` |
 | `set_presences` | `POST /api/presences` | Authenticated (own account) / `global` / `team_manager` |
 | `clear_presences` | `POST /api/presences/clear` | Authenticated (own account) / `global` / `team_manager` |
 
@@ -176,12 +176,14 @@ In `.vscode/mcp.json` at the workspace root:
 
 | Tool | Endpoint | Required role |
 |------|----------|---------------|
-| `list_teams` | `GET /api/teams` | `team_manager`, `team_leader`, or `global` |
+| `list_teams` | `GET /api/teams` | `team_manager`, team leader, or `global` |
 | `create_team` | `POST /admin/teams` | `team_manager` or `global` |
 | `update_team` | `PUT /admin/teams/{id}` | `team_manager` or `global` |
 | `delete_team` | `DELETE /admin/teams/{id}` | `team_manager` or `global` |
-| `add_team_member` | `POST /admin/teams/{id}/members` | `team_manager`, `global`, or `team_leader` |
-| `remove_team_member` | `DELETE /admin/teams/{id}/members/{userId}` | `team_manager`, `global`, or `team_leader` |
+| `add_team_member` | `POST /admin/teams/{id}/members` | `team_manager`, `global`, or team leader |
+| `remove_team_member` | `DELETE /admin/teams/{id}/members/{userId}` | `team_manager`, `global`, or team leader |
+| `get_team_leaders` | `GET /api/admin/teams/{id}/leaders` | `team_manager`, `global`, or team leader |
+| `set_team_leaders` | `PUT /api/admin/teams/{id}/leaders` | `team_manager` or `global` |
 
 ### 🗓️ Public Holidays
 
@@ -206,7 +208,7 @@ In `.vscode/mcp.json` at the workspace root:
 | `get_my_projects` | `GET /api/projects` | Authenticated |
 | `get_my_project_time` | `GET /api/project-time` | Authenticated |
 | `set_project_time` | `POST /api/project-time` | Authenticated |
-| `get_projects_report` | `GET /api/projects-report` | `projects_manager`, `projects_viewer`, or `team_leader` |
+| `get_projects_report` | `GET /api/projects-report` | `projects_manager`, `projects_viewer`, team leader, or `global` |
 | `list_admin_projects` | `GET /api/admin/projects` | `projects_manager` |
 | `create_project` | `POST /api/admin/projects` | `projects_manager` |
 | `update_project` | `PUT /api/admin/projects/{id}` | `projects_manager` |
@@ -215,7 +217,7 @@ In `.vscode/mcp.json` at the workspace root:
 
 | Tool | Endpoint | Required role |
 |------|----------|---------------|
-| `get_activity_report` | `GET /api/activity` | `activity_viewer` or `team_leader` |
+| `get_activity_report` | `GET /api/activity` | `activity_viewer`, team leader, or `global` |
 
 ---
 
@@ -243,7 +245,7 @@ Target: http://localhost:8080
   ✓  presences — invalid team returns 4xx (not a server crash)
   ✓  projects — get current month context (basic user)
   ✓  floorplans — list floor plans (may be empty or disabled)
-  ✓  teams — list teams (requires team_manager/team_leader/global)
+  ✓  teams — list teams (requires team_manager/team leader/global)
   ✓  users — list users (requires global role, may be 403)
   ✓  activity — missing params returns 4xx (not 5xx)
 ------------------------------------------------------------

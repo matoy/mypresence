@@ -497,8 +497,9 @@ func TestAccessibleManualTeams_TeamLeader_SeesOwnOnly(t *testing.T) {
 	myTeam, _ := d.CreateTeamWithDetails("My Manual Team", "MYT", true, false)
 	d.CreateTeamWithDetails("Other Manual Team", "OTH", true, false) //nolint:errcheck
 	d.AddTeamMember(myTeam, uid)                                     //nolint:errcheck
+	d.SetTeamLeaders(myTeam, []int64{uid})                           //nolint:errcheck
 
-	leader := &models.User{ID: uid, Roles: models.RoleTeamLeader}
+	leader := &models.User{ID: uid, Roles: "basic"}
 	teams := h.accessibleManualTeams(leader)
 	if len(teams) != 1 || teams[0].ID != myTeam {
 		t.Errorf("expected only own manual team, got %+v", teams)

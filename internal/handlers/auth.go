@@ -428,7 +428,6 @@ func (h *AuthHandler) syncSAMLGroupRoles(user *models.User, assertion *saml.Asse
 	for _, m := range []struct{ groupID, role string }{
 		{cfg.SAMLGroupGlobal, models.RoleGlobal},
 		{cfg.SAMLGroupTeamManager, models.RoleTeamManager},
-		{cfg.SAMLGroupTeamLeader, models.RoleTeamLeader},
 		{cfg.SAMLGroupStatusManager, models.RoleStatusManager},
 		{cfg.SAMLGroupActivityViewer, models.RoleActivityViewer},
 		{cfg.SAMLGroupFloorplanManager, models.RoleFloorplanManager},
@@ -482,9 +481,9 @@ func getAttributeValuesWithPresence(assertion *saml.Assertion, name string) ([]s
 
 func hasConfiguredSAMLGroupMappings(cfg *config.Config) bool {
 	return cfg.SAMLGroupGlobal != "" || cfg.SAMLGroupTeamManager != "" ||
-		cfg.SAMLGroupTeamLeader != "" || cfg.SAMLGroupStatusManager != "" ||
-		cfg.SAMLGroupActivityViewer != "" || cfg.SAMLGroupFloorplanManager != "" ||
-		cfg.SAMLGroupProjectsManager != "" || cfg.SAMLGroupProjectsViewer != ""
+		cfg.SAMLGroupStatusManager != "" || cfg.SAMLGroupActivityViewer != "" ||
+		cfg.SAMLGroupFloorplanManager != "" || cfg.SAMLGroupProjectsManager != "" ||
+		cfg.SAMLGroupProjectsViewer != ""
 }
 
 func listSAMLAttributeNames(assertion *saml.Assertion) []string {

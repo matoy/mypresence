@@ -90,7 +90,7 @@ func (h *ProjectsHandler) CertifyProjectMonth(w http.ResponseWriter, r *http.Req
 // activity viewers, and team leaders (scoped to their own team's members).
 func (h *ProjectsHandler) DecertifyProjectMonth(w http.ResponseWriter, r *http.Request) {
 	currentUser := middleware.GetUser(r)
-	if currentUser == nil || !currentUser.HasAnyRole(models.RoleGlobal, models.RoleActivityViewer, models.RoleTeamLeader) {
+	if currentUser == nil {
 		metrics.AdminOpsTotal.WithLabelValues("project_certification", "decertify", "failure").Inc()
 		jsonError(w, "Non autorisé", http.StatusForbidden)
 		return
@@ -107,7 +107,7 @@ func (h *ProjectsHandler) DecertifyProjectMonth(w http.ResponseWriter, r *http.R
 	}
 
 	// A plain team leader (without activity_viewer/global) can only decertify members of their own team(s).
-	if !currentUser.HasAnyRole(models.RoleGlobal, models.RoleActivityViewer) && !isTeamLeaderOf(h.DB, currentUser.ID, req.UserID) {
+	if !currentUser.HasAnyRole(models.RoleGlobal, models.RoleActivityViewer) && !h.DB.IsTeamLeaderOf(currentUser.ID, req.UserID) {
 		metrics.AdminOpsTotal.WithLabelValues("project_certification", "decertify", "failure").Inc()
 		jsonError(w, "Non autorisé", http.StatusForbidden)
 		return

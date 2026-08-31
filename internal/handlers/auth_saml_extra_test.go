@@ -122,7 +122,7 @@ func TestSAML_SyncGroupRoles_And_EntraOverage(t *testing.T) {
 	cfg := &config.Config{
 		SAMLGroupsClaim:         "groups",
 		SAMLGroupGlobal:         "group-admin-id",
-		SAMLGroupTeamLeader:     "group-tl-id",
+		SAMLGroupTeamManager:    "group-tm-id",
 		SAMLGroupActivityViewer: "group-viewer-id",
 	}
 
@@ -140,7 +140,7 @@ func TestSAML_SyncGroupRoles_And_EntraOverage(t *testing.T) {
 						Name: "groups",
 						Values: []saml.AttributeValue{
 							{Value: "group-admin-id"},
-							{Value: "group-tl-id"},
+							{Value: "group-tm-id"},
 							{Value: "group-other-id"},
 						},
 					},
@@ -151,8 +151,8 @@ func TestSAML_SyncGroupRoles_And_EntraOverage(t *testing.T) {
 
 	h.syncSAMLGroupRoles(user, assertion, user.Email)
 	updatedUser, _ := d.GetUserByID(uID)
-	if !updatedUser.HasRole(models.RoleGlobal) || !updatedUser.HasRole(models.RoleTeamLeader) {
-		t.Errorf("expected roles global and team_leader, got %q", updatedUser.Roles)
+	if !updatedUser.HasRole(models.RoleGlobal) || !updatedUser.HasRole(models.RoleTeamManager) {
+		t.Errorf("expected roles global and team_manager, got %q", updatedUser.Roles)
 	}
 
 	// 2. Assertion without matching groups -> falls back to basic

@@ -17,7 +17,7 @@
         <div class="flex items-center gap-3">
             <span class="text-sm text-gray-400" x-text="filteredCount + ' / ' + totalCount"></span>
             {{if $canManageTeams}}
-            <button @click="showCreateModal = true; createError = ''; newTeamName = ''; newTeamJiraKey = ''; newTeamManual = false; newTeamRequireComment = false; newTeamDomainId = 0; newTeamCountryCodes = ''"
+            <button @click="showCreateModal = true; createError = ''; newTeamName = ''; newTeamJiraKey = ''; newTeamManual = false; newTeamRequireComment = false; newTeamDomainId = 0; newTeamCountryCodes = ''; newTeamLeaderSearch = ''; newTeamLeaderIds = []"
                     type="button"
                     class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
                 + {{index $.T "teams.create"}}
@@ -64,6 +64,7 @@
          data-domain-id="{{.Team.DomainID}}"
          data-country-codes="{{.Team.CountryCodes}}"
          data-active-members="{{$activeCount}}"
+         data-leader-ids="{{range $i, $id := .LeaderIDs}}{{if $i}},{{end}}{{$id}}{{end}}"
          x-data="{
             editTeam: false,
             editNameValue: '',
@@ -72,6 +73,8 @@
             editRequireComment: false,
             editDomainId: 0,
             editCountryCodes: '',
+            editLeaderSearch: '',
+            editLeaderIds: [],
             showAddMember: false,
             memberSearch: '',
             memberIds: [{{range $i, $m := .Members}}{{if $i}},{{end}}{{$m.ID}}{{end}}]
@@ -83,6 +86,7 @@
             editRequireComment = $el.dataset.comment === 'true';
             editDomainId = parseInt($el.dataset.domainId) || 0;
             editCountryCodes = $el.dataset.countryCodes || '';
+            editLeaderIds = ($el.dataset.leaderIds ? $el.dataset.leaderIds.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n)) : []);
          "
          x-show="matchesTeam($el.dataset.teamName, parseInt($el.dataset.activeMembers) || 0)"
          x-cloak>
@@ -111,6 +115,17 @@
                             <span class="text-xs bg-purple-50 text-purple-700 px-2 py-0.5 rounded-full">{{.Name}}</span>
                             {{end}}{{end}}
                         </div>
+                        {{if .Leaders}}
+                        <div class="flex items-center gap-1.5 mt-2 flex-wrap">
+                            <span class="text-xs font-semibold text-gray-500">{{index $.T "teams.leaders"}}:</span>
+                            {{range .Leaders}}
+                            <span class="inline-flex items-center gap-1 text-xs bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full font-medium">
+                                <span>👑</span>
+                                <span>{{.Name}}</span>
+                            </span>
+                            {{end}}
+                        </div>
+                        {{end}}
                     </div>
                 </template>
                 <template x-if="editTeam">
@@ -160,8 +175,34 @@
                                 </template>
                             </div>
                         </div>
+                        {{if $canManageTeams}}
+                        <div class="mt-2">
+                            <label class="block text-xs font-medium text-gray-500 mb-0.5">{{index $.T "teams.leaders"}}</label>
+                            <p class="text-xs text-gray-400 mb-1.5">{{index $.T "teams.leaders_hint"}}</p>
+                            <div class="mb-1.5">
+                                <input type="text" x-model="editLeaderSearch" placeholder="{{index $.T "teams.leaders_search"}}"
+                                       class="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-xs">
+                            </div>
+                            <div class="max-h-36 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100 bg-white">
+                                <template x-for="u in (allUsers || []).filter(u => editLeaderSearch === '' || (u.name || '').toLowerCase().includes(editLeaderSearch.toLowerCase()) || (u.email || '').toLowerCase().includes(editLeaderSearch.toLowerCase()))" :key="u.id">
+                                    <label class="flex items-center gap-2.5 px-2.5 py-1.5 hover:bg-gray-50 cursor-pointer">
+                                        <input type="checkbox"
+                                               :value="u.id"
+                                               :checked="editLeaderIds.includes(u.id)"
+                                               @change="if (editLeaderIds.includes(u.id)) { editLeaderIds = editLeaderIds.filter(id => id !== u.id); } else { editLeaderIds.push(u.id); }"
+                                               class="h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary">
+                                        <span class="text-xs text-gray-700" x-text="u.name + ' (' + u.email + ')'"></span>
+                                    </label>
+                                </template>
+                                <div x-show="(allUsers || []).filter(u => editLeaderSearch === '' || (u.name || '').toLowerCase().includes(editLeaderSearch.toLowerCase()) || (u.email || '').toLowerCase().includes(editLeaderSearch.toLowerCase())).length === 0" class="px-3 py-2 text-xs text-gray-400 text-center">{{index $.T "teams.leaders_none"}}</div>
+                            </div>
+                            <p class="mt-1 text-xs text-gray-400" x-show="editLeaderIds.length === 0">{{index $.T "teams.leaders_empty"}}</p>
+                            <p class="mt-1 text-xs text-gray-600 font-medium" x-show="editLeaderIds.length > 0"
+                               x-text="editLeaderIds.length + ' {{index $.T "teams.leaders_assigned"}}'"></p>
+                        </div>
+                        {{end}}
                         <div class="flex gap-2 mt-1">
-                            <button @click="saveTeamDetails({{.Team.ID}}, editNameValue, editJiraKey, editManual, editRequireComment, editDomainId, editCountryCodes); editTeam = false"
+                            <button @click="saveTeamDetails({{.Team.ID}}, editNameValue, editJiraKey, editManual, editRequireComment, editDomainId, editCountryCodes, editLeaderIds); editTeam = false"
                                     type="button"
                                     class="text-xs px-2.5 py-1.5 bg-primary text-white rounded-lg font-medium hover:opacity-90 transition">
                                 {{index $.T "admin.save"}}
@@ -359,6 +400,31 @@
                         </button>
                     </template>
                 </div>
+            </div>
+            <!-- Team Leaders Assignment -->
+            <div class="mt-3">
+                <label class="block text-xs font-medium text-gray-500 mb-0.5">{{index $.T "teams.leaders"}}</label>
+                <p class="text-xs text-gray-400 mb-1.5">{{index $.T "teams.leaders_hint"}}</p>
+                <div class="mb-1.5">
+                    <input type="text" x-model="newTeamLeaderSearch" placeholder="{{index $.T "teams.leaders_search"}}"
+                           class="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-xs">
+                </div>
+                <div class="max-h-36 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100 bg-white">
+                    <template x-for="u in (allUsers || []).filter(u => newTeamLeaderSearch === '' || (u.name || '').toLowerCase().includes(newTeamLeaderSearch.toLowerCase()) || (u.email || '').toLowerCase().includes(newTeamLeaderSearch.toLowerCase()))" :key="u.id">
+                        <label class="flex items-center gap-2.5 px-2.5 py-1.5 hover:bg-gray-50 cursor-pointer">
+                            <input type="checkbox"
+                                   :value="u.id"
+                                   :checked="newTeamLeaderIds.includes(u.id)"
+                                   @change="if (newTeamLeaderIds.includes(u.id)) { newTeamLeaderIds = newTeamLeaderIds.filter(id => id !== u.id); } else { newTeamLeaderIds.push(u.id); }"
+                                   class="h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary">
+                            <span class="text-xs text-gray-700" x-text="u.name + ' (' + u.email + ')'"></span>
+                        </label>
+                    </template>
+                    <div x-show="(allUsers || []).filter(u => newTeamLeaderSearch === '' || (u.name || '').toLowerCase().includes(newTeamLeaderSearch.toLowerCase()) || (u.email || '').toLowerCase().includes(newTeamLeaderSearch.toLowerCase())).length === 0" class="px-3 py-2 text-xs text-gray-400 text-center">{{index $.T "teams.leaders_none"}}</div>
+                </div>
+                <p class="mt-1 text-xs text-gray-400" x-show="newTeamLeaderIds.length === 0">{{index $.T "teams.leaders_empty"}}</p>
+                <p class="mt-1 text-xs text-gray-600 font-medium" x-show="newTeamLeaderIds.length > 0"
+                   x-text="newTeamLeaderIds.length + ' {{index $.T "teams.leaders_assigned"}}'"></p>
             </div>
             <p x-show="createError" x-text="createError" class="mt-3 text-sm text-red-600"></p>
             <div class="flex justify-end gap-3 mt-6">

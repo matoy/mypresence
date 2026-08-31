@@ -14,15 +14,12 @@ func TestUserHasRole(t *testing.T) {
 		{"basic role matches", "basic", RoleBasic, true},
 		{"global grants any role", "global", RoleTeamManager, true},
 		{"global grants floorplan_manager", "global", RoleFloorplanManager, true},
-		{"global grants team_leader", "global", RoleTeamLeader, true},
 		{"single role no match", "basic", RoleTeamManager, false},
 		{"multiple roles match", "basic,team_manager", RoleTeamManager, true},
 		{"multiple roles no match", "basic,team_manager", RoleActivityViewer, false},
 		{"empty roles", "", RoleBasic, false},
 		{"whitespace trimmed", "basic, team_manager", RoleTeamManager, true},
 		{"floorplan_manager matches", "floorplan_manager", RoleFloorplanManager, true},
-		{"team_leader matches", "team_leader", RoleTeamLeader, true},
-		{"team_leader no match for team_manager", "team_leader", RoleTeamManager, false},
 	}
 
 	for _, tt := range tests {
@@ -85,7 +82,6 @@ func TestAllRoles_ContainsAllConstants(t *testing.T) {
 	wantRoles := []string{
 		RoleBasic,
 		RoleTeamManager,
-		RoleTeamLeader,
 		RoleStatusManager,
 		RoleActivityViewer,
 		RoleFloorplanManager,
@@ -158,7 +154,7 @@ func TestCanUseTokens(t *testing.T) {
 		{"", false},
 		{"basic,team_manager", true},
 		{"global", true},
-		{"team_leader", true},
+		{"activity_viewer", true},
 		{"basic,global", true},
 		{"status_manager", true},
 	}
@@ -238,7 +234,7 @@ func TestFilterUsersByText_EmptyQuery(t *testing.T) {
 // has no elevated roles (drives the HideAdminSection logic in MyLogsPage).
 func TestBasicUserHasNoAdminRole(t *testing.T) {
 	adminRoles := []string{
-		RoleGlobal, RoleTeamManager, RoleTeamLeader,
+		RoleGlobal, RoleTeamManager,
 		RoleStatusManager, RoleActivityViewer, RoleFloorplanManager,
 	}
 	u := &User{Roles: RoleBasic}
@@ -253,12 +249,12 @@ func TestBasicUserHasNoAdminRole(t *testing.T) {
 // are correctly detected (drives HideAdminSection = false).
 func TestNonBasicUserHasAdminRole(t *testing.T) {
 	elevated := []string{
-		RoleGlobal, RoleTeamManager, RoleTeamLeader,
+		RoleGlobal, RoleTeamManager,
 		RoleStatusManager, RoleActivityViewer, RoleFloorplanManager,
 	}
 	for _, role := range elevated {
 		u := &User{Roles: role}
-		if !u.HasAnyRole(RoleGlobal, RoleTeamManager, RoleTeamLeader, RoleStatusManager, RoleActivityViewer, RoleFloorplanManager) {
+		if !u.HasAnyRole(RoleGlobal, RoleTeamManager, RoleStatusManager, RoleActivityViewer, RoleFloorplanManager) {
 			t.Errorf("user with role %q should be detected as having an admin role", role)
 		}
 	}
@@ -267,7 +263,7 @@ func TestNonBasicUserHasAdminRole(t *testing.T) {
 // TestBasicPlusElevatedUserIsDetected ensures "basic,team_manager" is treated as elevated.
 func TestBasicPlusElevatedUserIsDetected(t *testing.T) {
 	u := &User{Roles: "basic,team_manager"}
-	if !u.HasAnyRole(RoleGlobal, RoleTeamManager, RoleTeamLeader, RoleStatusManager, RoleActivityViewer, RoleFloorplanManager) {
+	if !u.HasAnyRole(RoleGlobal, RoleTeamManager, RoleStatusManager, RoleActivityViewer, RoleFloorplanManager) {
 		t.Error("user with basic+team_manager should be detected as elevated")
 	}
 }

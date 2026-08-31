@@ -329,6 +329,12 @@ var en = map[string]string{
 	"teams.countries_hint":    "Public holidays for these countries apply to team members",
 	"teams.no_countries":      "No country specified (Global holidays only)",
 	"teams.add_country":       "Add country",
+	"teams.leaders":           "Team leaders",
+	"teams.leaders_hint":      "Assigned leaders can manage team members, view activity and reports for this team.",
+	"teams.leaders_search":    "Search users…",
+	"teams.leaders_none":      "No users found",
+	"teams.leaders_empty":     "No leader assigned",
+	"teams.leaders_assigned":  "leader(s) assigned",
 
 	// Domains
 	"domains.title":             "🏢 Domains",
@@ -1041,6 +1047,12 @@ var fr = map[string]string{
 	"teams.countries_hint":    "Les jours fériés de ces pays s'appliquent aux membres de l'équipe",
 	"teams.no_countries":      "Aucun pays spécifié (fériés mondiaux uniquement)",
 	"teams.add_country":       "Ajouter un pays",
+	"teams.leaders":           "Responsables d'équipe",
+	"teams.leaders_hint":      "Les responsables assignés peuvent gérer les membres, voir les activités et rapports de cette équipe.",
+	"teams.leaders_search":    "Rechercher un utilisateur…",
+	"teams.leaders_none":      "Aucun utilisateur trouvé",
+	"teams.leaders_empty":     "Aucun responsable assigné",
+	"teams.leaders_assigned":  "responsable(s) assigné(s)",
 
 	// Domaines
 	"domains.title":             "🏢 Domaines",
@@ -1746,6 +1758,12 @@ var de = map[string]string{
 	"teams.countries_hint":    "Feiertage dieser Länder gelten für Teammitglieder",
 	"teams.no_countries":      "Kein Land angegeben (nur globale Feiertage)",
 	"teams.add_country":       "Land hinzufügen",
+	"teams.leaders":           "Teamleiter",
+	"teams.leaders_hint":      "Zugewiesene Leiter können Mitglieder verwalten sowie Aktivitäten und Berichte für dieses Team einsehen.",
+	"teams.leaders_search":    "Benutzer suchen…",
+	"teams.leaders_none":      "Keine Benutzer gefunden",
+	"teams.leaders_empty":     "Kein Leiter zugewiesen",
+	"teams.leaders_assigned":  "Leiter zugewiesen",
 
 	// Bereiche
 	"domains.title":             "🏢 Bereiche",
@@ -2446,6 +2464,12 @@ var es = map[string]string{
 	"teams.countries_hint":    "Los festivos de estos países se aplican a los miembros del equipo",
 	"teams.no_countries":      "Sin país especificado (solo festivos globales)",
 	"teams.add_country":       "Añadir país",
+	"teams.leaders":           "Líderes de equipo",
+	"teams.leaders_hint":      "Los líderes asignados pueden gestionar miembros y ver actividades e informes de este equipo.",
+	"teams.leaders_search":    "Buscar usuarios…",
+	"teams.leaders_none":      "No se encontraron usuarios",
+	"teams.leaders_empty":     "Ningún líder asignado",
+	"teams.leaders_assigned":  "líder(es) asignado(s)",
 
 	// Dominios
 	"domains.title":             "🏢 Dominios",
@@ -3150,6 +3174,12 @@ var it = map[string]string{
 	"teams.countries_hint":    "I giorni festivi di questi paesi si applicano ai membri del team",
 	"teams.no_countries":      "Nessun paese specificato (solo festivi globali)",
 	"teams.add_country":       "Aggiungi paese",
+	"teams.leaders":           "Responsabili di team",
+	"teams.leaders_hint":      "I responsabili assegnati possono gestire i membri e visualizzare attività e report di questo team.",
+	"teams.leaders_search":    "Cerca utenti…",
+	"teams.leaders_none":      "Nessun utente trovato",
+	"teams.leaders_empty":     "Nessun responsabile assegnato",
+	"teams.leaders_assigned":  "responsabile/i assegnato/i",
 
 	// Domini
 	"domains.title":             "🏢 Domini",

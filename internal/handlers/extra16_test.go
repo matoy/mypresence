@@ -217,8 +217,9 @@ func TestIsTeamLeaderOf_SharedTeam(t *testing.T) {
 	leaderID, _ := d.CreateLocalUser("leader_shared@test.com", "Leader", "pass1234")
 	targetID, _ := d.CreateLocalUser("target_shared@test.com", "Target", "pass1234")
 
-	d.AddTeamMember(teamID, leaderID) //nolint:errcheck
-	d.AddTeamMember(teamID, targetID) //nolint:errcheck
+	d.AddTeamMember(teamID, leaderID)           //nolint:errcheck
+	d.AddTeamMember(teamID, targetID)           //nolint:errcheck
+	d.SetTeamLeaders(teamID, []int64{leaderID}) //nolint:errcheck
 
 	if !isTeamLeaderOf(d, leaderID, targetID) {
 		t.Fatal("expected isTeamLeaderOf to return true when they share a team")
@@ -234,8 +235,9 @@ func TestIsTeamLeaderOf_NoSharedTeam(t *testing.T) {
 	leaderID, _ := d.CreateLocalUser("leader_noshar@test.com", "LeaderNoShar", "pass1234")
 	targetID, _ := d.CreateLocalUser("target_noshar@test.com", "TargetNoShar", "pass1234")
 
-	d.AddTeamMember(t1, leaderID) //nolint:errcheck
-	d.AddTeamMember(t2, targetID) //nolint:errcheck
+	d.AddTeamMember(t1, leaderID)       //nolint:errcheck
+	d.SetTeamLeaders(t1, []int64{leaderID}) //nolint:errcheck
+	d.AddTeamMember(t2, targetID)       //nolint:errcheck
 
 	if isTeamLeaderOf(d, leaderID, targetID) {
 		t.Fatal("expected isTeamLeaderOf to return false when no shared team")

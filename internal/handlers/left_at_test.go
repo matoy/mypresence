@@ -85,12 +85,12 @@ func TestSetTeamMemberLeftAt_AsTeamLeader_InTeam_Allowed(t *testing.T) {
 	h := &AdminHandler{DB: d, Render: noRender}
 
 	leaderID := seedUserInHandlers(t, d, "leader_la@test.com")
-	d.UpdateUserRoles(leaderID, string(models.RoleTeamLeader)) //nolint:errcheck
 	targetID := seedUserInHandlers(t, d, "target_la3@test.com")
 
 	teamID, _ := d.CreateTeam("LeaderTeamLA")
-	d.AddTeamMember(teamID, leaderID) //nolint:errcheck
-	d.AddTeamMember(teamID, targetID) //nolint:errcheck
+	d.AddTeamMember(teamID, leaderID)           //nolint:errcheck
+	d.AddTeamMember(teamID, targetID)           //nolint:errcheck
+	d.SetTeamLeaders(teamID, []int64{leaderID}) //nolint:errcheck
 
 	tok, _ := d.CreateSession(leaderID)
 
@@ -113,12 +113,11 @@ func TestSetTeamMemberLeftAt_AsTeamLeader_NotInTeam_Forbidden(t *testing.T) {
 	h := &AdminHandler{DB: d, Render: noRender}
 
 	leaderID := seedUserInHandlers(t, d, "leader_la2@test.com")
-	d.UpdateUserRoles(leaderID, string(models.RoleTeamLeader)) //nolint:errcheck
 	targetID := seedUserInHandlers(t, d, "target_la4@test.com")
 
 	teamID, _ := d.CreateTeam("OtherTeamLA")
 	d.AddTeamMember(teamID, targetID) //nolint:errcheck
-	// leader is NOT in teamID
+	// leader is NOT a leader of teamID
 
 	tok, _ := d.CreateSession(leaderID)
 
@@ -344,12 +343,12 @@ func TestBulkReserveSeats_WithUserID_AsTeamLeader_InTeam_Success(t *testing.T) {
 	seatID, _ := d.CreateSeat(fpID, "BulkL1", 0.5, 0.5)
 
 	leaderID := seedUserInHandlers(t, d, "bulk_leader@test.com")
-	d.UpdateUserRoles(leaderID, string(models.RoleTeamLeader)) //nolint:errcheck
 	targetID := seedUserInHandlers(t, d, "bulk_target2@test.com")
 
 	teamID, _ := d.CreateTeam("BulkLeaderTeam")
-	d.AddTeamMember(teamID, leaderID) //nolint:errcheck
-	d.AddTeamMember(teamID, targetID) //nolint:errcheck
+	d.AddTeamMember(teamID, leaderID)           //nolint:errcheck
+	d.AddTeamMember(teamID, targetID)           //nolint:errcheck
+	d.SetTeamLeaders(teamID, []int64{leaderID}) //nolint:errcheck
 
 	statusID, _ := d.CreateStatus(models.Status{Name: "OnSiteBulk2", Color: "#def", OnSite: true})
 	d.SetPresences(targetID, []string{"2026-06-02"}, statusID, "") //nolint:errcheck

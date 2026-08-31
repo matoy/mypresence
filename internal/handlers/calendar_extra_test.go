@@ -19,7 +19,6 @@ func TestCalendar_DecertifyMonth_AccessControl(t *testing.T) {
 	memberUser, _ := d.GetUserByID(uID)
 
 	tlID, _ := d.CreateLocalUser("leader@example.com", "Leader", "pass")
-	_ = d.UpdateUserRoles(tlID, models.RoleTeamLeader)
 	tlUser, _ := d.GetUserByID(tlID)
 
 	viewerID, _ := d.CreateLocalUser("viewer@example.com", "Viewer", "pass")
@@ -27,12 +26,14 @@ func TestCalendar_DecertifyMonth_AccessControl(t *testing.T) {
 	viewerUser, _ := d.GetUserByID(viewerID)
 
 	otherID, _ := d.CreateLocalUser("other@example.com", "Other", "pass")
-	_ = d.UpdateUserRoles(otherID, models.RoleTeamLeader)
+	otherTeamID, _ := d.CreateTeamWithDetails("Other Team", "", false, false)
+	_ = d.SetTeamLeaders(otherTeamID, []int64{otherID})
 	otherUser, _ := d.GetUserByID(otherID)
 
 	teamID, _ := d.CreateTeamWithDetails("Dev Team", "", false, false)
 	_ = d.AddTeamMember(teamID, uID)
 	_ = d.AddTeamMember(teamID, tlID)
+	_ = d.SetTeamLeaders(teamID, []int64{tlID})
 
 	_ = d.CertifyMonth(uID, 2026, 8, uID)
 

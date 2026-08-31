@@ -247,7 +247,7 @@ def delete_news_banner(news_id: int) -> dict:
 def get_team_presences(team_id: int, year: int, month: int) -> dict:
     """
     Return presences for all members of a team for a given month.
-    Requires `activity_viewer` or `team_leader` role.
+    Requires `activity_viewer`, team leader, or `global` access.
     Team leaders can only query their own teams.
 
     Args:
@@ -426,7 +426,7 @@ def update_user_roles(user_id: int, roles: list[str]) -> dict:
     Replace the role set for a user.
     Requires the `global` role.
 
-    Valid roles: basic, team_manager, team_leader, status_manager, activity_viewer,
+    Valid roles: basic, team_manager, status_manager, activity_viewer,
     floorplan_manager, projects_manager, projects_viewer, global.
 
     Args:
@@ -445,7 +445,7 @@ def update_user_roles(user_id: int, roles: list[str]) -> dict:
 def list_teams() -> list:
     """
     List all teams.
-    Requires `team_manager`, `team_leader`, or `global` role.
+    Requires `team_manager`, team leader, or `global` access.
     """
     return _get("/api/teams")
 
@@ -491,7 +491,7 @@ def delete_team(team_id: int) -> dict:
 def add_team_member(team_id: int, user_id: int) -> dict:
     """
     Add a user to a team.
-    Requires `team_manager`, `global`, or `team_leader` (own teams only).
+    Requires `team_manager`, `global`, or designated team leader for this team.
 
     Args:
         team_id: ID of the team.
@@ -504,13 +504,37 @@ def add_team_member(team_id: int, user_id: int) -> dict:
 def remove_team_member(team_id: int, user_id: int) -> dict:
     """
     Remove a user from a team.
-    Requires `team_manager`, `global`, or `team_leader` (own teams only).
+    Requires `team_manager`, `global`, or designated team leader for this team.
 
     Args:
         team_id: ID of the team.
         user_id: ID of the user to remove.
     """
     return _delete(f"/admin/teams/{team_id}/members/{user_id}")
+
+
+@mcp.tool()
+def get_team_leaders(team_id: int) -> dict:
+    """
+    Get user IDs of designated leaders for a team.
+
+    Args:
+        team_id: ID of the team.
+    """
+    return _get(f"/api/admin/teams/{team_id}/leaders")
+
+
+@mcp.tool()
+def set_team_leaders(team_id: int, user_ids: list[int]) -> dict:
+    """
+    Set designated leaders for a team.
+    Requires `team_manager` or `global` role.
+
+    Args:
+        team_id:  ID of the team.
+        user_ids: List of user IDs to designate as team leaders.
+    """
+    return _put(f"/api/admin/teams/{team_id}/leaders", {"user_ids": user_ids})
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -708,7 +732,7 @@ def get_projects_report(
 ) -> dict:
     """
     Return the project report (all projects, all users, monthly breakdown).
-    Requires `projects_manager`, `projects_viewer`, or `team_leader` role.
+    Requires `projects_manager`, `projects_viewer`, team leader, or `global` access.
     Team leaders only see their own teams.
 
     Args:
@@ -806,7 +830,7 @@ def update_project(
 def get_activity_report(team_id: int, year: int, month: int) -> dict:
     """
     Return presence statistics for all members of a team over a month.
-    Requires `activity_viewer` or `team_leader` role.
+    Requires `activity_viewer`, team leader, or `global` access.
 
     Args:
         team_id: Team to report on.

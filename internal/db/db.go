@@ -398,6 +398,14 @@ FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
 FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
 `),
 
+		dl.createTableIfNotExists("team_leaders", `
+team_id BIGINT NOT NULL,
+user_id BIGINT NOT NULL,
+PRIMARY KEY (team_id, user_id),
+FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE,
+FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+`),
+
 		// domains group several teams under a shared manager for aggregated
 		// activity reporting.
 		dl.createTableIfNotExists("domains", fmt.Sprintf(`
@@ -472,6 +480,53 @@ FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	d.core.Exec(dl.rebind(dl.addColumnIfNotExists("teams", "require_activity_comment", fmt.Sprintf("%s NOT NULL DEFAULT %s", bool_, dl.boolDefault(false)))))    //nolint:errcheck
 	d.core.Exec(dl.rebind(dl.addColumnIfNotExists("teams", "domain_id", "BIGINT NOT NULL DEFAULT 0")))                                                           //nolint:errcheck
 	d.core.Exec(dl.rebind(dl.addColumnIfNotExists("teams", "country_codes", dl.varcharType(255)+" NOT NULL DEFAULT ''")))                                        //nolint:errcheck
+
+	// Migrate legacy team_leader role users into team_leaders table and clean up users.role
+	if rows, err := d.core.Query(`SELECT u.id, ut.team_id FROM users u JOIN user_teams ut ON u.id = ut.user_id WHERE u.role LIKE '%team_leader%'`); err == nil {
+		type legacyLeader struct {
+			userID, teamID int64
+		}
+		var legacy []legacyLeader
+		for rows.Next() {
+			var l legacyLeader
+			if err := rows.Scan(&l.userID, &l.teamID); err == nil {
+				legacy = append(legacy, l)
+			}
+		}
+		rows.Close() //nolint:errcheck
+		for _, l := range legacy {
+			_, _ = d.core.Exec(dl.rebind(dl.insertOrIgnore("team_leaders", []string{"team_id", "user_id"}, "?, ?")), l.teamID, l.userID)
+		}
+		if userRows, err := d.core.Query(`SELECT id, role FROM users WHERE role LIKE '%team_leader%'`); err == nil {
+			type userRole struct {
+				id   int64
+				role string
+			}
+			var uRoles []userRole
+			for userRows.Next() {
+				var ur userRole
+				if err := userRows.Scan(&ur.id, &ur.role); err == nil {
+					uRoles = append(uRoles, ur)
+				}
+			}
+			userRows.Close() //nolint:errcheck
+			for _, ur := range uRoles {
+				var newRoles []string
+				for _, r := range strings.Split(ur.role, ",") {
+					r = strings.TrimSpace(r)
+					if r != "" && r != "team_leader" {
+						newRoles = append(newRoles, r)
+					}
+				}
+				newRoleStr := strings.Join(newRoles, ",")
+				if newRoleStr == "" {
+					newRoleStr = "basic"
+				}
+				_, _ = d.core.Exec("UPDATE users SET role = ? WHERE id = ?", newRoleStr, ur.id)
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -1148,7 +1203,7 @@ func (d *DB) ListUsers() ([]models.User, error) {
 func (d *DB) UpdateUserRoles(id int64, roles string) error {
 	valid := map[string]bool{
 		models.RoleBasic: true, models.RoleTeamManager: true,
-		models.RoleTeamLeader: true, models.RoleStatusManager: true,
+		models.RoleStatusManager: true,
 		models.RoleActivityViewer: true, models.RoleFloorplanManager: true,
 		models.RoleProjectsManager: true, models.RoleProjectsViewer: true,
 		models.RoleGlobal: true,
@@ -1435,6 +1490,153 @@ ORDER BY t.name
 		teams = append(teams, t)
 	}
 	return teams, rows.Err()
+}
+
+// ─── Team leaders ─────────────────────────────────────────────────────────────
+
+// GetTeamLeaderIDs returns the user IDs explicitly designated as leaders of a team.
+func (d *DB) GetTeamLeaderIDs(teamID int64) ([]int64, error) {
+	rows, err := d.core.Query(`SELECT user_id FROM team_leaders WHERE team_id = ? ORDER BY user_id`, teamID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() //nolint:errcheck
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// ListTeamLeaders returns the users designated as leaders of a team.
+func (d *DB) ListTeamLeaders(teamID int64) ([]models.User, error) {
+	rows, err := d.core.Query(`
+SELECT u.id, u.email, u.name, u.role, COALESCE(u.password_hash,''), u.disabled, u.created_at
+FROM users u
+JOIN team_leaders tl ON u.id = tl.user_id
+WHERE tl.team_id = ?
+ORDER BY u.name
+`, teamID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() //nolint:errcheck
+
+	var users []models.User
+	for rows.Next() {
+		var u models.User
+		if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt); err != nil {
+			return nil, err
+		}
+		u.IsLocal = u.PasswordHash != ""
+		users = append(users, u)
+	}
+	return users, rows.Err()
+}
+
+// SetTeamLeaders atomically replaces the full leader list of a team.
+func (d *DB) SetTeamLeaders(teamID int64, userIDs []int64) error {
+	tx, err := d.core.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	if _, err := tx.Exec(`DELETE FROM team_leaders WHERE team_id = ?`, teamID); err != nil {
+		return err
+	}
+	for _, uid := range userIDs {
+		if _, err := tx.Exec(d.dialect.rebind(d.dialect.insertOrIgnore(
+			"team_leaders",
+			[]string{"team_id", "user_id"},
+			"?, ?",
+		)), teamID, uid); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// IsTeamLeader reports whether the user is designated as a leader of at least one team.
+func (d *DB) IsTeamLeader(userID int64) (bool, error) {
+	var count int
+	err := d.core.QueryRow(`SELECT COUNT(*) FROM team_leaders WHERE user_id = ?`, userID).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+// IsLeaderOfTeam reports whether userID is designated as a leader of teamID.
+func (d *DB) IsLeaderOfTeam(userID, teamID int64) (bool, error) {
+	var count int
+	err := d.core.QueryRow(`SELECT COUNT(*) FROM team_leaders WHERE team_id = ? AND user_id = ?`, teamID, userID).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+// GetLedTeamIDs returns the IDs of all teams where userID is a designated leader.
+func (d *DB) GetLedTeamIDs(userID int64) ([]int64, error) {
+	rows, err := d.core.Query(`SELECT team_id FROM team_leaders WHERE user_id = ? ORDER BY team_id`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() //nolint:errcheck
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// GetLedTeams returns the full Team objects for all teams where userID is a designated leader.
+func (d *DB) GetLedTeams(userID int64) ([]models.Team, error) {
+	rows, err := d.core.Query(`
+SELECT t.id, t.name, COALESCE(t.jira_space_key,''), t.timesheets_managed_manually, COALESCE(t.require_activity_comment, false), t.domain_id, COALESCE(t.country_codes, ''), t.created_at
+FROM teams t
+JOIN team_leaders tl ON t.id = tl.team_id
+WHERE tl.user_id = ?
+ORDER BY t.name
+`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() //nolint:errcheck
+
+	var teams []models.Team
+	for rows.Next() {
+		var t models.Team
+		if err := rows.Scan(&t.ID, &t.Name, &t.JiraSpaceKey, &t.TimesheetsManagedManually, &t.RequireActivityComment, &t.DomainID, &t.CountryCodes, &t.CreatedAt); err != nil {
+			return nil, err
+		}
+		teams = append(teams, t)
+	}
+	return teams, rows.Err()
+}
+
+// IsTeamLeaderOf returns true if leaderID is a designated leader of any team that targetID is currently an active member of.
+func (d *DB) IsTeamLeaderOf(leaderID, targetID int64) bool {
+	var count int
+	err := d.core.QueryRow(`
+SELECT COUNT(*)
+FROM team_leaders tl
+JOIN user_teams ut ON tl.team_id = ut.team_id
+WHERE tl.user_id = ? AND ut.user_id = ? AND ut.left_at IS NULL
+`, leaderID, targetID).Scan(&count)
+	if err != nil {
+		return false
+	}
+	return count > 0
 }
 
 // --- Status management ---

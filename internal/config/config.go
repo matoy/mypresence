@@ -65,7 +65,6 @@ type Config struct {
 	SAMLGroupsClaim           string // claim URI that carries group values (default: Entra standard)
 	SAMLGroupGlobal           string // group ID → global (admin) role
 	SAMLGroupTeamManager      string // group ID → team_manager role
-	SAMLGroupTeamLeader       string // group ID → team_leader role
 	SAMLGroupStatusManager    string // group ID → status_manager role
 	SAMLGroupActivityViewer   string // group ID → activity_viewer role
 	SAMLGroupFloorplanManager string // group ID → floorplan_manager role
@@ -146,7 +145,6 @@ func Load() *Config {
 		SAMLGroupsClaim:           getEnv("SAML_GROUPS_CLAIM", "http://schemas.microsoft.com/ws/2008/06/identity/claims/groups"),
 		SAMLGroupGlobal:           getEnv("SAML_GROUP_GLOBAL", ""),
 		SAMLGroupTeamManager:      getEnv("SAML_GROUP_TEAM_MANAGER", ""),
-		SAMLGroupTeamLeader:       getEnv("SAML_GROUP_TEAM_LEADER", ""),
 		SAMLGroupStatusManager:    getEnv("SAML_GROUP_STATUS_MANAGER", ""),
 		SAMLGroupActivityViewer:   getEnv("SAML_GROUP_ACTIVITY_VIEWER", ""),
 		SAMLGroupFloorplanManager: getEnv("SAML_GROUP_FLOORPLAN_MANAGER", ""),

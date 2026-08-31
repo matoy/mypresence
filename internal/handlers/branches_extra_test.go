@@ -19,10 +19,10 @@ func TestTeamsPage_TeamLeaderFiltered(t *testing.T) {
 	d := newExtraTestDB(t)
 
 	uid, _ := d.CreateLocalUser("tlfilter@test.com", "TLFilter", "password1")
-	d.UpdateUserRoles(uid, string(models.RoleTeamLeader)) //nolint:errcheck
 	myTeam, _ := d.CreateTeam("TLMyTeam")
-	d.AddTeamMember(myTeam, uid) //nolint:errcheck
-	d.CreateTeam("OtherTeam")    //nolint:errcheck
+	d.AddTeamMember(myTeam, uid)             //nolint:errcheck
+	d.SetTeamLeaders(myTeam, []int64{uid})   //nolint:errcheck
+	d.CreateTeam("OtherTeam")                //nolint:errcheck
 	tok, _ := d.CreateSession(uid)
 
 	h := &AdminHandler{DB: d, Render: noRender}

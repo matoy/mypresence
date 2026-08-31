@@ -9,7 +9,6 @@ import (
 const (
 	RoleBasic            = "basic"
 	RoleTeamManager      = "team_manager"
-	RoleTeamLeader       = "team_leader"
 	RoleStatusManager    = "status_manager"
 	RoleActivityViewer   = "activity_viewer"
 	RoleFloorplanManager = "floorplan_manager"
@@ -25,7 +24,6 @@ var AllRoles = []struct {
 }{
 	{RoleBasic, "Basic"},
 	{RoleTeamManager, "Team manager"},
-	{RoleTeamLeader, "Team leader"},
 	{RoleStatusManager, "Status manager"},
 	{RoleActivityViewer, "Activity viewer"},
 	{RoleFloorplanManager, "Floorplan manager"},
@@ -479,6 +477,10 @@ type PageData struct {
 	// domain, granting them scoped access to the Activity Report and
 	// Projects Report nav links even without any other role.
 	IsDomainManager bool
+	// IsTeamLeader is true when the current user is a designated leader of at
+	// least one team, granting them scoped access to the Activity Report,
+	// Projects Report, and Teams admin nav links even without any other role.
+	IsTeamLeader bool
 	// TeamCalendarRefreshMinutes is how often (in minutes) the team calendar(s)
 	// on the home page auto-refresh. 0 disables auto-refresh.
 	TeamCalendarRefreshMinutes int

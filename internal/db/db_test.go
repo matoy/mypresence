@@ -1582,5 +1582,129 @@ func TestGetAdminLogsByActor_AllEntityTypes(t *testing.T) {
 	}
 }
 
+// ── Team Leaders Tests ────────────────────────────────────────────────────────
+
+func TestTeamLeaders_CRUD_And_Helpers(t *testing.T) {
+	d := newTestDB(t)
+
+	leader1 := seedUser(t, d, "leader1@corp.local")
+	leader2 := seedUser(t, d, "leader2@corp.local")
+	member1 := seedUser(t, d, "member1@corp.local")
+	otherUser := seedUser(t, d, "other@corp.local")
+
+	team1, err := d.CreateTeam("Team Alpha")
+	if err != nil {
+		t.Fatalf("CreateTeam: %v", err)
+	}
+	team2, err := d.CreateTeam("Team Beta")
+	if err != nil {
+		t.Fatalf("CreateTeam: %v", err)
+	}
+
+	_ = d.AddTeamMember(team1, leader1)
+	_ = d.AddTeamMember(team1, member1)
+	_ = d.AddTeamMember(team2, otherUser)
+
+	// Initially, neither is a team leader
+	isTL, err := d.IsTeamLeader(leader1)
+	if err != nil || isTL {
+		t.Errorf("expected IsTeamLeader=false, got %v (err: %v)", isTL, err)
+	}
+
+	// Set leader1 and leader2 as leaders for team1
+	if err := d.SetTeamLeaders(team1, []int64{leader1, leader2}); err != nil {
+		t.Fatalf("SetTeamLeaders: %v", err)
+	}
+
+	// GetTeamLeaderIDs
+	ids, err := d.GetTeamLeaderIDs(team1)
+	if err != nil {
+		t.Fatalf("GetTeamLeaderIDs: %v", err)
+	}
+	if len(ids) != 2 || ids[0] != leader1 || ids[1] != leader2 {
+		t.Errorf("expected leader IDs [%d, %d], got %v", leader1, leader2, ids)
+	}
+
+	// ListTeamLeaders
+	leaders, err := d.ListTeamLeaders(team1)
+	if err != nil {
+		t.Fatalf("ListTeamLeaders: %v", err)
+	}
+	if len(leaders) != 2 {
+		t.Errorf("expected 2 leaders, got %d", len(leaders))
+	}
+
+	// IsTeamLeader
+	isTL, err = d.IsTeamLeader(leader1)
+	if err != nil || !isTL {
+		t.Errorf("expected IsTeamLeader=true for leader1, got %v", isTL)
+	}
+	isTL, err = d.IsTeamLeader(member1)
+	if err != nil || isTL {
+		t.Errorf("expected IsTeamLeader=false for member1, got %v", isTL)
+	}
+
+	// IsLeaderOfTeam
+	isLot, err := d.IsLeaderOfTeam(leader1, team1)
+	if err != nil || !isLot {
+		t.Errorf("expected IsLeaderOfTeam=true for leader1/team1, got %v", isLot)
+	}
+	isLot, err = d.IsLeaderOfTeam(leader1, team2)
+	if err != nil || isLot {
+		t.Errorf("expected IsLeaderOfTeam=false for leader1/team2, got %v", isLot)
+	}
+
+	// GetLedTeamIDs
+	ledIDs, err := d.GetLedTeamIDs(leader1)
+	if err != nil {
+		t.Fatalf("GetLedTeamIDs: %v", err)
+	}
+	if len(ledIDs) != 1 || ledIDs[0] != team1 {
+		t.Errorf("expected ledIDs=[%d], got %v", team1, ledIDs)
+	}
+
+	// GetLedTeams
+	ledTeams, err := d.GetLedTeams(leader1)
+	if err != nil {
+		t.Fatalf("GetLedTeams: %v", err)
+	}
+	if len(ledTeams) != 1 || ledTeams[0].ID != team1 {
+		t.Errorf("expected ledTeams with team1, got %v", ledTeams)
+	}
+
+	// IsTeamLeaderOf
+	if !d.IsTeamLeaderOf(leader1, member1) {
+		t.Errorf("expected IsTeamLeaderOf=true for leader1->member1")
+	}
+	if d.IsTeamLeaderOf(leader1, otherUser) {
+		t.Errorf("expected IsTeamLeaderOf=false for leader1->otherUser")
+	}
+
+	// Departed member (left_at set) -> IsTeamLeaderOf should return false
+	leftAt := "2026-05-01"
+	_ = d.SetTeamMemberLeftAt(team1, member1, &leftAt)
+	if d.IsTeamLeaderOf(leader1, member1) {
+		t.Errorf("expected IsTeamLeaderOf=false for departed member1")
+	}
+
+	// Update leaders: remove leader2, keep leader1
+	if err := d.SetTeamLeaders(team1, []int64{leader1}); err != nil {
+		t.Fatalf("SetTeamLeaders: %v", err)
+	}
+	ids, _ = d.GetTeamLeaderIDs(team1)
+	if len(ids) != 1 || ids[0] != leader1 {
+		t.Errorf("expected leader IDs [%d], got %v", leader1, ids)
+	}
+
+	// Clear all leaders
+	if err := d.SetTeamLeaders(team1, []int64{}); err != nil {
+		t.Fatalf("SetTeamLeaders(empty): %v", err)
+	}
+	ids, _ = d.GetTeamLeaderIDs(team1)
+	if len(ids) != 0 {
+		t.Errorf("expected 0 leaders, got %v", ids)
+	}
+}
+
 // Ensure the import of "time" is used (kept for existing TestListAllPATs_ReturnsAllUsers).
 var _ = time.Now

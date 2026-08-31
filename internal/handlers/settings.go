@@ -38,15 +38,16 @@ func (h *SettingsHandler) MyLogsPage(w http.ResponseWriter, r *http.Request) {
 	notifLogs, _ := h.DB.GetUserNotificationLogs(user.ID, since)
 	statuses, _ := h.DB.ListStatuses()
 
-	// Only show admin actions section if user has a role beyond basic.
-	// Uses model constants to avoid typos.
-	hideAdminSection := !user.HasAnyRole(
+	isTeamLeader, _ := h.DB.IsTeamLeader(user.ID)
+	isDomainManager, _ := h.DB.IsDomainManager(user.ID)
+	hideAdminSection := !isTeamLeader && !isDomainManager && !user.HasAnyRole(
 		models.RoleGlobal,
 		models.RoleTeamManager,
-		models.RoleTeamLeader,
 		models.RoleStatusManager,
 		models.RoleActivityViewer,
 		models.RoleFloorplanManager,
+		models.RoleProjectsManager,
+		models.RoleProjectsViewer,
 	)
 
 	h.Render(w, r, "admin_user_logs", map[string]interface{}{

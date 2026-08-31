@@ -142,8 +142,8 @@ func TestIsTeamLeaderOf_NoMatchingTeam(t *testing.T) {
 
 	h := &CalendarHandler{DB: d, Render: noRender}
 
-	// Build a SetPresences request as leaderID (team leader) editing targetID
-	d.UpdateUserRoles(leaderID, string(models.RoleTeamLeader)) //nolint:errcheck
+	// Build a SetPresences request as leaderID (team leader of teamA) editing targetID (in teamB)
+	d.SetTeamLeaders(teamA, []int64{leaderID}) //nolint:errcheck
 	tok, _ := d.CreateSession(leaderID)
 
 	statusID, _ := d.CreateStatus(models.Status{Name: "ILTF", Color: "#abc", OnSite: true})
@@ -165,14 +165,13 @@ func TestIsTeamLeaderOf_NoMatchingTeam(t *testing.T) {
 	}
 }
 
-// Leader with no teams → GetUserTeams returns empty → isTeamLeaderOf returns false immediately
+// Leader with no teams → IsTeamLeaderOf returns false immediately
 func TestIsTeamLeaderOf_LeaderNoTeams(t *testing.T) {
 	d := newExtraTestDB(t)
 
 	leaderID := seedUserInHandlers(t, d, "leader_noteams@test.com")
 	targetID := seedUserInHandlers(t, d, "target_noteams@test.com")
 
-	d.UpdateUserRoles(leaderID, string(models.RoleTeamLeader)) //nolint:errcheck
 	tok, _ := d.CreateSession(leaderID)
 
 	body, _ := json.Marshal(map[string]interface{}{

@@ -62,10 +62,10 @@ $SITE=1; $REMOTE=2; $TRIP=3; $LEAVE=4; $SICK=5; $TRAINING=6
 Write-Host "`nCreating users..."
 $users = @(
     @{ email="alice.martin@corp.local";  name="Alice Martin";  password="demo1234"; role="team_manager" },
-    @{ email="bob.dupont@corp.local";    name="Bob Dupont";    password="demo1234"; role="team_leader" },
+    @{ email="bob.dupont@corp.local";    name="Bob Dupont";    password="demo1234"; role="basic" },
     @{ email="claire.leroy@corp.local";  name="Claire Leroy";  password="demo1234"; role="basic" },
     @{ email="david.simon@corp.local";   name="David Simon";   password="demo1234"; role="basic" },
-    @{ email="emma.garcia@corp.local";   name="Emma Garcia";   password="demo1234"; role="team_leader,activity_viewer" },
+    @{ email="emma.garcia@corp.local";   name="Emma Garcia";   password="demo1234"; role="activity_viewer" },
     @{ email="felix.nguyen@corp.local";  name="Felix Nguyen";  password="demo1234"; role="basic" },
     @{ email="grace.chen@corp.local";    name="Grace Chen";    password="demo1234"; role="basic" },
     @{ email="hugo.moreau@corp.local";   name="Hugo Moreau";   password="demo1234"; role="basic" },
@@ -327,6 +327,22 @@ foreach ($m in $memberships) {
         if ($uid) { PostJSON "$Base/admin/teams/$tid/members" @{user_id=[int]$uid} | Out-Null }
     }
     Write-Host "  $($m.team) (id=$tid): $($m.keys -join ',')"
+}
+
+# ── 5a. Team Leaders ───────────────────────────────────────────────────────────
+Write-Host "`nAssigning team leaders..."
+$teamLeaderDefs = @(
+    @{ team="Engineering"; leaders=@("bob") },
+    @{ team="Marketing";   leaders=@("emma") },
+    @{ team="Sales";       leaders=@("bob") },
+    @{ team="HR";          leaders=@("emma") }
+)
+foreach ($tl in $teamLeaderDefs) {
+    $tid = $teamIDs[$tl.team]
+    if (-not $tid) { continue }
+    $leaderUserIDs = @($tl.leaders | ForEach-Object { [int]$U[$_] } | Where-Object { $_ -gt 0 })
+    PutJSON "$Base/api/admin/teams/$tid/leaders" @{ user_ids=$leaderUserIDs } | Out-Null
+    Write-Host "  $($tl.team): $($tl.leaders -join ',') ($($leaderUserIDs -join ','))"
 }
 
 # ── 5b. Domains ────────────────────────────────────────────────────────────────

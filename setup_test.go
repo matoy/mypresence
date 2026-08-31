@@ -311,8 +311,8 @@ func TestBuildTemplateFuncMap_And_LoadTemplates(t *testing.T) {
 	if hasRoleFn(nil, models.RoleGlobal) {
 		t.Errorf("hasRole(nil) should be false")
 	}
-	u := &models.User{Roles: models.RoleTeamLeader}
-	if !hasRoleFn(u, models.RoleTeamLeader) || hasRoleFn(u, models.RoleStatusManager) {
+	u := &models.User{Roles: models.RoleTeamManager}
+	if !hasRoleFn(u, models.RoleTeamManager) || hasRoleFn(u, models.RoleStatusManager) {
 		t.Errorf("hasRole failed for user with role")
 	}
 

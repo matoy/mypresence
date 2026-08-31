@@ -174,7 +174,7 @@ def _():
         assert isinstance(data, list), f"Expected list, got {data}"
 
 
-@test("teams — list teams (requires team_manager/team_leader/global)")
+@test("teams — list teams (requires team_manager/team leader/global)")
 def _():
     with _auth() as c:
         r = c.get("/api/teams")

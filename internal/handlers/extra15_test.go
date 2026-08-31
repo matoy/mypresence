@@ -105,12 +105,12 @@ func TestCalendarPage_TeamWithMembersFloorplansEnabled(t *testing.T) {
 	}, DisableFloorplans: false}
 
 	leaderUID, _ := d.CreateLocalUser("calteam_leader@test.com", "Leader", "password1")
-	d.UpdateUserRoles(leaderUID, models.RoleTeamLeader) //nolint:errcheck
 
 	teamID, _ := d.CreateTeam("CalTeamFP")
 	memberUID := seedUserInHandlers(t, d, "calteam_member@test.com")
-	d.AddTeamMember(teamID, leaderUID) //nolint:errcheck
-	d.AddTeamMember(teamID, memberUID) //nolint:errcheck
+	d.AddTeamMember(teamID, leaderUID)           //nolint:errcheck
+	d.AddTeamMember(teamID, memberUID)           //nolint:errcheck
+	d.SetTeamLeaders(teamID, []int64{leaderUID}) //nolint:errcheck
 
 	tok, _ := d.CreateSession(leaderUID)
 	req := httptest.NewRequest(http.MethodGet, "/calendar?year=2026&month=6", nil)
@@ -229,12 +229,12 @@ func TestIsTeamLeaderOf_SameTeam(t *testing.T) {
 	d := newExtraTestDB(t)
 
 	leaderUID := seedUserInHandlers(t, d, "leader_st@test.com")
-	d.UpdateUserRoles(leaderUID, models.RoleTeamLeader) //nolint:errcheck
 	memberUID := seedUserInHandlers(t, d, "member_st@test.com")
 
 	teamID, _ := d.CreateTeam("SameTeamST")
-	d.AddTeamMember(teamID, leaderUID) //nolint:errcheck
-	d.AddTeamMember(teamID, memberUID) //nolint:errcheck
+	d.AddTeamMember(teamID, leaderUID)           //nolint:errcheck
+	d.AddTeamMember(teamID, memberUID)           //nolint:errcheck
+	d.SetTeamLeaders(teamID, []int64{leaderUID}) //nolint:errcheck
 
 	if !isTeamLeaderOf(d, leaderUID, memberUID) {
 		t.Error("expected isTeamLeaderOf to return true for same team")

@@ -929,6 +929,8 @@ function teamsAdmin(initialTeams, countriesCatalog, allUsers) {
         newTeamRequireComment: false,
         newTeamDomainId: 0,
         newTeamCountryCodes: '',
+        newTeamLeaderSearch: '',
+        newTeamLeaderIds: [],
         createError: '',
         showCreateModal: false,
         filterText: '',
@@ -997,6 +999,14 @@ function teamsAdmin(initialTeams, countriesCatalog, allUsers) {
                 })
             });
             if (r.ok) {
+                const data = await r.json().catch(() => ({}));
+                if (data.id && this.newTeamLeaderIds.length > 0) {
+                    await fetch(`/api/admin/teams/${data.id}/leaders`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ user_ids: this.newTeamLeaderIds })
+                    });
+                }
                 this.showCreateModal = false;
                 window.location.reload();
                 return;
@@ -1009,7 +1019,7 @@ function teamsAdmin(initialTeams, countriesCatalog, allUsers) {
             }
         },
 
-        async saveTeamDetails(id, name, jiraSpaceKey, timesheetsManagedManually, requireActivityComment, domainId, countryCodes) {
+        async saveTeamDetails(id, name, jiraSpaceKey, timesheetsManagedManually, requireActivityComment, domainId, countryCodes, leaderIds) {
             await fetch(`/admin/teams/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
@@ -1022,6 +1032,13 @@ function teamsAdmin(initialTeams, countriesCatalog, allUsers) {
                     country_codes: (countryCodes || '').trim()
                 })
             });
+            if (Array.isArray(leaderIds)) {
+                await fetch(`/api/admin/teams/${id}/leaders`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_ids: leaderIds })
+                });
+            }
             window.location.reload();
         },
 

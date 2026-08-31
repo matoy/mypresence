@@ -747,3 +747,87 @@ func TestSetProjectTime_InactiveProject_Returns400(t *testing.T) {
 		t.Fatalf("expected 400 inactive project, got %d: %s", w.Code, w.Body.String())
 	}
 }
+
+// ── Team Leaders API ──────────────────────────────────────────────────────────
+
+func TestGetTeamLeadersAPI_Success(t *testing.T) {
+	d := newCRUDTestDB(t)
+	h := &AdminHandler{DB: d}
+
+	teamID, err := d.CreateTeam("Team Leaders Test")
+	if err != nil {
+		t.Fatalf("CreateTeam: %v", err)
+	}
+	u1, _ := d.CreateLocalUser("tl1@test.com", "TL 1", "password1")
+	u2, _ := d.CreateLocalUser("tl2@test.com", "TL 2", "password1")
+	_ = d.SetTeamLeaders(teamID, []int64{u1, u2})
+
+	req := createAuthedReq(t, d, http.MethodGet, "/api/admin/teams/"+strconvI64(teamID)+"/leaders",
+		"reader@test.com", "Reader", "password1", models.RoleBasic, nil)
+	req.SetPathValue("id", strconvI64(teamID))
+	w := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.GetTeamLeadersAPI)).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		UserIDs []int64 `json:"user_ids"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp.UserIDs) != 2 || resp.UserIDs[0] != u1 || resp.UserIDs[1] != u2 {
+		t.Fatalf("expected [%d, %d], got %v", u1, u2, resp.UserIDs)
+	}
+}
+
+func TestSetTeamLeadersAPI_AccessControlAndValidation(t *testing.T) {
+	d := newCRUDTestDB(t)
+	h := &AdminHandler{DB: d}
+
+	teamID, err := d.CreateTeam("Set Leaders Test")
+	if err != nil {
+		t.Fatalf("CreateTeam: %v", err)
+	}
+	u1, _ := d.CreateLocalUser("tl3@test.com", "TL 3", "password1")
+
+	// 1. Basic user without team_manager/global -> 403
+	reqForbidden := createAuthedReq(t, d, http.MethodPut, "/api/admin/teams/"+strconvI64(teamID)+"/leaders",
+		"basicuser@test.com", "Basic", "password1", models.RoleBasic,
+		[]byte(`{"user_ids":[`+strconvI64(u1)+`]}`))
+	reqForbidden.SetPathValue("id", strconvI64(teamID))
+	wForbidden := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.SetTeamLeadersAPI)).ServeHTTP(wForbidden, reqForbidden)
+	if wForbidden.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", wForbidden.Code)
+	}
+
+	// 2. Team Manager user with invalid json -> 400
+	reqBadJSON := createAuthedReq(t, d, http.MethodPut, "/api/admin/teams/"+strconvI64(teamID)+"/leaders",
+		"tm@test.com", "TM", "password1", models.RoleTeamManager,
+		[]byte(`invalid-json`))
+	reqBadJSON.SetPathValue("id", strconvI64(teamID))
+	wBadJSON := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.SetTeamLeadersAPI)).ServeHTTP(wBadJSON, reqBadJSON)
+	if wBadJSON.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on bad json, got %d", wBadJSON.Code)
+	}
+
+	// 3. Team Manager user with valid payload -> 200 and DB updated
+	reqOK := createAuthedReq(t, d, http.MethodPut, "/api/admin/teams/"+strconvI64(teamID)+"/leaders",
+		"tm2@test.com", "TM 2", "password1", models.RoleTeamManager,
+		[]byte(`{"user_ids":[`+strconvI64(u1)+`]}`))
+	reqOK.SetPathValue("id", strconvI64(teamID))
+	wOK := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.SetTeamLeadersAPI)).ServeHTTP(wOK, reqOK)
+	if wOK.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", wOK.Code, wOK.Body.String())
+	}
+
+	leaderIDs, _ := d.GetTeamLeaderIDs(teamID)
+	if len(leaderIDs) != 1 || leaderIDs[0] != u1 {
+		t.Fatalf("expected DB leaderIDs=[%d], got %v", u1, leaderIDs)
+	}
+}

@@ -69,7 +69,7 @@
 </head>
 <body class="h-full bg-gray-50 font-sans">
     {{if .User}}
-    {{$hasAdminNav := or (and (not .DisableFloorplans) (.User.HasRole "floorplan_manager")) (or (.User.HasRole "team_manager") (.User.HasRole "team_leader")) (.User.HasRole "global") (.User.HasRole "status_manager") (and (not .DisableProjects) (.User.HasRole "projects_manager")) (.User.HasRole "activity_viewer")}}
+    {{$hasAdminNav := or (and (not .DisableFloorplans) (.User.HasRole "floorplan_manager")) (.User.HasRole "team_manager") .IsTeamLeader (.User.HasRole "global") (.User.HasRole "status_manager") (and (not .DisableProjects) (.User.HasRole "projects_manager")) (.User.HasRole "activity_viewer")}}
     <!-- Navigation -->
     <nav class="bg-gradient-to-r from-primary to-secondary shadow-lg" x-data="{ mobileMenu: false }">
         <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
@@ -104,12 +104,12 @@
                         {{if .UserTasksMode}}{{index .T "nav.tasks"}}{{else}}{{index .T "nav.projects"}}{{end}}
                     </a>
                     {{end}}
-                    {{if or (.User.HasRole "activity_viewer") (.User.HasRole "team_leader") .IsDomainManager}}
+                    {{if or (.User.HasRole "activity_viewer") .IsTeamLeader .IsDomainManager}}
                     <a href="/admin/activity" class="text-white/80 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition {{if eq .Page "admin_activity"}}bg-white/20 text-white{{end}}">
                         {{index .T "nav.activity"}}
                     </a>
                     {{end}}
-                    {{if and (not .DisableProjects) (or (.User.HasRole "projects_manager") (.User.HasRole "projects_viewer") (.User.HasRole "team_leader") .IsDomainManager)}}
+                    {{if and (not .DisableProjects) (or (.User.HasRole "projects_manager") (.User.HasRole "projects_viewer") .IsTeamLeader .IsDomainManager)}}
                     <a href="/admin/projects-report" class="inline-flex items-center gap-1.5 text-white/80 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition {{if eq .Page "admin_projects_report"}}bg-white/20 text-white{{end}}">
                         <svg class="h-4 w-4 opacity-90" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 19h16M6 15l4-4 3 3 5-6"/>
@@ -169,7 +169,7 @@
                                 {{index .T "nav.projects_manager"}}
                             </a>
                             {{end}}
-                            {{if or (.User.HasRole "team_manager") (.User.HasRole "team_leader")}}
+                            {{if or (.User.HasRole "team_manager") .IsTeamLeader}}
                             <a href="/admin/teams" class="flex items-center gap-2.5 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition {{if eq .Page "admin_teams"}}font-semibold{{end}}">
                                 {{index .T "nav.teams"}}
                             </a>
@@ -315,10 +315,10 @@
                 {{if not .DisableProjects}}
                 <a href="/projects" class="block text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">{{if .UserTasksMode}}{{index .T "nav.tasks"}}{{else}}{{index .T "nav.projects"}}{{end}}</a>
                 {{end}}
-                {{if or (.User.HasRole "activity_viewer") (.User.HasRole "team_leader") .IsDomainManager}}
+                {{if or (.User.HasRole "activity_viewer") .IsTeamLeader .IsDomainManager}}
                 <a href="/admin/activity" class="block text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">{{index .T "nav.activity"}}</a>
                 {{end}}
-                {{if and (not .DisableProjects) (or (.User.HasRole "projects_manager") (.User.HasRole "projects_viewer") (.User.HasRole "team_leader") .IsDomainManager)}}
+                {{if and (not .DisableProjects) (or (.User.HasRole "projects_manager") (.User.HasRole "projects_viewer") .IsTeamLeader .IsDomainManager)}}
                 <a href="/admin/projects-report" class="inline-flex items-center gap-1.5 text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">
                     <svg class="h-4 w-4 opacity-90" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 19h16M6 15l4-4 3 3 5-6"/>
@@ -351,7 +351,7 @@
                         {{index .T "nav.projects_manager"}}
                     </a>
                     {{end}}
-                    {{if or (.User.HasRole "team_manager") (.User.HasRole "team_leader")}}
+                    {{if or (.User.HasRole "team_manager") .IsTeamLeader}}
                     <a href="/admin/teams" class="block text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">{{index .T "nav.teams"}}</a>
                     {{end}}
                     {{if .User.HasRole "global"}}
@@ -507,13 +507,13 @@
                         {{if not .DisableProjects}}
                         <option value="projects">{{index $.T "help.topic.projects.title"}}</option>
                         {{end}}
-                        {{if or (.User.HasRole "activity_viewer") (.User.HasRole "team_leader") .IsDomainManager}}
+                        {{if or (.User.HasRole "activity_viewer") .IsTeamLeader .IsDomainManager}}
                         <option value="admin_activity">{{index $.T "help.topic.admin_activity.title"}}</option>
                         {{end}}
-                        {{if and (not .DisableProjects) (or (.User.HasRole "projects_manager") (.User.HasRole "projects_viewer") (.User.HasRole "team_leader") .IsDomainManager)}}
+                        {{if and (not .DisableProjects) (or (.User.HasRole "projects_manager") (.User.HasRole "projects_viewer") .IsTeamLeader .IsDomainManager)}}
                         <option value="admin_projects_report">{{index $.T "help.topic.admin_projects_report.title"}}</option>
                         {{end}}
-                        {{if or (.User.HasRole "team_manager") (.User.HasRole "team_leader")}}
+                        {{if or (.User.HasRole "team_manager") .IsTeamLeader}}
                         <option value="admin_teams">{{index $.T "help.topic.admin_teams.title"}}</option>
                         {{end}}
                         {{if .User.HasRole "status_manager"}}
@@ -590,7 +590,7 @@
                 </div>
                 {{end}}
 
-                {{if or (.User.HasRole "activity_viewer") (.User.HasRole "team_leader") .IsDomainManager}}
+                {{if or (.User.HasRole "activity_viewer") .IsTeamLeader .IsDomainManager}}
                 <!-- Activity Report -->
                 <div x-show="topic === 'admin_activity'" class="space-y-4">
                     <div>
@@ -605,7 +605,7 @@
                 </div>
                 {{end}}
 
-                {{if and (not .DisableProjects) (or (.User.HasRole "projects_manager") (.User.HasRole "projects_viewer") (.User.HasRole "team_leader") .IsDomainManager)}}
+                {{if and (not .DisableProjects) (or (.User.HasRole "projects_manager") (.User.HasRole "projects_viewer") .IsTeamLeader .IsDomainManager)}}
                 <!-- Projects Report -->
                 <div x-show="topic === 'admin_projects_report'" class="space-y-4">
                     <div>
@@ -619,7 +619,7 @@
                 </div>
                 {{end}}
 
-                {{if or (.User.HasRole "team_manager") (.User.HasRole "team_leader")}}
+                {{if or (.User.HasRole "team_manager") .IsTeamLeader}}
                 <!-- Teams Admin -->
                 <div x-show="topic === 'admin_teams'" class="space-y-4">
                     <div>

@@ -99,7 +99,6 @@ func TestCertifyAndDecertifyProjectMonth(t *testing.T) {
 	devUser, _ := d.GetUserByID(uID)
 
 	tlID, _ := d.CreateLocalUser("tl@example.com", "Team Leader", "pass")
-	_ = d.UpdateUserRoles(tlID, models.RoleTeamLeader)
 	tlUser, _ := d.GetUserByID(tlID)
 
 	adminID, _ := d.CreateLocalUser("admin_cert@example.com", "Admin Cert", "pass")
@@ -109,6 +108,7 @@ func TestCertifyAndDecertifyProjectMonth(t *testing.T) {
 	teamID, _ := d.CreateTeamWithDetails("Dev Team", "", false, false)
 	_ = d.AddTeamMember(teamID, uID)
 	_ = d.AddTeamMember(teamID, tlID)
+	_ = d.SetTeamLeaders(teamID, []int64{tlID})
 
 	statusID, _ := d.CreateStatus(models.Status{Name: "Work", Color: "#000000", OnSite: true, Billable: true})
 	_ = d.SetPresences(uID, []string{"2026-08-10"}, statusID, "full")

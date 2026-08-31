@@ -144,9 +144,9 @@ func TestActivityPage_TeamLeaderDomainManagerCanSelectAnyDomainTeam(t *testing.T
 	d.UpdateTeamDomain(leaderTeam, domainID)      //nolint:errcheck
 	d.UpdateTeamDomain(otherDomainTeam, domainID) //nolint:errcheck
 
-	// leaderMember is both team_leader of leaderTeam AND a manager of the domain.
-	if err := d.UpdateUserRoles(leaderMember, models.RoleTeamLeader); err != nil {
-		t.Fatalf("UpdateUserRoles: %v", err)
+	// leaderMember is both leader of leaderTeam AND a manager of the domain.
+	if err := d.SetTeamLeaders(leaderTeam, []int64{leaderMember}); err != nil {
+		t.Fatalf("SetTeamLeaders: %v", err)
 	}
 	d.AddTeamMember(leaderTeam, leaderMember) //nolint:errcheck
 	if err := d.SetDomainManagers(domainID, []int64{leaderMember}); err != nil {

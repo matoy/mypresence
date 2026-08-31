@@ -190,11 +190,13 @@ func newRenderPage(cfg *config.Config, database *db.DB, templates map[string]*te
 			}
 		}
 
-		// Domain managers get scoped access to Activity/Projects Report nav
+		// Domain managers and team leaders get scoped access to Activity/Projects Report nav
 		// links even without any other role.
 		var isDomainManager bool
+		var isTeamLeader bool
 		if user != nil {
 			isDomainManager, _ = database.IsDomainManager(user.ID)
+			isTeamLeader, _ = database.IsTeamLeader(user.ID)
 		}
 
 		pd := models.PageData{
@@ -223,6 +225,7 @@ func newRenderPage(cfg *config.Config, database *db.DB, templates map[string]*te
 			RealAdmin:                  realAdmin,
 			UserTasksMode:              userTasksMode,
 			IsDomainManager:            isDomainManager,
+			IsTeamLeader:               isTeamLeader,
 			TeamCalendarRefreshMinutes: cfg.TeamCalendarRefreshMinutes,
 		}
 		// Fetch active news banners and unread notifications for authenticated users.
