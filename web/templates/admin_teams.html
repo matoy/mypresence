@@ -171,7 +171,7 @@
                                                :checked="editLeaderIds.includes(u.id)"
                                                @change="if (editLeaderIds.includes(u.id)) { editLeaderIds = editLeaderIds.filter(id => id !== u.id); } else { editLeaderIds.push(u.id); }"
                                                class="h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary">
-                                        <span class="text-xs text-gray-700" x-text="u.name + ' (' + u.email + ')'"></span>
+                                        <span class="text-xs text-gray-500 font-medium" x-text="u.name + ' (' + u.email + ')'"></span>
                                     </label>
                                 </template>
                                 <div x-show="(allUsers || []).filter(u => editLeaderSearch === '' || (u.name || '').toLowerCase().includes(editLeaderSearch.toLowerCase()) || (u.email || '').toLowerCase().includes(editLeaderSearch.toLowerCase())).length === 0" class="px-3 py-2 text-xs text-gray-400 text-center">{{index $.T "teams.leaders_none"}}</div>
@@ -241,8 +241,8 @@
                     <button type="button"
                             @click="addMember({{.Team.ID}}, u.id); showAddMember = false; memberSearch = ''"
                             class="w-full text-left px-3 py-2 hover:bg-green-50 transition flex flex-col">
-                        <span x-text="u.name" class="text-sm font-medium text-gray-800"></span>
-                        <span x-text="u.email" class="text-xs text-gray-500"></span>
+                        <span x-text="u.name" class="text-sm font-medium text-gray-500"></span>
+                        <span x-text="u.email" class="text-xs text-gray-400"></span>
                     </button>
                 </template>
                 <div x-show="(allUsers || []).filter(u => !memberIds.includes(u.id) && (memberSearch === '' || (u.name || '').toLowerCase().includes(memberSearch.toLowerCase()) || (u.email || '').toLowerCase().includes(memberSearch.toLowerCase()))).length === 0"
@@ -316,7 +316,7 @@
                                     <template x-for="st in grp.sites" :key="'m_' + memberId + '_st_' + st.id">
                                         <div @click="setMemberSite(teamId, memberId, st.id); openSite = false"
                                              class="pl-6 pr-3 py-1.5 hover:bg-indigo-50 cursor-pointer flex items-center justify-between transition"
-                                             :class="st.id === memberSiteId ? 'bg-indigo-50/70 text-primary font-semibold' : 'text-gray-700'">
+                                             :class="st.id === memberSiteId ? 'bg-indigo-50/70 text-primary font-semibold' : 'text-gray-500 font-medium'">
                                             <span class="truncate flex items-center gap-1.5">
                                                 <span>🏢</span>
                                                 <span x-text="st.name"></span>
@@ -450,7 +450,7 @@
                                    :checked="newTeamLeaderIds.includes(u.id)"
                                    @change="if (newTeamLeaderIds.includes(u.id)) { newTeamLeaderIds = newTeamLeaderIds.filter(id => id !== u.id); } else { newTeamLeaderIds.push(u.id); }"
                                    class="h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary">
-                            <span class="text-xs text-gray-700" x-text="u.name + ' (' + u.email + ')'"></span>
+                            <span class="text-xs text-gray-500 font-medium" x-text="u.name + ' (' + u.email + ')'"></span>
                         </label>
                     </template>
                     <div x-show="(allUsers || []).filter(u => newTeamLeaderSearch === '' || (u.name || '').toLowerCase().includes(newTeamLeaderSearch.toLowerCase()) || (u.email || '').toLowerCase().includes(newTeamLeaderSearch.toLowerCase())).length === 0" class="px-3 py-2 text-xs text-gray-400 text-center">{{index $.T "teams.leaders_none"}}</div>

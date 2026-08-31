@@ -167,7 +167,7 @@
                                                :checked="editFloorIds.includes(f.id)"
                                                @change="if (editFloorIds.includes(f.id)) { editFloorIds = editFloorIds.filter(id => id !== f.id); } else { editFloorIds.push(f.id); }"
                                                class="h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary">
-                                        <span class="text-xs text-gray-700 font-medium" x-text="f.name"></span>
+                                        <span class="text-xs text-gray-500 font-medium" x-text="f.name"></span>
                                         <span x-show="f.site_name && f.site_id !== {{$siteItem.ID}}" class="text-[10px] text-gray-400" x-text="'(' + f.site_name + ')'"></span>
                                     </label>
                                 </template>
@@ -283,7 +283,7 @@
                                            :checked="newSiteFloorplanIds.includes(f.id)"
                                            @change="if (newSiteFloorplanIds.includes(f.id)) { newSiteFloorplanIds = newSiteFloorplanIds.filter(id => id !== f.id); } else { newSiteFloorplanIds.push(f.id); }"
                                            class="h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary">
-                                    <span class="text-xs text-gray-700 font-medium" x-text="f.name"></span>
+                                    <span class="text-xs text-gray-500 font-medium" x-text="f.name"></span>
                                     <span x-show="f.site_name" class="text-[10px] text-gray-400" x-text="'(' + f.site_name + ')'"></span>
                                 </label>
                             </template>

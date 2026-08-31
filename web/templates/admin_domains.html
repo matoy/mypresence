@@ -95,8 +95,8 @@
                 <template x-for="u in filteredManagerCandidates" :key="u.id">
                     <button type="button" @click="form.manager_ids.push(u.id); managerSearch = ''"
                             class="w-full text-left px-3 py-2 hover:bg-amber-50 transition flex flex-col">
-                        <span x-text="u.name" class="text-sm font-medium text-gray-800"></span>
-                        <span x-text="u.email" class="text-xs text-gray-500"></span>
+                        <span x-text="u.name" class="text-sm font-medium text-gray-500"></span>
+                        <span x-text="u.email" class="text-xs text-gray-400"></span>
                     </button>
                 </template>
             </div>
@@ -116,7 +116,7 @@
                 <template x-for="t in filteredTeamCandidates" :key="t.id">
                     <button type="button" @click="form.team_ids.push(t.id); teamSearch = ''"
                             class="w-full text-left px-3 py-2 hover:bg-blue-50 transition">
-                        <span x-text="t.name" class="text-sm font-medium text-gray-800"></span>
+                        <span x-text="t.name" class="text-sm font-medium text-gray-500"></span>
                     </button>
                 </template>
             </div>
