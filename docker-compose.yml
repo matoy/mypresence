@@ -333,7 +333,6 @@ services:
       # Map each Entra group Object ID to an application role:
       # - SAML_GROUP_GLOBAL=<object-id>          # Global admin (all permissions)
       # - SAML_GROUP_TEAM_MANAGER=<object-id>    # Manage teams and memberships
-      # - SAML_GROUP_TEAM_LEADER=<object-id>     # View and manage own team activity
       # - SAML_GROUP_STATUS_MANAGER=<object-id>  # Manage presence statuses
       # - SAML_GROUP_ACTIVITY_VIEWER=<object-id> # View all users activity
       # - SAML_GROUP_FLOORPLAN_MANAGER=<object-id> # Manage floor plans and seats
