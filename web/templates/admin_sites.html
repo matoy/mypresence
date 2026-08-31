@@ -1,0 +1,312 @@
+{{define "content"}}
+{{with .Data}}
+{{$allFloorplans := .Floorplans}}
+{{$countries := .Countries}}
+
+<!-- Safe JSON data payloads for Alpine component -->
+<script id="sites-json-data" type="application/json">{{json .Sites}}</script>
+<script id="floorplans-json-data" type="application/json">{{json .Floorplans}}</script>
+<script id="countries-json-data" type="application/json">{{json .Countries}}</script>
+
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" x-data="sitesAdmin()">
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-bold text-gray-900">{{index $.T "sites.title"}}</h1>
+        <div class="flex items-center gap-3">
+            <span class="text-sm text-gray-400" x-text="filteredCount + ' / ' + totalCount"></span>
+            <button @click="showCreateModal = true; createError = ''; newSiteName = ''; newSiteCountryCode = ''; newSiteNotCorporate = false; newSiteFloorplanSearch = ''; newSiteFloorplanIds = []"
+                    type="button"
+                    class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
+                + {{index $.T "sites.create"}}
+            </button>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
+        <div class="flex flex-wrap gap-3 items-end">
+            <div class="flex-1 min-w-[220px]">
+                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "admin.search"}}</label>
+                <input type="text" x-model="filterText" placeholder="{{index $.T "sites.name"}}"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "sites.filter_corporate"}}</label>
+                <select x-model="filterCorporate"
+                        class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+                    <option value="all">{{index $.T "sites.filter_corporate_all"}}</option>
+                    <option value="corporate">{{index $.T "sites.filter_corporate_yes"}}</option>
+                    <option value="non_corporate">{{index $.T "sites.filter_corporate_no"}}</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "sites.filter_floors"}}</label>
+                <select x-model="filterFloors"
+                        class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+                    <option value="all">{{index $.T "sites.filter_floors_all"}}</option>
+                    <option value="with">{{index $.T "sites.filter_floors_with"}}</option>
+                    <option value="empty">{{index $.T "sites.filter_floors_empty"}}</option>
+                </select>
+            </div>
+            <button @click="resetFilters()"
+                    type="button"
+                    class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
+                {{index $.T "admin.reset"}}
+            </button>
+        </div>
+    </div>
+
+    <!-- Sites List -->
+    {{range $siteItem := .Sites}}
+    {{$floorsCount := len .Floorplans}}
+    <div class="bg-white rounded-xl shadow-md p-6 mb-4"
+         data-site-id="{{.ID}}"
+         data-site-name="{{.Name}}"
+         data-country-code="{{.CountryCode}}"
+         data-not-corporate="{{if .NotCorporateSite}}true{{else}}false{{end}}"
+         data-floor-count="{{$floorsCount}}"
+         data-floor-ids="{{range $i, $id := .FloorplanIDs}}{{if $i}},{{end}}{{$id}}{{end}}"
+         x-data="{
+            editSite: false,
+            editNameValue: '',
+            editCountryCode: '',
+            editNotCorporate: false,
+            editFloorSearch: '',
+            editFloorIds: []
+         }"
+         x-init="
+            editNameValue = $el.dataset.siteName || '';
+            editCountryCode = $el.dataset.countryCode || '';
+            editNotCorporate = $el.dataset.notCorporate === 'true';
+            editFloorIds = ($el.dataset.floorIds ? $el.dataset.floorIds.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n)) : []);
+         "
+         x-show="matchesSite($el.dataset.siteName, $el.dataset.countryCode, $el.dataset.notCorporate === 'true', parseInt($el.dataset.floorCount) || 0)"
+         x-cloak>
+        <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-3 flex-1 min-w-0">
+                <div class="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                    <span class="text-primary font-bold text-lg">🏢</span>
+                </div>
+                <template x-if="!editSite">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-800">{{.Name}}</h3>
+                        <div class="flex flex-wrap items-center gap-2 mt-1">
+                            {{if .CountryCode}}
+                            <span class="text-xs bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full font-medium">🌍 {{.CountryCode}}</span>
+                            {{end}}
+                            {{if .NotCorporateSite}}
+                            <span class="text-xs bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full font-medium">🏢 {{index $.T "sites.not_corporate"}}</span>
+                            {{end}}
+                            <span class="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-medium" x-text="editFloorIds.length + ' {{index $.T "sites.floors_assigned"}}'"></span>
+                        </div>
+                        {{if .Floorplans}}
+                        <div class="flex items-center gap-1.5 mt-3 flex-wrap">
+                            <span class="text-xs font-semibold text-gray-500">{{index $.T "sites.floors"}}:</span>
+                            {{range .Floorplans}}
+                            <span class="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-700 px-2.5 py-1 rounded-md font-medium">
+                                <span aria-hidden="true">📐</span>
+                                {{.Name}}
+                            </span>
+                            {{end}}
+                        </div>
+                        {{end}}
+                    </div>
+                </template>
+                <template x-if="editSite">
+                    <div class="flex flex-col gap-2.5 flex-1 max-w-md">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-500 mb-0.5">{{index $.T "sites.name"}}</label>
+                            <input type="text" x-ref="editNameInput" x-model="editNameValue"
+                                    @keydown.escape="editSite = false"
+                                    placeholder="{{index $.T "sites.name"}}"
+                                    class="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-base font-semibold focus:ring-2 focus:ring-primary/50">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-500 mb-0.5">{{index $.T "sites.country"}}</label>
+                            <p class="text-xs text-gray-400 mb-1">{{index $.T "sites.countries_hint"}}</p>
+                            <div class="flex gap-2 items-center">
+                                <select x-model="editCountryCode"
+                                        class="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary/50 bg-white">
+                                    <option value="">{{index $.T "sites.no_country"}}</option>
+                                    <template x-for="c in countriesCatalog" :key="c.code">
+                                        <option :value="c.code" :selected="editCountryCode === c.code" x-text="(c.flag ? c.flag + ' ' : '') + c.code + (c.name ? ' - ' + c.name : '')"></option>
+                                    </template>
+                                </select>
+                                <button type="button" x-show="editCountryCode" @click="editCountryCode = ''"
+                                        class="px-2 py-1 text-xs text-gray-400 hover:text-gray-600 bg-gray-100 rounded" title="Clear">✕</button>
+                            </div>
+                            <div class="flex flex-wrap gap-1 mt-1.5 max-h-24 overflow-y-auto">
+                                <template x-for="c in countriesCatalog" :key="c.code">
+                                    <button type="button" @click="editCountryCode = (editCountryCode === c.code ? '' : c.code)"
+                                            class="text-xs px-2 py-0.5 rounded-full border transition"
+                                            :class="editCountryCode === c.code ? 'bg-primary text-white border-primary font-semibold shadow-sm' : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'"
+                                            x-text="(c.flag ? c.flag + ' ' : '') + c.code">
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+                        <div class="pt-1">
+                            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                <input type="checkbox" x-model="editNotCorporate"
+                                       class="rounded border-gray-300 text-primary focus:ring-primary/50 h-4 w-4">
+                                <span class="font-medium">{{index $.T "sites.not_corporate"}}</span>
+                            </label>
+                            <p class="text-xs text-gray-400 mt-0.5 ml-6">{{index $.T "sites.not_corporate_hint"}}</p>
+                        </div>
+                        <div class="mt-2">
+                            <label class="block text-xs font-medium text-gray-500 mb-0.5">{{index $.T "sites.floors"}}</label>
+                            <p class="text-xs text-gray-400 mb-1.5">{{index $.T "sites.floors_hint"}}</p>
+                            <div class="mb-1.5">
+                                <input type="text" x-model="editFloorSearch" placeholder="{{index $.T "sites.floors_search"}}"
+                                       class="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-xs">
+                            </div>
+                            <div class="max-h-36 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100 bg-white">
+                                <template x-for="f in (allFloorplans || []).filter(f => editFloorSearch === '' || (f.name || '').toLowerCase().includes(editFloorSearch.toLowerCase()))" :key="f.id">
+                                    <label class="flex items-center gap-2.5 px-2.5 py-1.5 hover:bg-gray-50 cursor-pointer">
+                                        <input type="checkbox"
+                                               :value="f.id"
+                                               :checked="editFloorIds.includes(f.id)"
+                                               @change="if (editFloorIds.includes(f.id)) { editFloorIds = editFloorIds.filter(id => id !== f.id); } else { editFloorIds.push(f.id); }"
+                                               class="h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary">
+                                        <span class="text-xs text-gray-700 font-medium" x-text="f.name"></span>
+                                        <span x-show="f.site_name && f.site_id !== {{$siteItem.ID}}" class="text-[10px] text-gray-400" x-text="'(' + f.site_name + ')'"></span>
+                                    </label>
+                                </template>
+                                <div x-show="(allFloorplans || []).filter(f => editFloorSearch === '' || (f.name || '').toLowerCase().includes(editFloorSearch.toLowerCase())).length === 0" class="px-3 py-2 text-xs text-gray-400 text-center">{{index $.T "sites.floors_none"}}</div>
+                            </div>
+                            <p class="mt-1 text-xs text-gray-400" x-show="editFloorIds.length === 0">{{index $.T "sites.floors_empty"}}</p>
+                            <p class="mt-1 text-xs text-gray-600 font-medium" x-show="editFloorIds.length > 0"
+                               x-text="editFloorIds.length + ' {{index $.T "sites.floors_assigned"}}'"></p>
+                        </div>
+                        <div class="flex gap-2 mt-2">
+                            <button @click="saveSiteDetails({{.ID}}, editNameValue, editCountryCode, editNotCorporate, editFloorIds); editSite = false"
+                                    type="button"
+                                    class="text-xs px-2.5 py-1.5 bg-primary text-white rounded-lg font-medium hover:opacity-90 transition">
+                                {{index $.T "admin.save"}}
+                            </button>
+                            <button @click="editSite = false"
+                                    type="button"
+                                    class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition">
+                                {{index $.T "admin.cancel"}}
+                            </button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+            <div class="flex items-center gap-2">
+                <button @click="editSite = !editSite; $nextTick(() => $refs.editNameInput?.focus())"
+                        type="button"
+                        class="p-2 text-gray-400 hover:text-gray-600 transition" title="Edit">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+                    </svg>
+                </button>
+                <button @click="if(confirm(_t['sites.delete_confirm'])) deleteSite({{.ID}})"
+                        type="button"
+                        class="p-2 text-red-400 hover:text-red-600 transition" title="Delete">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+    {{else}}
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center text-gray-400 text-sm">
+        {{index $.T "sites.none"}}
+    </div>
+    {{end}}
+
+    <!-- Create Site Modal -->
+    <div x-show="showCreateModal" x-cloak
+         class="fixed inset-0 z-50 overflow-y-auto"
+         @keydown.escape.window="showCreateModal = false">
+        <div class="flex min-h-screen items-center justify-center p-4">
+            <div class="fixed inset-0 bg-black/50 transition-opacity" @click="showCreateModal = false"></div>
+            <div class="relative bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 space-y-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-bold text-gray-900">{{index $.T "sites.new_site"}}</h3>
+                    <button @click="showCreateModal = false" class="text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
+                </div>
+                <template x-if="createError">
+                    <div class="p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg" x-text="createError"></div>
+                </template>
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">{{index $.T "sites.name"}} *</label>
+                        <input type="text" x-model="newSiteName" placeholder="{{index $.T "sites.name"}}"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary/50">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-0.5">{{index $.T "sites.country"}}</label>
+                        <p class="text-xs text-gray-400 mb-1">{{index $.T "sites.countries_hint"}}</p>
+                        <div class="flex gap-2 items-center">
+                            <select x-model="newSiteCountryCode"
+                                    class="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary/50 bg-white">
+                                <option value="">{{index $.T "sites.no_country"}}</option>
+                                <template x-for="c in countriesCatalog" :key="c.code">
+                                    <option :value="c.code" :selected="newSiteCountryCode === c.code" x-text="(c.flag ? c.flag + ' ' : '') + c.code + (c.name ? ' - ' + c.name : '')"></option>
+                                </template>
+                            </select>
+                            <button type="button" x-show="newSiteCountryCode" @click="newSiteCountryCode = ''"
+                                    class="px-2 py-1 text-xs text-gray-400 hover:text-gray-600 bg-gray-100 rounded" title="Clear">✕</button>
+                        </div>
+                        <div class="flex flex-wrap gap-1 mt-1.5 max-h-24 overflow-y-auto">
+                            <template x-for="c in countriesCatalog" :key="c.code">
+                                <button type="button" @click="newSiteCountryCode = (newSiteCountryCode === c.code ? '' : c.code)"
+                                        class="text-xs px-2 py-0.5 rounded-full border transition"
+                                        :class="newSiteCountryCode === c.code ? 'bg-primary text-white border-primary font-semibold shadow-sm' : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'"
+                                        x-text="(c.flag ? c.flag + ' ' : '') + c.code">
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+                    <div class="pt-1">
+                        <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                            <input type="checkbox" x-model="newSiteNotCorporate"
+                                   class="rounded border-gray-300 text-primary focus:ring-primary/50 h-4 w-4">
+                            <span class="font-medium">{{index $.T "sites.not_corporate"}}</span>
+                        </label>
+                        <p class="text-xs text-gray-400 mt-0.5 ml-6">{{index $.T "sites.not_corporate_hint"}}</p>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-0.5">{{index $.T "sites.floors"}}</label>
+                        <p class="text-xs text-gray-400 mb-1.5">{{index $.T "sites.floors_hint"}}</p>
+                        <div class="mb-1.5">
+                            <input type="text" x-model="newSiteFloorplanSearch" placeholder="{{index $.T "sites.floors_search"}}"
+                                   class="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-xs">
+                        </div>
+                        <div class="max-h-36 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100 bg-white">
+                            <template x-for="f in (allFloorplans || []).filter(f => newSiteFloorplanSearch === '' || (f.name || '').toLowerCase().includes(newSiteFloorplanSearch.toLowerCase()))" :key="f.id">
+                                <label class="flex items-center gap-2.5 px-2.5 py-1.5 hover:bg-gray-50 cursor-pointer">
+                                    <input type="checkbox"
+                                           :value="f.id"
+                                           :checked="newSiteFloorplanIds.includes(f.id)"
+                                           @change="if (newSiteFloorplanIds.includes(f.id)) { newSiteFloorplanIds = newSiteFloorplanIds.filter(id => id !== f.id); } else { newSiteFloorplanIds.push(f.id); }"
+                                           class="h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary">
+                                    <span class="text-xs text-gray-700 font-medium" x-text="f.name"></span>
+                                    <span x-show="f.site_name" class="text-[10px] text-gray-400" x-text="'(' + f.site_name + ')'"></span>
+                                </label>
+                            </template>
+                            <div x-show="(allFloorplans || []).filter(f => newSiteFloorplanSearch === '' || (f.name || '').toLowerCase().includes(newSiteFloorplanSearch.toLowerCase())).length === 0" class="px-3 py-2 text-xs text-gray-400 text-center">{{index $.T "sites.floors_none"}}</div>
+                        </div>
+                        <p class="mt-1 text-xs text-gray-400" x-show="newSiteFloorplanIds.length === 0">{{index $.T "sites.floors_empty"}}</p>
+                        <p class="mt-1 text-xs text-gray-600 font-medium" x-show="newSiteFloorplanIds.length > 0"
+                           x-text="newSiteFloorplanIds.length + ' {{index $.T "sites.floors_assigned"}}'"></p>
+                    </div>
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button @click="showCreateModal = false" type="button"
+                            class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition">
+                        {{index $.T "admin.cancel"}}
+                    </button>
+                    <button @click="createSite()" type="button"
+                            class="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:opacity-90 transition">
+                        {{index $.T "admin.create"}}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}
+{{end}}

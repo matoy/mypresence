@@ -157,7 +157,35 @@ function Get-WorkingDays ($year, $month) {
     return $days
 }
 
-# ── 3. Create floorplan + seats ───────────────────────────────────────────────
+# ── 3. Create sites & floorplans ──────────────────────────────────────────────
+
+Write-Host "`nCreating sites..."
+$siteItems = @(
+    @{ name="Siège Social Paris";        country_code="FR"; not_corporate_site=$false },
+    @{ name="Site Logistique Troyes";    country_code="FR"; not_corporate_site=$false },
+    @{ name="Hub Régional Casablanca";   country_code="MA"; not_corporate_site=$false },
+    @{ name="Espace Coworking Lyon";     country_code="FR"; not_corporate_site=$true }
+)
+$siteIDs = @{}
+foreach ($si in $siteItems) {
+    $r = PostJSON "$Base/admin/sites" $si
+    if ($r -and $r.id) {
+        $siteIDs[$si.name] = [int]$r.id
+        Write-Host "  Site '$($si.name)' [$($si.country_code)] id=$($r.id)"
+    } else {
+        Write-Warning "  Site '$($si.name)' may already exist"
+    }
+}
+if ($siteIDs.Count -eq 0) {
+    $existSites = Invoke-RestMethod "$Base/api/admin/sites" -Headers $jh -ErrorAction SilentlyContinue
+    if ($existSites) {
+        foreach ($es in $existSites) {
+            $siteIDs[$es.name] = [int]$es.id
+        }
+    }
+}
+
+$parisSiteId = if ($siteIDs["Siège Social Paris"]) { $siteIDs["Siège Social Paris"] } else { 0 }
 
 # Helper: generate a simple fallback PNG if no local image is provided
 function New-FloorplanPNG {
@@ -184,8 +212,8 @@ function New-FloorplanPNG {
     $g.FillRectangle($zoneFill, 442, 11, 230, 258); $g.DrawRectangle($divPen, 442, 11, 230, 258)
     $g.DrawString("Zone B", $font, $txtBrush, 510, 120)
     $g.FillRectangle($meetFill, 673, 11, $W-683, 258); $g.DrawRectangle($divPen, 673, 11, $W-683, 258)
-   
-       foreach ($obj in @($g,$wallPen,$divPen,$zoneFill,$meetFill,$corrFill,$txtBrush,$font,$fontSm)) { $obj.Dispose() }
+    $g.DrawString("Meeting", $font, $txtBrush, 720, 120)
+    foreach ($obj in @($g,$wallPen,$divPen,$zoneFill,$meetFill,$corrFill,$txtBrush,$font,$fontSm)) { $obj.Dispose() }
     $ms = [System.IO.MemoryStream]::new()
     $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png); $bmp.Dispose()
     $bytes = $ms.ToArray(); $ms.Dispose(); return $bytes
@@ -207,7 +235,7 @@ function Upload-FloorplanImage ($fpId, [byte[]]$imgBytes, [string]$filename = "f
 }
 
 Write-Host "`nCreating floorplan..."
-$fp = PostJSON "$Base/admin/floorplans" @{ name="HQ Open Space" }
+$fp = PostJSON "$Base/admin/floorplans" @{ name="HQ Open Space"; site_id=$parisSiteId }
 if ($fp -and $fp.id) {
     $fpID = [int]$fp.id
     Write-Host "  Floorplan id=$fpID"

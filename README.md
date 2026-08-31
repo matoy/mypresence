@@ -313,14 +313,19 @@ All statuses are fully editable from `/admin/statuses`. The **On-site** flag det
 
 ---
 
-## Floor Plans & Desk Reservations
+## Sites & Floor Plans
 
-The floor plan feature allows administrators to set up interactive office maps so users can book a specific desk directly from the calendar.
+### Sites Administration (`floorplan_manager` or `global` role required)
 
-### Admin setup (`floorplan_manager` role required)
+Navigate to **🏢 Sites** in the Admin dropdown (above Floorplans) to manage physical buildings and locations:
+- **Properties**: Name, country code (e.g. `FR`, `MA`, `CZ`), "Not a corporate site" flag, and attached floor plans.
+- **Filters**: Filter by text search (name, country), corporate type (Corporate only, Non-corporate only), and floor plans attachment status.
+- **Floor plan assignment**: Associate one or more floor plans to a site directly from the site creation/edition form or from the floor plans administration page.
 
-1. Go to **🗺️ Plans admin** in the navigation.
-2. Create one or more floor plans (e.g. *Floor 2*, *Open Space A*).
+### Floor Plans Admin setup (`floorplan_manager` role required)
+
+1. Go to **🗺️ Floorplans** in the Admin dropdown.
+2. Create one or more floor plans (e.g. *Floor 2*, *Open Space A*) and optionally select its attached **Site**.
 3. Upload a background image (PNG, JPG, GIF, or WEBP) for each plan.
 4. Click anywhere on the image to place a seat and give it a short label (e.g. `A1`, `B12`).
 5. Drag-hover over an existing seat pin and click × to remove it.

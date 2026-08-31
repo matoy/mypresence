@@ -619,9 +619,18 @@ func (d *DB) migrateFloorplan() error {
 	dt := dl.datetimeType()
 
 	stmts := []string{
+		dl.createTableIfNotExists("sites", fmt.Sprintf(`
+id %s,
+name %s NOT NULL,
+country_code %s NOT NULL DEFAULT '',
+not_corporate_site BOOLEAN NOT NULL DEFAULT 0,
+created_at %s DEFAULT CURRENT_TIMESTAMP
+`, ai, dl.varcharType(128), dl.varcharType(64), dt)),
+
 		dl.createTableIfNotExists("floorplans", fmt.Sprintf(`
 id %s,
 name %s NOT NULL,
+site_id BIGINT NOT NULL DEFAULT 0,
 image_path %s NOT NULL DEFAULT '',
 sort_order INTEGER NOT NULL DEFAULT 0
 `, ai, dl.varcharType(128), dl.varcharType(255))),
@@ -655,10 +664,17 @@ FOREIGN KEY (floorplan_id) REFERENCES floorplans(id) ON DELETE CASCADE
 	}
 
 	for _, stmt := range stmts {
+		if stmt == "" {
+			continue
+		}
 		if _, err := d.floorplan.Exec(dl.rebind(stmt)); err != nil {
 			return err
 		}
 	}
+
+	// Additive migrations
+	d.floorplan.Exec(dl.rebind(dl.addColumnIfNotExists("floorplans", "site_id", "BIGINT NOT NULL DEFAULT 0"))) //nolint:errcheck
+
 	return nil
 }
 
@@ -2462,10 +2478,149 @@ func resolveAdminLogEntityName(l models.AdminLog, teamNames, statusNames, holida
 	return ""
 }
 
+// --- Site management ---
+
+func (d *DB) CreateSite(s models.Site) (int64, error) {
+	id, err := d.floorplan.InsertGetID(
+		"INSERT INTO sites (name, country_code, not_corporate_site) VALUES (?, ?, ?)",
+		s.Name, s.CountryCode, s.NotCorporateSite,
+	)
+	if err != nil {
+		return 0, err
+	}
+	if len(s.FloorplanIDs) > 0 {
+		_ = d.SetSiteFloorplans(id, s.FloorplanIDs)
+	}
+	return id, nil
+}
+
+func (d *DB) GetSite(id int64) (*models.Site, error) {
+	var s models.Site
+	err := d.floorplan.QueryRow(
+		"SELECT id, name, country_code, not_corporate_site FROM sites WHERE id = ?", id,
+	).Scan(&s.ID, &s.Name, &s.CountryCode, &s.NotCorporateSite)
+	if err != nil {
+		return nil, err
+	}
+	fps, err := d.GetFloorplansBySite(id)
+	if err == nil {
+		s.Floorplans = fps
+		for _, fp := range fps {
+			s.FloorplanIDs = append(s.FloorplanIDs, fp.ID)
+		}
+	}
+	return &s, nil
+}
+
+func (d *DB) ListSites() ([]*models.Site, error) {
+	rows, err := d.floorplan.Query("SELECT id, name, country_code, not_corporate_site FROM sites ORDER BY name, id")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() //nolint:errcheck
+
+	var sites []*models.Site
+	siteMap := make(map[int64]*models.Site)
+	for rows.Next() {
+		var s models.Site
+		if err := rows.Scan(&s.ID, &s.Name, &s.CountryCode, &s.NotCorporateSite); err != nil {
+			return nil, err
+		}
+		s.Floorplans = []*models.Floorplan{}
+		s.FloorplanIDs = []int64{}
+		sites = append(sites, &s)
+		siteMap[s.ID] = &s
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Fetch all floorplans and populate their sites
+	allFps, err := d.ListFloorplans()
+	if err == nil {
+		for i := range allFps {
+			fp := &allFps[i]
+			if fp.SiteID > 0 {
+				if s, ok := siteMap[fp.SiteID]; ok {
+					s.Floorplans = append(s.Floorplans, fp)
+					s.FloorplanIDs = append(s.FloorplanIDs, fp.ID)
+				}
+			}
+		}
+	}
+
+	return sites, nil
+}
+
+func (d *DB) UpdateSite(s models.Site) error {
+	_, err := d.floorplan.Exec(
+		"UPDATE sites SET name = ?, country_code = ?, not_corporate_site = ? WHERE id = ?",
+		s.Name, s.CountryCode, s.NotCorporateSite, s.ID,
+	)
+	if err != nil {
+		return err
+	}
+	if s.FloorplanIDs != nil {
+		return d.SetSiteFloorplans(s.ID, s.FloorplanIDs)
+	}
+	return nil
+}
+
+func (d *DB) DeleteSite(id int64) error {
+	// Detach floorplans first
+	_, _ = d.floorplan.Exec("UPDATE floorplans SET site_id = 0 WHERE site_id = ?", id)
+	_, err := d.floorplan.Exec("DELETE FROM sites WHERE id = ?", id)
+	return err
+}
+
+func (d *DB) SetSiteFloorplans(siteID int64, floorplanIDs []int64) error {
+	// Reset any floorplans currently attached to this site
+	if _, err := d.floorplan.Exec("UPDATE floorplans SET site_id = 0 WHERE site_id = ?", siteID); err != nil {
+		return err
+	}
+	if len(floorplanIDs) == 0 {
+		return nil
+	}
+	for _, fpID := range floorplanIDs {
+		if _, err := d.floorplan.Exec("UPDATE floorplans SET site_id = ? WHERE id = ?", siteID, fpID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (d *DB) GetFloorplansBySite(siteID int64) ([]*models.Floorplan, error) {
+	rows, err := d.floorplan.Query(
+		`SELECT f.id, f.name, f.image_path, f.sort_order, f.site_id, COALESCE(s.name, '') AS site_name
+		FROM floorplans f
+		LEFT JOIN sites s ON f.site_id = s.id
+		WHERE f.site_id = ?
+		ORDER BY f.sort_order, f.id`, siteID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() //nolint:errcheck
+
+	var fps []*models.Floorplan
+	for rows.Next() {
+		var f models.Floorplan
+		if err := rows.Scan(&f.ID, &f.Name, &f.ImagePath, &f.SortOrder, &f.SiteID, &f.SiteName); err != nil {
+			return nil, err
+		}
+		fps = append(fps, &f)
+	}
+	return fps, rows.Err()
+}
+
 // --- Floorplan management ---
 
 func (d *DB) ListFloorplans() ([]models.Floorplan, error) {
-	rows, err := d.floorplan.Query("SELECT id, name, image_path, sort_order FROM floorplans ORDER BY sort_order, id")
+	rows, err := d.floorplan.Query(`
+		SELECT f.id, f.name, f.image_path, f.sort_order, f.site_id, COALESCE(s.name, '') AS site_name
+		FROM floorplans f
+		LEFT JOIN sites s ON f.site_id = s.id
+		ORDER BY f.sort_order, f.id`)
 	if err != nil {
 		return nil, err
 	}
@@ -2473,7 +2628,7 @@ func (d *DB) ListFloorplans() ([]models.Floorplan, error) {
 	var fps []models.Floorplan
 	for rows.Next() {
 		var f models.Floorplan
-		if err := rows.Scan(&f.ID, &f.Name, &f.ImagePath, &f.SortOrder); err != nil {
+		if err := rows.Scan(&f.ID, &f.Name, &f.ImagePath, &f.SortOrder, &f.SiteID, &f.SiteName); err != nil {
 			return nil, err
 		}
 		fps = append(fps, f)
@@ -2483,8 +2638,12 @@ func (d *DB) ListFloorplans() ([]models.Floorplan, error) {
 
 func (d *DB) GetFloorplan(id int64) (*models.Floorplan, error) {
 	var f models.Floorplan
-	err := d.floorplan.QueryRow("SELECT id, name, image_path, sort_order FROM floorplans WHERE id = ?", id).
-		Scan(&f.ID, &f.Name, &f.ImagePath, &f.SortOrder)
+	err := d.floorplan.QueryRow(`
+		SELECT f.id, f.name, f.image_path, f.sort_order, f.site_id, COALESCE(s.name, '') AS site_name
+		FROM floorplans f
+		LEFT JOIN sites s ON f.site_id = s.id
+		WHERE f.id = ?`, id).
+		Scan(&f.ID, &f.Name, &f.ImagePath, &f.SortOrder, &f.SiteID, &f.SiteName)
 	if err != nil {
 		return nil, err
 	}
@@ -2492,11 +2651,25 @@ func (d *DB) GetFloorplan(id int64) (*models.Floorplan, error) {
 }
 
 func (d *DB) CreateFloorplan(name string, sortOrder int) (int64, error) {
-	return d.floorplan.InsertGetID("INSERT INTO floorplans (name, sort_order) VALUES (?, ?)", name, sortOrder)
+	return d.CreateFloorplanWithSite(name, 0, sortOrder)
+}
+
+func (d *DB) CreateFloorplanWithSite(name string, siteID int64, sortOrder int) (int64, error) {
+	return d.floorplan.InsertGetID("INSERT INTO floorplans (name, site_id, sort_order) VALUES (?, ?, ?)", name, siteID, sortOrder)
 }
 
 func (d *DB) UpdateFloorplan(id int64, name string, sortOrder int) error {
 	_, err := d.floorplan.Exec("UPDATE floorplans SET name = ?, sort_order = ? WHERE id = ?", name, sortOrder, id)
+	return err
+}
+
+func (d *DB) UpdateFloorplanWithSite(id int64, name string, siteID int64, sortOrder int) error {
+	_, err := d.floorplan.Exec("UPDATE floorplans SET name = ?, site_id = ?, sort_order = ? WHERE id = ?", name, siteID, sortOrder, id)
+	return err
+}
+
+func (d *DB) UpdateFloorplanSite(id int64, siteID int64) error {
+	_, err := d.floorplan.Exec("UPDATE floorplans SET site_id = ? WHERE id = ?", siteID, id)
 	return err
 }
 

@@ -231,6 +231,9 @@ try {
     # 5b. Domains
     $cmdId = Take-Screenshot $ws $cmdId "$BaseUrl/admin/domains"        "05b-domains"  2500
 
+    # 5c. Sites
+    $cmdId = Take-Screenshot $ws $cmdId "$BaseUrl/admin/sites"          "05c-sites"    2500
+
     # 6. Holidays
     $cmdId = Take-Screenshot $ws $cmdId "$BaseUrl/admin/holidays"       "06-holidays"  2500
 
@@ -239,6 +242,9 @@ try {
 
     # 8. Floor plan
     $cmdId = Take-Screenshot $ws $cmdId "$BaseUrl/floorplan"            "08-floorplan" 4500
+
+    # 8b. Floorplans Admin
+    $cmdId = Take-Screenshot $ws $cmdId "$BaseUrl/admin/floorplans"     "08b-floorplans-admin" 2500
 
     # 9. Project time imputation (last month — filled in by the seed script)
     $cmdId = Take-Screenshot $ws $cmdId "$BaseUrl/projects?year=$ScreenshotYear&month=$ScreenshotMonth" "09-projects-imputation" 2500

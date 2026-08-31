@@ -138,7 +138,7 @@
                          x-data="{ adminMenuOpen: false }"
                          @click.outside="adminMenuOpen = false">
                         <button @click="adminMenuOpen = !adminMenuOpen"
-                                class="flex items-center gap-2 text-white/80 hover:text-white transition px-2 py-1 rounded-md {{if or (eq .Page "admin_floorplans") (eq .Page "admin_teams") (eq .Page "admin_domains") (eq .Page "admin_holidays") (eq .Page "admin_statuses") (eq .Page "admin_projects") (eq .Page "admin_users") (eq .Page "admin_user_logs") (eq .Page "admin_general_settings") (eq .Page "admin_news") (eq .Page "admin_notifications")}}bg-white/20 text-white{{end}}">
+                                class="flex items-center gap-2 text-white/80 hover:text-white transition px-2 py-1 rounded-md {{if or (eq .Page "admin_sites") (eq .Page "admin_floorplans") (eq .Page "admin_teams") (eq .Page "admin_domains") (eq .Page "admin_holidays") (eq .Page "admin_statuses") (eq .Page "admin_projects") (eq .Page "admin_users") (eq .Page "admin_user_logs") (eq .Page "admin_general_settings") (eq .Page "admin_news") (eq .Page "admin_notifications")}}bg-white/20 text-white{{end}}">
                             <span class="text-sm font-medium">Admin</span>
                             <svg class="h-3.5 w-3.5 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -159,14 +159,16 @@
                             </a>
                             {{end}}
                             {{if and (not .DisableFloorplans) (.User.HasRole "floorplan_manager")}}
+                            <a href="/admin/sites" class="flex items-center gap-2.5 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition {{if eq .Page "admin_sites"}}font-semibold{{end}}">
+                                {{index .T "nav.sites"}}
+                            </a>
                             <a href="/admin/floorplans" class="flex items-center gap-2.5 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition {{if eq .Page "admin_floorplans"}}font-semibold{{end}}">
                                 {{index .T "nav.floorplans_admin"}}
                             </a>
                             {{end}}
-                            {{if and (not .DisableProjects) (.User.HasRole "projects_manager")}}
-                            <a href="/admin/projects" class="flex items-center gap-2.5 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition {{if eq .Page "admin_projects"}}font-semibold{{end}}">
-                                <span aria-hidden="true">📂</span>
-                                {{index .T "nav.projects_manager"}}
+                            {{if .User.HasRole "global"}}
+                            <a href="/admin/domains" class="flex items-center gap-2.5 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition {{if eq .Page "admin_domains"}}font-semibold{{end}}">
+                                {{index .T "nav.domains"}}
                             </a>
                             {{end}}
                             {{if or (.User.HasRole "team_manager") .IsTeamLeader}}
@@ -174,9 +176,10 @@
                                 {{index .T "nav.teams"}}
                             </a>
                             {{end}}
-                            {{if .User.HasRole "global"}}
-                            <a href="/admin/domains" class="flex items-center gap-2.5 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition {{if eq .Page "admin_domains"}}font-semibold{{end}}">
-                                {{index .T "nav.domains"}}
+                            {{if and (not .DisableProjects) (.User.HasRole "projects_manager")}}
+                            <a href="/admin/projects" class="flex items-center gap-2.5 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition {{if eq .Page "admin_projects"}}font-semibold{{end}}">
+                                <span aria-hidden="true">📂</span>
+                                {{index .T "nav.projects_manager"}}
                             </a>
                             {{end}}
                             {{if .User.HasRole "global"}}
@@ -337,7 +340,14 @@
                     <a href="/admin/news" class="block text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">{{index .T "nav.news"}}</a>
                     {{end}}
                     {{if and (not .DisableFloorplans) (.User.HasRole "floorplan_manager")}}
+                    <a href="/admin/sites" class="block text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">{{index .T "nav.sites"}}</a>
                     <a href="/admin/floorplans" class="block text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">{{index .T "nav.floorplans_admin"}}</a>
+                    {{end}}
+                    {{if .User.HasRole "global"}}
+                    <a href="/admin/domains" class="block text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">{{index .T "nav.domains"}}</a>
+                    {{end}}
+                    {{if or (.User.HasRole "team_manager") .IsTeamLeader}}
+                    <a href="/admin/teams" class="block text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">{{index .T "nav.teams"}}</a>
                     {{end}}
                     {{if and (not .DisableProjects) (.User.HasRole "projects_manager")}}
                     <a href="/admin/projects" class="inline-flex items-center gap-1.5 text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">
@@ -350,12 +360,6 @@
                         </svg>
                         {{index .T "nav.projects_manager"}}
                     </a>
-                    {{end}}
-                    {{if or (.User.HasRole "team_manager") .IsTeamLeader}}
-                    <a href="/admin/teams" class="block text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">{{index .T "nav.teams"}}</a>
-                    {{end}}
-                    {{if .User.HasRole "global"}}
-                    <a href="/admin/domains" class="block text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">{{index .T "nav.domains"}}</a>
                     {{end}}
                     {{if .User.HasRole "global"}}
                     <a href="/admin/holidays" class="block text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">{{index .T "nav.holidays"}}</a>

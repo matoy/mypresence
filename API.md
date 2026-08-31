@@ -1009,27 +1009,110 @@ the domains they manage.
 
 ---
 
-### Floor Plan Admin _(requires `floorplan_manager` role)_
+### Sites Admin _(requires `floorplan_manager` or `global` role)_
 
-#### `POST /admin/floorplans`
-Create a new floor plan.
+Sites represent physical buildings, locations, or facilities. Floor plans can be attached to a site.
+
+#### `GET /api/admin/sites`
+List all sites with their associated floor plans and properties.
+
+**Response 200**
+```json
+[
+  {
+    "id": 1,
+    "name": "Headquarters Paris",
+    "country_code": "FR",
+    "not_corporate_site": false,
+    "floorplan_ids": [1, 2],
+    "floorplans": [
+      { "id": 1, "name": "1st Floor", "sort_order": 0, "site_id": 1, "site_name": "Headquarters Paris" }
+    ]
+  }
+]
+```
+
+#### `GET /api/admin/sites/{id}`
+Get details of a single site.
+
+**Response 200**
+```json
+{
+  "id": 1,
+  "name": "Headquarters Paris",
+  "country_code": "FR",
+  "not_corporate_site": false,
+  "floorplan_ids": [1, 2]
+}
+```
+
+#### `POST /admin/sites` (or `POST /api/admin/sites`)
+Create a new site.
 
 **Request**
 ```json
-{ "name": "HQ Open Space" }
+{
+  "name": "Troyes Logistics Center",
+  "country_code": "FR",
+  "not_corporate_site": false,
+  "floorplan_ids": [3]
+}
 ```
 
 **Response 200**
 ```json
-{ "id": 1, "name": "HQ Open Space" }
+{ "id": 2, "name": "Troyes Logistics Center" }
 ```
 
-#### `PUT /admin/floorplans/{id}`
-Rename a floor plan or change its display order.
+#### `PUT /admin/sites/{id}` (or `PUT /api/admin/sites/{id}`)
+Update an existing site and its linked floor plans.
 
 **Request**
 ```json
-{ "name": "HQ 3rd Floor", "sort_order": 0 }
+{
+  "name": "Troyes Logistics Center",
+  "country_code": "FR",
+  "not_corporate_site": true,
+  "floorplan_ids": [3, 4]
+}
+```
+
+**Response 200**
+```json
+{ "status": "ok" }
+```
+
+#### `DELETE /admin/sites/{id}` (or `DELETE /api/admin/sites/{id}`)
+Delete a site. Linked floor plans are detached (`site_id` reset to `0`), not deleted.
+
+**Response 200**
+```json
+{ "status": "ok" }
+```
+
+---
+
+### Floor Plan Admin _(requires `floorplan_manager` role)_
+
+#### `POST /admin/floorplans`
+Create a new floor plan (optionally attached to a site).
+
+**Request**
+```json
+{ "name": "HQ Open Space", "site_id": 1 }
+```
+
+**Response 200**
+```json
+{ "id": 1, "name": "HQ Open Space", "site_id": 1 }
+```
+
+#### `PUT /admin/floorplans/{id}`
+Rename a floor plan, change its site attachment or its display order.
+
+**Request**
+```json
+{ "name": "HQ 3rd Floor", "site_id": 1, "sort_order": 0 }
 ```
 
 **Response 200**

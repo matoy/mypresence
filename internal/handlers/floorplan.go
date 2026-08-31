@@ -228,17 +228,24 @@ func (h *FloorplanHandler) AdminFloorplansPage(w http.ResponseWriter, r *http.Re
 		seats, _ = h.DB.ListSeats(currentFP.ID)
 	}
 
+	sites, _ := h.DB.ListSites()
+	if sites == nil {
+		sites = []*models.Site{}
+	}
+
 	h.Render(w, r, "admin_floorplans", map[string]interface{}{
 		"Floorplans": floorplans,
 		"CurrentFP":  currentFP,
 		"Seats":      seats,
+		"Sites":      sites,
 	})
 }
 
 // CreateFloorplan handles POST /admin/floorplans.
 func (h *FloorplanHandler) CreateFloorplan(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name string `json:"name"`
+		Name   string `json:"name"`
+		SiteID int64  `json:"site_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		metrics.FloorplanOpsTotal.WithLabelValues("admin_floorplan", "failure").Inc()
@@ -252,7 +259,7 @@ func (h *FloorplanHandler) CreateFloorplan(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	fps, _ := h.DB.ListFloorplans()
-	id, err := h.DB.CreateFloorplan(req.Name, len(fps))
+	id, err := h.DB.CreateFloorplanWithSite(req.Name, req.SiteID, len(fps))
 	if err != nil {
 		metrics.FloorplanOpsTotal.WithLabelValues("admin_floorplan", "failure").Inc()
 		jsonError(w, "Erreur", http.StatusInternalServerError)
@@ -260,10 +267,10 @@ func (h *FloorplanHandler) CreateFloorplan(w http.ResponseWriter, r *http.Reques
 	}
 	actor := middleware.GetUser(r)
 	if actor != nil {
-		slog.Info("admin.floorplan.create", "actor", actor.Email, "floorplan_id", id, "name", req.Name)
+		slog.Info("admin.floorplan.create", "actor", actor.Email, "floorplan_id", id, "name", req.Name, "site_id", req.SiteID)
 	}
 	metrics.FloorplanOpsTotal.WithLabelValues("admin_floorplan", "success").Inc()
-	jsonOK(w, map[string]interface{}{"id": id, "name": req.Name})
+	jsonOK(w, map[string]interface{}{"id": id, "name": req.Name, "site_id": req.SiteID})
 }
 
 // AdminGetFloorplan handles GET /api/admin/floorplans/{id}.
@@ -304,6 +311,7 @@ func (h *FloorplanHandler) UpdateFloorplan(w http.ResponseWriter, r *http.Reques
 	var req struct {
 		Name      string `json:"name"`
 		SortOrder int    `json:"sort_order"`
+		SiteID    *int64 `json:"site_id"`
 	}
 	json.NewDecoder(r.Body).Decode(&req) //nolint:errcheck
 	req.Name = strings.TrimSpace(req.Name)
@@ -312,7 +320,13 @@ func (h *FloorplanHandler) UpdateFloorplan(w http.ResponseWriter, r *http.Reques
 		jsonError(w, "Name is required", http.StatusBadRequest)
 		return
 	}
-	if err := h.DB.UpdateFloorplan(id, req.Name, req.SortOrder); err != nil {
+	var err error
+	if req.SiteID != nil {
+		err = h.DB.UpdateFloorplanWithSite(id, req.Name, *req.SiteID, req.SortOrder)
+	} else {
+		err = h.DB.UpdateFloorplan(id, req.Name, req.SortOrder)
+	}
+	if err != nil {
 		metrics.FloorplanOpsTotal.WithLabelValues("admin_floorplan", "failure").Inc()
 		jsonError(w, "Erreur", http.StatusInternalServerError)
 		return

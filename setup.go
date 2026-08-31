@@ -126,7 +126,7 @@ func buildTemplateFuncMap(cfg *config.Config) template.FuncMap {
 func loadTemplates(funcMap template.FuncMap) map[string]*template.Template {
 	pages := []string{
 		"login", "calendar", "admin_teams", "admin_domains", "admin_statuses", "admin_activity",
-		"admin_holidays", "admin_users", "admin_user_logs", "floorplan", "admin_floorplans",
+		"admin_holidays", "admin_users", "admin_user_logs", "floorplan", "admin_floorplans", "admin_sites",
 		"pat", "settings_change_password", "settings_passkeys", "forgot_password", "reset_password",
 		"impersonate", "projects", "admin_projects", "admin_projects_report",
 		"admin_general_settings", "admin_news", "admin_notifications",

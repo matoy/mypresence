@@ -370,12 +370,39 @@ type AdminLog struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
+// Site represents a physical building/site with a country and linked floorplans.
+type Site struct {
+	ID               int64        `json:"id"`
+	Name             string       `json:"name"`
+	CountryCode      string       `json:"country_code"`
+	NotCorporateSite bool         `json:"not_corporate_site"`
+	FloorplanIDs     []int64      `json:"floorplan_ids,omitempty"`
+	Floorplans       []*Floorplan `json:"floorplans,omitempty"`
+}
+
+// CountryList returns the list of uppercase country codes for the site.
+func (s *Site) CountryList() []string {
+	if s == nil || s.CountryCode == "" {
+		return nil
+	}
+	var list []string
+	for _, c := range strings.Split(s.CountryCode, ",") {
+		c = strings.ToUpper(strings.TrimSpace(c))
+		if c != "" {
+			list = append(list, c)
+		}
+	}
+	return list
+}
+
 // Floorplan represents a floor map with seats.
 type Floorplan struct {
 	ID         int64  `json:"id"`
 	Name       string `json:"name"`
 	ImagePath  string `json:"image_path"`
 	SortOrder  int    `json:"sort_order"`
+	SiteID     int64  `json:"site_id"`
+	SiteName   string `json:"site_name,omitempty"`
 	IsFavorite bool   `json:"is_favorite,omitempty"`
 }
 

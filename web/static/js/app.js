@@ -1083,6 +1083,135 @@ function teamsAdmin(initialTeams, countriesCatalog, allUsers) {
 }
 
 // ============================================================
+// Admin: Sites management
+// ============================================================
+function sitesAdmin(initialSites) {
+    let sites = initialSites;
+    if (!sites) {
+        const el = document.getElementById('sites-json-data');
+        if (el && el.textContent) {
+            try { sites = JSON.parse(el.textContent); } catch (e) { sites = []; }
+        }
+    }
+    let allFloorplans = [];
+    const fpEl = document.getElementById('floorplans-json-data');
+    if (fpEl && fpEl.textContent) {
+        try { allFloorplans = JSON.parse(fpEl.textContent); } catch (e) { allFloorplans = []; }
+    }
+    let countriesCatalog = [];
+    const cEl = document.getElementById('countries-json-data');
+    if (cEl && cEl.textContent) {
+        try { countriesCatalog = JSON.parse(cEl.textContent); } catch (e) { countriesCatalog = []; }
+    }
+
+    return {
+        sites: sites || [],
+        allFloorplans: allFloorplans || [],
+        countriesCatalog: countriesCatalog || [],
+        filterText: '',
+        filterCorporate: 'all',
+        filterFloors: 'all',
+        showCreateModal: false,
+        createError: '',
+        newSiteName: '',
+        newSiteCountryCode: '',
+        newSiteNotCorporate: false,
+        newSiteFloorplanSearch: '',
+        newSiteFloorplanIds: [],
+
+        get totalCount() {
+            return (this.sites || []).length;
+        },
+
+        get filteredCount() {
+            return (this.sites || []).filter(s => {
+                const count = (s.floorplan_ids || s.floorplans || []).length;
+                return this.matchesSite(s.name, s.country_code, s.not_corporate_site, count);
+            }).length;
+        },
+
+        resetFilters() {
+            this.filterText = '';
+            this.filterCorporate = 'all';
+            this.filterFloors = 'all';
+        },
+
+        matchesSite(name, countryCode, notCorporate, floorCount) {
+            if (this.filterText) {
+                const q = this.filterText.toLowerCase();
+                const n = (name || '').toLowerCase();
+                const c = (countryCode || '').toLowerCase();
+                if (!n.includes(q) && !c.includes(q)) return false;
+            }
+            if (this.filterCorporate === 'corporate' && notCorporate) return false;
+            if (this.filterCorporate === 'non_corporate' && !notCorporate) return false;
+            if (this.filterFloors === 'with' && floorCount <= 0) return false;
+            if (this.filterFloors === 'empty' && floorCount > 0) return false;
+            return true;
+        },
+
+        isCountryInList(currentStr, code) {
+            if (!currentStr || !code) return false;
+            return currentStr.trim().toUpperCase() === code.trim().toUpperCase();
+        },
+
+        toggleCountryInList(currentStr, code) {
+            if (!code) return '';
+            const target = code.trim().toUpperCase();
+            return (currentStr || '').trim().toUpperCase() === target ? '' : target;
+        },
+
+        async createSite() {
+            this.createError = '';
+            if (!this.newSiteName.trim()) {
+                this.createError = _t['sites.error_name_required'] || 'Name is required';
+                return;
+            }
+            const r = await fetch('/admin/sites', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: this.newSiteName.trim(),
+                    country_code: (this.newSiteCountryCode || '').trim().toUpperCase(),
+                    not_corporate_site: !!this.newSiteNotCorporate,
+                    floorplan_ids: this.newSiteFloorplanIds
+                })
+            });
+            if (r.ok) {
+                this.showCreateModal = false;
+                window.location.reload();
+                return;
+            }
+            try {
+                const d = await r.json();
+                this.createError = _t[d.error] || d.error || 'Error';
+            } catch (e) {
+                this.createError = 'Error';
+            }
+        },
+
+        async saveSiteDetails(id, name, countryCode, notCorporate, floorplanIds) {
+            await fetch(`/admin/sites/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: (name || '').trim(),
+                    country_code: (countryCode || '').trim(),
+                    not_corporate_site: !!notCorporate,
+                    floorplan_ids: floorplanIds || []
+                })
+            });
+            window.location.reload();
+        },
+
+        async deleteSite(id) {
+            await fetch(`/admin/sites/${id}`, { method: 'DELETE' });
+            window.location.reload();
+        }
+    };
+}
+
+// ============================================================
 // Admin: Domains management
 // ============================================================
 function domainsAdmin(initialDomains) {

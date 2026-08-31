@@ -1,6 +1,6 @@
 {{define "content"}}
 {{with .Data}}
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" x-data="adminFloorplanApp({{json .Floorplans}})">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" x-data="adminFloorplanApp({{json .Floorplans}}, {{json .Sites}})">
 
     <div class="flex items-center justify-between mb-4">
         <h1 class="text-2xl font-bold text-gray-900">{{index $.T "fp.admin_title"}}</h1>
@@ -22,13 +22,21 @@
                 <!-- Create form -->
                 <div x-show="showCreate" x-cloak x-transition class="px-4 py-3 border-b border-gray-100 bg-gray-50">
                     <form @submit.prevent="createFloorplan()">
-                        <div class="flex gap-2">
-                        <input x-model="newName" type="text" placeholder="{{index $.T "fp.plan_name_ph"}}" required
-                               class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary/50">
-                            <button type="submit"
-                                    class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
-                                {{index $.T "admin.create"}}
-                            </button>
+                        <div class="space-y-2">
+                            <input x-model="newName" type="text" placeholder="{{index $.T "fp.plan_name_ph"}}" required
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary/50">
+                            <div class="flex gap-2">
+                                <select x-model.number="newSiteID" class="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-primary/50 bg-white">
+                                    <option value="0">{{index $.T "fp.no_site"}}</option>
+                                    {{range .Sites}}
+                                    <option value="{{.ID}}">🏢 {{.Name}}{{if .CountryCode}} ({{.CountryCode}}){{end}}</option>
+                                    {{end}}
+                                </select>
+                                <button type="submit"
+                                        class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
+                                    {{index $.T "admin.create"}}
+                                </button>
+                            </div>
                         </div>
                     </form>
                 </div>
@@ -40,16 +48,37 @@
                         <div class="flex items-center justify-between px-4 py-3 hover:bg-gray-50 cursor-pointer"
                              @click="selectFP({{.ID}}, '{{js .Name}}')"
                              :class="selectedFpID === {{.ID}} ? 'bg-primary/5 border-l-4 border-primary' : ''">
-                            <div>
-                                <div x-show="editingFpID !== {{.ID}}" class="font-medium text-gray-800 text-sm">{{.Name}}</div>
-                                <form x-show="editingFpID === {{.ID}}" @submit.prevent="renameFloorplan({{.ID}})" @click.stop>
+                            <div class="flex-1 min-w-0 pr-2">
+                                <div x-show="editingFpID !== {{.ID}}">
+                                    <div class="font-medium text-gray-800 text-sm truncate">{{.Name}}</div>
+                                    {{if .SiteName}}
+                                    <div class="flex items-center gap-1 mt-0.5 text-xs text-primary font-medium">
+                                        <span>🏢</span>
+                                        <span class="truncate">{{.SiteName}}</span>
+                                    </div>
+                                    {{end}}
+                                </div>
+                                <form x-show="editingFpID === {{.ID}}" @submit.prevent="renameFloorplan({{.ID}})" @click.stop class="space-y-1.5">
                                     <input x-ref="rn{{.ID}}" x-model="editName" type="text"
-                                           class="px-2 py-1 border border-primary rounded text-sm focus:outline-none"
-                                           @blur="editingFpID = null">
+                                           class="w-full px-2 py-1 border border-primary rounded text-sm focus:outline-none">
+                                    <div class="flex gap-1">
+                                        <select x-model.number="editSiteID" class="flex-1 px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none bg-white">
+                                            <option value="0">{{index $.T "fp.no_site"}}</option>
+                                            {{range $.Data.Sites}}
+                                            <option value="{{.ID}}">🏢 {{.Name}}{{if .CountryCode}} ({{.CountryCode}}){{end}}</option>
+                                            {{end}}
+                                        </select>
+                                        <button type="submit" class="text-xs px-2 py-1 bg-primary text-white rounded font-medium hover:opacity-90">
+                                            {{index $.T "admin.save"}}
+                                        </button>
+                                        <button type="button" @click="editingFpID = null" class="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded font-medium hover:bg-gray-200">
+                                            ✕
+                                        </button>
+                                    </div>
                                 </form>
                             </div>
-                            <div class="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition">
-                                <button @click.stop="startRename({{.ID}}, '{{js .Name}}')"
+                            <div class="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition shrink-0" x-show="editingFpID !== {{.ID}}">
+                                <button @click.stop="startRename({{.ID}}, '{{js .Name}}', {{.SiteID}})"
                                         class="p-1 hover:text-primary text-gray-400" title="Renommer">✏️</button>
                                 <button @click.stop="confirmDeleteFP({{.ID}}, '{{js .Name}}')"
                                         class="p-1 hover:text-red-500 text-gray-400" title="Supprimer">🗑️</button>
@@ -191,15 +220,18 @@
 </div>
 
 <script>
-function adminFloorplanApp(allFloorplans) {
+function adminFloorplanApp(allFloorplans, allSites) {
     return {
         allFloorplans: allFloorplans || [],
+        allSites: allSites || [],
         showCreate: false,
         newName: '',
+        newSiteID: 0,
         selectedFpID: 0,
         selectedFpName: '',
         editingFpID: null,
         editName: '',
+        editSiteID: 0,
         currentImage: null,
         currentSeats: [],
         cacheBust: Date.now(),
@@ -237,7 +269,7 @@ function adminFloorplanApp(allFloorplans) {
             const resp = await fetch('/admin/floorplans', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: this.newName.trim() })
+                body: JSON.stringify({ name: this.newName.trim(), site_id: this.newSiteID || 0 })
             });
             if (resp.ok) {
                 this.showToast(_t['fp.plans']);
@@ -248,9 +280,10 @@ function adminFloorplanApp(allFloorplans) {
             }
         },
 
-        startRename(id, name) {
+        startRename(id, name, siteId) {
             this.editingFpID = id;
             this.editName = name;
+            this.editSiteID = siteId || 0;
             this.$nextTick(() => {
                 const el = this.$refs[`rn${id}`];
                 if (el) el.focus();
@@ -262,7 +295,7 @@ function adminFloorplanApp(allFloorplans) {
             const resp = await fetch(`/admin/floorplans/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: this.editName.trim() })
+                body: JSON.stringify({ name: this.editName.trim(), site_id: this.editSiteID || 0 })
             });
             if (resp.ok) {
                 this.showToast(_t['fp.plans']);
