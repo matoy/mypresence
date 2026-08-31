@@ -526,6 +526,9 @@
                         {{if and (not .DisableFloorplans) (.User.HasRole "floorplan_manager")}}
                         <option value="admin_floorplans">{{index $.T "help.topic.admin_floorplans.title"}}</option>
                         {{end}}
+                        {{if or (and (not .DisableFloorplans) (.User.HasRole "floorplan_manager")) (.User.HasRole "global")}}
+                        <option value="admin_sites">{{index $.T "help.topic.admin_sites.title"}}</option>
+                        {{end}}
                         {{if and (not .DisableProjects) (.User.HasRole "projects_manager")}}
                         <option value="admin_projects">{{index $.T "help.topic.admin_projects.title"}}</option>
                         {{end}}
@@ -660,6 +663,20 @@
                     </div>
                     <div class="space-y-2.5">
                         <div class="p-3 rounded-xl bg-gray-50 border border-gray-100"><p class="text-xs text-gray-700 leading-relaxed">{{index $.T "help.topic.admin_floorplans.item1"}}</p></div>
+                    </div>
+                </div>
+                {{end}}
+
+                {{if or (and (not .DisableFloorplans) (.User.HasRole "floorplan_manager")) (.User.HasRole "global")}}
+                <!-- Sites Admin -->
+                <div x-show="topic === 'admin_sites'" class="space-y-4">
+                    <div>
+                        <h4 class="text-base font-bold text-gray-900 mb-1">{{index $.T "help.topic.admin_sites.title"}}</h4>
+                        <p class="text-xs text-gray-500 leading-relaxed">{{index $.T "help.topic.admin_sites.desc"}}</p>
+                    </div>
+                    <div class="space-y-2.5">
+                        <div class="p-3 rounded-xl bg-gray-50 border border-gray-100"><p class="text-xs text-gray-700 leading-relaxed">{{index $.T "help.topic.admin_sites.item1"}}</p></div>
+                        <div class="p-3 rounded-xl bg-gray-50 border border-gray-100"><p class="text-xs text-gray-700 leading-relaxed">{{index $.T "help.topic.admin_sites.item2"}}</p></div>
                     </div>
                 </div>
                 {{end}}

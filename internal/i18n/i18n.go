@@ -734,7 +734,7 @@ var en = map[string]string{
 	"help.general_hint":  "Need more assistance? Contact your team manager or system administrator.",
 
 	"help.topic.calendar.title": "📅 Calendar & Presence Declaration",
-	"help.topic.calendar.desc":  "Declare your daily presences (office, remote, leave, illness...), view team schedules and certify your monthly presence sheet. Public holidays adapt automatically to your team's countries.",
+	"help.topic.calendar.desc":  "Declare your daily presences (office, remote, leave, illness...), view team schedules and certify your monthly presence sheet. Public holidays adapt automatically according to your assigned physical site's country.",
 	"help.topic.calendar.item1": "🖱️ Left-Click & Drag Selection: Click any working day to open the status palette. Click and drag across multiple days to assign a status in bulk.",
 	"help.topic.calendar.item2": "🖱️ Right-Click (Context Menu): Right-click on a day to declare half-days (AM / PM) or export/add your declared presence to your external calendar (.ics / Outlook).",
 	"help.topic.calendar.item3": "🚀 Progress & Monthly Certification: The progress bar tracks declared days versus working days. Once 100% of working days are declared, click 'Certify' to confirm and lock your month.",
@@ -748,8 +748,8 @@ var en = map[string]string{
 	"help.topic.floorplan.item4": "⭐ Favorite Floors: Click the star next to the floor dropdown on the floorplan page to mark an office floor as your favorite. Favorite floors appear at the top of floor dropdowns across the app.",
 
 	"help.topic.projects.title": "📂 Projects & Tasks Timesheets",
-	"help.topic.projects.desc":  "Declare working time across projects or daily tasks, monitor declared days against worked capacity, and certify your month.",
-	"help.topic.projects.item1": "⚙️ Entry Modes: In standard mode, enter total monthly days per project. In daily tasks mode, record detailed day-by-day activities (Jira, ServiceNow, Other).",
+	"help.topic.projects.desc":  "Declare working time across projects or daily tasks, monitor declared days against worked capacity, and certify your month. Non-worked days (weekends, holidays, leaves) can be hidden.",
+	"help.topic.projects.item1": "⚙️ Entry Modes: In standard mode, enter total monthly days per project. In daily tasks mode, record detailed day-by-day activities (Jira, ServiceNow, Other). Non-worked days are automatically greyed out.",
 	"help.topic.projects.item2": "⚡ Percentage Presets & Batch Save: In tasks mode, use the 25%, 50%, and 100% buttons to fill activity time quickly, and save all activities of the day with a single button.",
 	"help.topic.projects.item3": "💬 Jira Tickets & Comments: Link tasks to Jira issues or add descriptive comments (mandatory if required by your team settings).",
 	"help.topic.projects.item4": "🚀 Project Certification: Once your total declared time equals your worked days cap, click 'Certify' to validate your project timesheet.",
@@ -766,8 +766,8 @@ var en = map[string]string{
 	"help.topic.admin_projects_report.item2": "🔓 Decertification: Authorized managers can decertify a validated month to allow users to correct time declarations.",
 
 	"help.topic.admin_teams.title": "👥 Teams Administration",
-	"help.topic.admin_teams.desc":  "Create and manage teams, assign memberships, configure member countries for localized holidays, and configure timesheet policies.",
-	"help.topic.admin_teams.item1": "⚙️ Timesheet & Country Configuration: Toggle manual daily tasks mode, configure Jira Space Key, assign member countries for public holidays, and enforce mandatory activity comments.",
+	"help.topic.admin_teams.desc":  "Create and manage teams, assign memberships, attach members to physical sites for localized holidays, and configure timesheet policies.",
+	"help.topic.admin_teams.item1": "⚙️ Timesheet & Site Assignment: Toggle manual daily tasks mode, configure Jira Space Key, enforce mandatory comments, and attach each member to a physical site with a searchable dropdown grouped by country.",
 	"help.topic.admin_teams.item2": "👤 Managers & Departure Dates: Assign Team Managers and Team Leaders, and record departure dates when members leave.",
 
 	"help.topic.admin_statuses.title": "🏷️ Presence Statuses",
@@ -778,6 +778,11 @@ var en = map[string]string{
 	"help.topic.admin_floorplans.title": "🗺️ Floorplans Editor",
 	"help.topic.admin_floorplans.desc":  "Upload floorplan blueprint images and position interactive desks for seat reservations.",
 	"help.topic.admin_floorplans.item1": "🖱️ Desk Layout: Add desks, drag to position them on the map, resize, and assign desk identifiers.",
+
+	"help.topic.admin_sites.title": "🏢 Physical Sites & Offices",
+	"help.topic.admin_sites.desc":  "Manage physical company sites, link each site to its country, identify external/coworking locations, and organize attached floorplans.",
+	"help.topic.admin_sites.item1": "🏢 Site Configuration: Define name, country code, external/coworking tag, and floorplans for desk reservations.",
+	"help.topic.admin_sites.item2": "👥 Member Linkage: When team members are assigned to a site, their country and localized public holidays are automatically derived.",
 
 	"help.topic.admin_projects.title": "📂 Projects Administration",
 	"help.topic.admin_projects.desc":  "Create project codes, manage project visibility, and assign allowed members.",
@@ -793,7 +798,7 @@ var en = map[string]string{
 	"help.topic.admin_domains.item1": "🏢 Domain Scoping: Domain managers can view activity reports and project metrics for all teams in their domain.",
 
 	"help.topic.admin_holidays.title": "🎌 Public Holidays",
-	"help.topic.admin_holidays.desc":  "Configure public holidays (optionally assigned to specific countries) and define whether work can be exceptionally declared on those dates.",
+	"help.topic.admin_holidays.desc":  "Configure public holidays (global or assigned to specific countries) and define whether work can be exceptionally declared on those dates. Holidays apply to users according to their assigned site.",
 	"help.topic.admin_holidays.item1": "🎌 Holiday Rules: Set name, date, optional country code (e.g. FR, MA, CZ, or Global), and toggle whether users are allowed to impute presence/projects on that day.",
 
 	"help.topic.admin_general_settings.title": "⚙️ General Settings & Branding",
@@ -1480,7 +1485,7 @@ var fr = map[string]string{
 	"help.general_hint":  "Besoin d'une aide supplémentaire ? Contactez votre responsable d'équipe ou l'administrateur.",
 
 	"help.topic.calendar.title": "📅 Calendrier & Déclaration de présence",
-	"help.topic.calendar.desc":  "Déclarez vos présences quotidiennes (bureau, télétravail, congés, maladie...), consultez les plannings d'équipe et certifiez votre feuille du mois. Les jours fériés s'adaptent automatiquement selon les pays de votre équipe.",
+	"help.topic.calendar.desc":  "Déclarez vos présences quotidiennes (bureau, télétravail, congés, maladie...), consultez les plannings d'équipe et certifiez votre feuille du mois. Les jours fériés s'adaptent automatiquement selon le pays de votre site de rattachement.",
 	"help.topic.calendar.item1": "🖱️ Clic gauche & Sélection glissée : Cliquez sur un jour ouvré pour ouvrir la palette de statuts. Cliquez et glissez sur plusieurs jours pour attribuer un statut en masse.",
 	"help.topic.calendar.item2": "🖱️ Clic droit (Menu contextuel) : Faites un clic droit sur une journée pour déclarer une demi-journée (Matin AM / Après-midi PM) ou pour exporter/ajouter vos présences à votre calendrier externe (.ics / Outlook).",
 	"help.topic.calendar.item3": "🚀 Progression & Certification mensuelle : La barre de progression compare les jours déclarés aux jours ouvrés. Une fois tous les jours ouvrés renseignés, cliquez sur 'Certifier' pour valider et verrouiller votre mois.",
@@ -1494,8 +1499,8 @@ var fr = map[string]string{
 	"help.topic.floorplan.item4": "⭐ Étages favoris : Cliquez sur l'étoile à côté du sélecteur d'étage sur la page des plans pour définir vos étages favoris. Vos favoris s'affichent automatiquement en tête des listes déroulantes.",
 
 	"help.topic.projects.title": "📂 Déclaration des Projets & Tâches",
-	"help.topic.projects.desc":  "Déclarez votre temps de travail sur les projets ou tâches quotidiennes, suivez votre capacité travaillée et certifiez votre récapitulatif mensuel.",
-	"help.topic.projects.item1": "⚙️ Modes de saisie : En mode classique, saisissez le total de jours par projet. En mode tâches manuelles, détaillez vos activités au jour le jour (Jira, ServiceNow, Autre).",
+	"help.topic.projects.desc":  "Déclarez votre temps de travail sur les projets ou tâches quotidiennes, suivez votre capacité travaillée et certifiez votre récapitulatif mensuel. Les jours non travaillés (week-ends, fériés, congés) peuvent être masqués.",
+	"help.topic.projects.item1": "⚙️ Modes de saisie : En mode classique, saisissez le total de jours par projet. En mode tâches manuelles, détaillez vos activités au jour le jour (Jira, ServiceNow, Autre). Les jours non travaillés sont automatiquement grisés.",
 	"help.topic.projects.item2": "⚡ Presets & Sauvegarde par jour : En mode tâches, utilisez les boutons 25%, 50% et 100% pour ajuster rapidement les pourcentages, et enregistrez l'ensemble des activités d'un jour en un clic.",
 	"help.topic.projects.item3": "💬 Tickets Jira & Commentaires : Associez vos tâches à un ticket Jira ou saisissez un commentaire (obligatoire selon la configuration de votre équipe).",
 	"help.topic.projects.item4": "🚀 Certification projet : Lorsque votre temps déclaré atteint 100% de vos jours ouvrés/travaillés, cliquez sur 'Certifier' pour valider la feuille de projets.",
@@ -1512,8 +1517,8 @@ var fr = map[string]string{
 	"help.topic.admin_projects_report.item2": "🔓 Décertification : Les managers autorisés peuvent déverrouiller un mois certifié afin de permettre à un utilisateur de corriger une erreur.",
 
 	"help.topic.admin_teams.title": "👥 Administration des Équipes",
-	"help.topic.admin_teams.desc":  "Créez et gérez les équipes, affectez les membres, configurez les pays des membres pour les jours fériés localisés et définissez les politiques de saisie.",
-	"help.topic.admin_teams.item1": "⚙️ Configuration des équipes et pays : Activez la saisie par tâches, configurez la clé Jira, renseignez les pays des membres pour les jours fériés et imposez des commentaires.",
+	"help.topic.admin_teams.desc":  "Créez et gérez les équipes, affectez les membres, rattachez chaque membre à un site physique pour ses jours fériés et définissez les politiques de saisie.",
+	"help.topic.admin_teams.item1": "⚙️ Configuration & Sites de rattachement : Activez la saisie par tâches, configurez la clé Jira, imposez des commentaires et affectez chaque membre à son site physique via un menu déroulant searchable par pays.",
 	"help.topic.admin_teams.item2": "👤 Managers & Dates de départ : Nommez les Team Managers / Team Leaders et renseignez la date de départ lorsqu'un membre quitte l'équipe.",
 
 	"help.topic.admin_statuses.title": "🏷️ Statuts de présence",
@@ -1524,6 +1529,11 @@ var fr = map[string]string{
 	"help.topic.admin_floorplans.title": "🗺️ Éditeur de Plans d'étage",
 	"help.topic.admin_floorplans.desc":  "Importez l'image du plan de masse et positionnez les bureaux interactifs disponibles à la réservation.",
 	"help.topic.admin_floorplans.item1": "🖱️ Placement des postes : Ajoutez des bureaux, déplacez-les sur le plan, ajustez leur taille et attribuez un numéro.",
+
+	"help.topic.admin_sites.title": "🏢 Sites physiques",
+	"help.topic.admin_sites.desc":  "Gérez les sites physiques et locaux de l'entreprise, associez chaque site à un pays, identifiez les sites externes/coworking et organisez les plans d'étage associés.",
+	"help.topic.admin_sites.item1": "🏢 Configuration des sites : Définissez le nom, le code pays, le type de site (externe/coworking) et les plans d'étage pour les réservations de bureaux.",
+	"help.topic.admin_sites.item2": "👥 Rattachement des collaborateurs : Lorsqu'un membre est rattaché à un site, son pays et ses jours fériés applicables sont automatiquement déduits.",
 
 	"help.topic.admin_projects.title": "📂 Administration des Projets",
 	"help.topic.admin_projects.desc":  "Créez les codes projets, gérez leur visibilité et assignez des membres autorisés.",
@@ -1539,7 +1549,7 @@ var fr = map[string]string{
 	"help.topic.admin_domains.item1": "🏢 Périmètre domaine : Les domain managers accèdent aux rapports d'activité et projets de toutes les équipes de leur domaine.",
 
 	"help.topic.admin_holidays.title": "🎌 Jours fériés",
-	"help.topic.admin_holidays.desc":  "Configurez les jours fériés (optionnellement affectés à des pays) et définissez si des imputations exceptionnelles y sont autorisées.",
+	"help.topic.admin_holidays.desc":  "Configurez les jours fériés (mondiaux ou affectés à des pays) et définissez si des imputations exceptionnelles y sont autorisées. Ils s'appliquent aux utilisateurs selon leur site de rattachement.",
 	"help.topic.admin_holidays.item1": "🎌 Règles fériés : Définissez le libellé, la date, le pays associé (ex. FR, MA, CZ, ou Mondial) et l'autorisation d'imputer du temps ouvré/projet ce jour-là.",
 
 	"help.topic.admin_general_settings.title": "⚙️ Paramètres généraux & Personnalisation",
@@ -2227,7 +2237,7 @@ var de = map[string]string{
 	"help.general_hint":  "Benötigen Sie weitere Unterstützung? Wenden Sie sich an Ihren Teamleiter oder Administrator.",
 
 	"help.topic.calendar.title": "📅 Kalender & Anwesenheitserfassung",
-	"help.topic.calendar.desc":  "Erfassen Sie Ihre täglichen Anwesenheiten (Büro, Homeoffice, Urlaub, Krankheit...), sehen Sie Teampläne ein und zertifizieren Sie Ihren Monatsnachweis. Feiertage passen sich automatisch den Ländern Ihres Teams an.",
+	"help.topic.calendar.desc":  "Erfassen Sie Ihre täglichen Anwesenheiten (Büro, Homeoffice, Urlaub, Krankheit...), sehen Sie Teampläne ein und zertifizieren Sie Ihren Monatsnachweis. Feiertage passen sich automatisch dem Land Ihres zugewiesenen Standorts an.",
 	"help.topic.calendar.item1": "🖱️ Linksklick & Ziehauswahl: Klicken Sie auf einen Arbeitstag, um die Statusauswahl zu öffnen. Klicken und ziehen Sie über mehrere Tage, um den Status gesammelt zuzuweisen.",
 	"help.topic.calendar.item2": "🖱️ Rechtsklick (Kontextmenü): Rechtsklicken Sie auf einen Tag, um Halbtage (Vormittag AM / Nachmittag PM) zu erfassen oder den Eintrag in Ihren externen Kalender (.ics / Outlook) zu exportieren.",
 	"help.topic.calendar.item3": "🚀 Fortschritt & Monatszertifizierung: Der Fortschrittsbalken vergleicht erfasste mit regulären Arbeitstagen. Sobald alle Tage erfasst sind, klicken Sie auf 'Zertifizieren', um den Monat abzuschließen.",
@@ -2241,8 +2251,8 @@ var de = map[string]string{
 	"help.topic.floorplan.item4": "⭐ Favorisierte Stockwerke: Klicken Sie auf den Stern neben der Stockwerkauswahl auf der Grundrissseite, um ein Stockwerk als Favorit zu markieren. Favoriten werden in Dropdown-Menüs oben angezeigt.",
 
 	"help.topic.projects.title": "📂 Projekte & Aufgaben Zeiterfassung",
-	"help.topic.projects.desc":  "Erfassen Sie Ihre Arbeitszeiten auf Projekten oder täglichen Aufgaben, überwachen Sie Ihr Projektkontingent und zertifizieren Sie den Monat.",
-	"help.topic.projects.item1": "⚙️ Erfassungsmodi: Im Standardmodus erfassen Sie Monatstage pro Projekt. Im Aufgabenmodus erfassen Sie detaillierte tägliche Aktivitäten (Jira, ServiceNow, Sonstige).",
+	"help.topic.projects.desc":  "Erfassen Sie Ihre Arbeitszeiten auf Projekten oder täglichen Aufgaben, überwachen Sie Ihr Projektkontingent und zertifizieren Sie den Monat. Nicht gearbeitete Tage (Wochenenden, Feiertage, Urlaub) können ausgeblendet werden.",
+	"help.topic.projects.item1": "⚙️ Erfassungsmodi: Im Standardmodus erfassen Sie Monatstage pro Projekt. Im Aufgabenmodus erfassen Sie detaillierte tägliche Aktivitäten (Jira, ServiceNow, Sonstige). Nicht gearbeitete Tage werden automatisch ausgegraut.",
 	"help.topic.projects.item2": "⚡ Prozent-Voreinstellungen & Tagesspeicherung: Nutzen Sie im Aufgabenmodus die Tasten 25%, 50% und 100% und speichern Sie alle Aktivitäten eines Tages mit einem Klick.",
 	"help.topic.projects.item3": "💬 Jira-Tickets & Kommentare: Verknüpfen Sie Aufgaben mit Jira-Tickets oder ergänzen Sie Kommentare (verpflichtend je nach Teameinstellung).",
 	"help.topic.projects.item4": "🚀 Projektzertifizierung: Sobald Ihre erfasste Zeit 100% Ihrer gearbeiteten Tage entspricht, klicken Sie auf 'Zertifizieren'.",
@@ -2259,8 +2269,8 @@ var de = map[string]string{
 	"help.topic.admin_projects_report.item2": "🔓 Entzertifizierung: Autorisierte Manager können einen zertifizierten Monat entsperren, um Korrekturen zu ermöglichen.",
 
 	"help.topic.admin_teams.title": "👥 Teamverwaltung",
-	"help.topic.admin_teams.desc":  "Erstellen und verwalten Sie Teams, weisen Sie Mitglieder zu, konfigurieren Sie Mitgliedsländer für lokale Feiertage und Richtlinien.",
-	"help.topic.admin_teams.item1": "⚙️ Team- & Länderkonfiguration: Aufgabenmodus umschalten, Jira-Schlüssel festlegen, Mitgliedsländer für Feiertage zuweisen und Kommentare erzwingen.",
+	"help.topic.admin_teams.desc":  "Erstellen und verwalten Sie Teams, weisen Sie Mitglieder zu, verknüpfen Sie Mitglieder mit physischen Standorten für lokale Feiertage und definieren Sie Zeiterfassungsrichtlinien.",
+	"help.topic.admin_teams.item1": "⚙️ Konfiguration & Standortzuweisung: Aufgabenmodus umschalten, Jira-Schlüssel festlegen, Kommentare erzwingen und Mitglieder über ein nach Ländern gruppiertes Dropdown Standorten zuweisen.",
 	"help.topic.admin_teams.item2": "👤 Leiter & Austrittsdaten: Weisen Sie Teamleiter zu und hinterlegen Sie Austrittsdaten.",
 
 	"help.topic.admin_statuses.title": "🏷️ Anwesenheitsstatus",
@@ -2271,6 +2281,11 @@ var de = map[string]string{
 	"help.topic.admin_floorplans.title": "🗺️ Grundriss-Editor",
 	"help.topic.admin_floorplans.desc":  "Laden Sie Raumpläne hoch und positionieren Sie interaktive Schreibtische.",
 	"help.topic.admin_floorplans.item1": "🖱️ Schreibtischplatzierung: Fügen Sie Plätze hinzu, verschieben und skalieren Sie diese auf dem Plan.",
+
+	"help.topic.admin_sites.title": "🏢 Physische Standorte",
+	"help.topic.admin_sites.desc":  "Verwalten Sie Standorte und Büros, weisen Sie jedem Standort ein Land zu, kennzeichnen Sie externe Standorte und organisieren Sie Grundrisse.",
+	"help.topic.admin_sites.item1": "🏢 Standortkonfiguration: Name, Ländercode, externer Standort-Tag und zugeordnete Grundrisse für Platzbuchungen festlegen.",
+	"help.topic.admin_sites.item2": "👥 Mitgliederzuordnung: Weist man Mitgliedern einen Standort zu, werden ihr Land und lokale Feiertage automatisch abgeleitet.",
 
 	"help.topic.admin_projects.title": "📂 Projektverwaltung",
 	"help.topic.admin_projects.desc":  "Verwalten Sie Projektcodes, Sichtbarkeit und berechtigte Mitglieder.",
@@ -2286,7 +2301,7 @@ var de = map[string]string{
 	"help.topic.admin_domains.item1": "🏢 Bereichsübersicht: Bereichsleiter erhalten aggregierte Berichte über alle zugehörigen Teams.",
 
 	"help.topic.admin_holidays.title": "🎌 Feiertage",
-	"help.topic.admin_holidays.desc":  "Verwalten Sie gesetzliche Feiertage (optional nach Ländern) und erlauben Sie bei Bedarf Ausnahmen.",
+	"help.topic.admin_holidays.desc":  "Verwalten Sie gesetzliche Feiertage (global oder länderspezifisch) und Erfassungsausnahmen. Feiertage gelten gemäß dem Standort des Benutzers.",
 	"help.topic.admin_holidays.item1": "🎌 Feiertagsregeln: Definieren Sie Datum, Name, Land (z.B. FR, MA, CZ oder Global) und Ausnahmeerfassungen.",
 
 	"help.topic.admin_general_settings.title": "⚙️ Allgemeine Einstellungen & Design",
@@ -2968,7 +2983,7 @@ var es = map[string]string{
 	"help.general_hint":  "¿Necesita más ayuda? Póngase en contacto con su responsable de equipo o el administrador.",
 
 	"help.topic.calendar.title": "📅 Calendario y declaración de presencia",
-	"help.topic.calendar.desc":  "Declare sus presencias diarias (oficina, teletrabajo, vacaciones, enfermedad...), consulte los horarios del equipo y certifique su hoja mensual. Los días festivos se adaptan automáticamente a los países de su equipo.",
+	"help.topic.calendar.desc":  "Declare sus presencias diarias (oficina, teletrabajo, vacaciones, enfermedad...), consulte los horarios del equipo y certifique su hoja mensual. Los días festivos se adaptan automáticamente según el país de su sede física asignada.",
 	"help.topic.calendar.item1": "🖱️ Clic izquierdo y arrastrar: Haga clic en un día laborable para abrir la paleta de estados. Arrastre por varios días para asignar un estado en lote.",
 	"help.topic.calendar.item2": "🖱️ Clic derecho (Menú contextual): Haga clic derecho en un día para registrar medios días (Mañana AM / Tarde PM) o exportar/añadir sus presencias a su calendario externo (.ics / Outlook).",
 	"help.topic.calendar.item3": "🚀 Progreso y certificación mensual: La barra de progreso compara los días declarados con los días laborables. Cuando todos los días estén completos, pulse 'Certificar' para validar el mes.",
@@ -2982,8 +2997,8 @@ var es = map[string]string{
 	"help.topic.floorplan.item4": "⭐ Plantas favoritas: Haga clic en la estrella junto al selector de planta en la página de planos para marcar su planta favorita. Las plantas favoritas aparecen primero en los menús desplegables.",
 
 	"help.topic.projects.title": "📂 Imputación de proyectos y tareas",
-	"help.topic.projects.desc":  "Declare su tiempo de trabajo en proyectos o tareas diarias, controle sus días trabajados y certifique el mes.",
-	"help.topic.projects.item1": "⚙️ Modos de entrada: En el modo estándar, introduzca el total de días por proyecto. En el modo de tareas diarias, desglose sus actividades día a día (Jira, ServiceNow, Otro).",
+	"help.topic.projects.desc":  "Declare su tiempo de trabajo en proyectos o tareas diarias, controle sus días trabajados y certifique el mes. Los días no trabajados (fines de semana, festivos, permisos) pueden ocultarse.",
+	"help.topic.projects.item1": "⚙️ Modos de entrada: En el modo estándar, introduzca el total de días por proyecto. En el modo de tareas diarias, desglose sus actividades día a día (Jira, ServiceNow, Otro). Los días no trabajados se muestran en gris automáticamente.",
 	"help.topic.projects.item2": "⚡ Ajustes rápidos y guardado diario: En el modo de tareas, utilice los botones de 25%, 50% y 100% para asignar porcentajes rápidamente y guarde el día con un solo clic.",
 	"help.topic.projects.item3": "💬 Tickets de Jira y comentarios: Vincule tareas a incidencias de Jira o añada comentarios (obligatorio según la configuración de su equipo).",
 	"help.topic.projects.item4": "🚀 Certificación de proyectos: Cuando el tiempo declarado iguale su total de días laborables/trabajados, pulse 'Certificar'.",
@@ -3000,8 +3015,8 @@ var es = map[string]string{
 	"help.topic.admin_projects_report.item2": "🔓 Descertificación: Los responsables autorizados pueden descertificar un mes para permitir correcciones.",
 
 	"help.topic.admin_teams.title": "👥 Administración de equipos",
-	"help.topic.admin_teams.desc":  "Cree y gestione equipos, asigne miembros, configure países miembros para días festivos localizados y establezca políticas de imputación.",
-	"help.topic.admin_teams.item1": "⚙️ Configuración de equipo y países: Active el modo de tareas diarias, configure la clave Jira, asigne países para días festivos y exija comentarios obligatorios.",
+	"help.topic.admin_teams.desc":  "Cree y gestione equipos, asigne miembros, vincule miembros a sedes físicas para festivos localizados y configure políticas de imputación.",
+	"help.topic.admin_teams.item1": "⚙️ Configuración y asignación de sede: Active el modo de tareas diarias, configure la clave Jira, exija comentarios y asigne cada miembro a su sede física mediante un menú desplegable por países.",
 	"help.topic.admin_teams.item2": "👤 Responsables y fechas de salida: Asigne Team Managers / Team Leaders e introduzca la fecha de salida de un miembro.",
 
 	"help.topic.admin_statuses.title": "🏷️ Estados de presencia",
@@ -3012,6 +3027,11 @@ var es = map[string]string{
 	"help.topic.admin_floorplans.title": "🗺️ Editor de planos",
 	"help.topic.admin_floorplans.desc":  "Suba planos de planta y posicione los escritorios interactivos para su reserva.",
 	"help.topic.admin_floorplans.item1": "🖱️ Distribución de puestos: Añada puestos, muévalos en el plano, ajuste su tamaño y asigne identificadores.",
+
+	"help.topic.admin_sites.title": "🏢 Sedes físicas",
+	"help.topic.admin_sites.desc":  "Gestione sedes y oficinas físicas, vincule cada sede a su país, identifique sedes externas/coworking y organice los planos asociados.",
+	"help.topic.admin_sites.item1": "🏢 Configuración de sedes: Defina nombre, código de país, distintivo de sede externa y planos para la reserva de escritorios.",
+	"help.topic.admin_sites.item2": "👥 Vinculación de colaboradores: Al asignar un miembro a una sede, su país y sus días festivos aplicables se deducen automáticamente.",
 
 	"help.topic.admin_projects.title": "📂 Administración de proyectos",
 	"help.topic.admin_projects.desc":  "Cree códigos de proyecto, gestione la visibilidad y asigne los miembros autorizados.",
@@ -3027,7 +3047,7 @@ var es = map[string]string{
 	"help.topic.admin_domains.item1": "🏢 Ámbito de dominio: Los responsables de dominio acceden a los informes de todos los equipos de su dominio.",
 
 	"help.topic.admin_holidays.title": "🎌 Días festivos",
-	"help.topic.admin_holidays.desc":  "Configure los días festivos (opcionalmente asignados a países) y defina si se permiten imputaciones de trabajo excepcionales.",
+	"help.topic.admin_holidays.desc":  "Configure días festivos (globales o por países) y autorizaciones de imputación. Los festivos se aplican según la sede física asignada al usuario.",
 	"help.topic.admin_holidays.item1": "🎌 Reglas de festivos: Establezca el nombre, la fecha, el país asociado (p.ej. FR, MA, CZ o Global) y si se autoriza la imputación de tiempo en ese día.",
 
 	"help.topic.admin_general_settings.title": "⚙️ Configuración general y personalización",
@@ -3720,7 +3740,7 @@ var it = map[string]string{
 	"help.general_hint":  "Hai bisogno di ulteriore assistenza? Contatta il tuo responsabile di team o l'amministratore.",
 
 	"help.topic.calendar.title": "📅 Calendario e dichiarazione presenze",
-	"help.topic.calendar.desc":  "Dichiara le tue presenze giornaliere (ufficio, smart working, ferie, malattia...), visualizza i calendari del team e certifica il foglio mensile. I giorni festivi si adattano automaticamente ai paesi del tuo team.",
+	"help.topic.calendar.desc":  "Dichiara le tue presenze giornaliere (ufficio, smart working, ferie, malattia...), visualizza i calendari del team e certifica il foglio mensile. I giorni festivi si adattano automaticamente in base al paese della sede fisica assegnata.",
 	"help.topic.calendar.item1": "🖱️ Clic sinistro e trascinamento: Clicca su un giorno lavorativo per aprire la tavolozza degli stati. Trascina su più giorni per assegnare uno stato in blocco.",
 	"help.topic.calendar.item2": "🖱️ Clic destro (Menu contestuale): Fai clic destro su un giorno per registrare mezze giornate (Mattina AM / Pomeriggio PM) o esportare/aggiungere la presenza al tuo calendario esterno (.ics / Outlook).",
 	"help.topic.calendar.item3": "🚀 Progresso e certificazione mensile: La barra di avanzamento confronta i giorni dichiarati con quelli lavorativi. Quando tutti i giorni sono compilati, clicca su 'Certifica' per convalidare il mese.",
@@ -3734,8 +3754,8 @@ var it = map[string]string{
 	"help.topic.floorplan.item4": "⭐ Piani preferiti: Clicca sulla stella accanto al selettore del piano nella pagina delle planimetrie per impostare i tuoi piani preferiti. I piani preferiti appaiono per primi nei menu a discesa.",
 
 	"help.topic.projects.title": "📂 Dichiarazione progetti e attività",
-	"help.topic.projects.desc":  "Dichiara il tempo di lavoro sui progetti o sulle attività giornaliere, monitora la quota lavorata e certifica il mese.",
-	"help.topic.projects.item1": "⚙️ Modalità di inserimento: In modalità standard, inserisci i giorni totali per progetto. In modalità attività giornaliere, dettaglia le attività giorno per giorno (Jira, ServiceNow, Altro).",
+	"help.topic.projects.desc":  "Dichiara il tempo di lavoro sui progetti o sulle attività giornaliere, monitora i giorni lavorati e certifica il riepilogo mensile. I giorni non lavorati possono essere nascosti.",
+	"help.topic.projects.item1": "⚙️ Modalità di inserimento: In modalità standard, inserisci i giorni totali per progetto. In modalità attività giornaliere, dettaglia le attività giorno per giorno (Jira, ServiceNow, Altro). I giorni non lavorati appaiono automaticamente disattivati in grigio.",
 	"help.topic.projects.item2": "⚡ Preset e salvataggio giornaliero: Nella modalità attività, usa i pulsanti 25%, 50% e 100% per impostare rapidamente le percentuali e salva l'intera giornata con un solo clic.",
 	"help.topic.projects.item3": "💬 Ticket Jira e commenti: Collega le attività ai ticket Jira o inserisci commenti (obbligatorio a seconda delle impostazioni del team).",
 	"help.topic.projects.item4": "🚀 Certificazione progetti: Quando il tempo dichiarato eguaglia i tuoi giorni lavorativi/lavorati, clicca su 'Certifica'.",
@@ -3752,8 +3772,8 @@ var it = map[string]string{
 	"help.topic.admin_projects_report.item2": "🔓 Decertificazione: I manager autorizzati possono decertificare un mese per consentire correzioni.",
 
 	"help.topic.admin_teams.title": "👥 Amministrazione team",
-	"help.topic.admin_teams.desc":  "Crea e gestisci team, assegna membri, configura i paesi dei membri per i festivi localizzati e imposta le policy.",
-	"help.topic.admin_teams.item1": "⚙️ Configurazione team e paesi: Attiva la modalità attività giornaliere, configura la chiave Jira, assegna i paesi dei membri per le festività e richiedi commenti.",
+	"help.topic.admin_teams.desc":  "Crea e gestisci team, assegna membri, associa ciascun membro a una sede fisica per le festività localizzate e imposta le policy di imputazione.",
+	"help.topic.admin_teams.item1": "⚙️ Configurazione e assegnazione sede: Attiva la modalità attività, configura la chiave Jira, richiedi commenti obbligatori e associa i membri alla sede fisica con un menu a discesa raggruppato per paese.",
 	"help.topic.admin_teams.item2": "👤 Manager e date di uscita: Assegna Team Manager / Team Leader e registra le date di uscita.",
 
 	"help.topic.admin_statuses.title": "🏷️ Stati di presenza",
@@ -3764,6 +3784,11 @@ var it = map[string]string{
 	"help.topic.admin_floorplans.title": "🗺️ Editor planimetrie",
 	"help.topic.admin_floorplans.desc":  "Carica le immagini delle planimetrie e posiziona le scrivanie interattive per la prenotazione.",
 	"help.topic.admin_floorplans.item1": "🖱️ Posizionamento postazioni: Aggiungi scrivanie, spostale sulla mappa, ridimensionalo e assegna identificatori.",
+
+	"help.topic.admin_sites.title": "🏢 Sedi fisiche",
+	"help.topic.admin_sites.desc":  "Gestisci le sedi fisiche e gli uffici, associa ciascuna sede al proprio paese, identifica sedi esterne/coworking e organizza le planimetrie associate.",
+	"help.topic.admin_sites.item1": "🏢 Configurazione sedi: Definisci nome, codice paese, tag sede esterna e planimetrie per la prenotazione postazioni.",
+	"help.topic.admin_sites.item2": "👥 Assegnazione collaboratori: Quando un membro è assegnato a una sede, il suo paese e le festività applicabili vengono dedotti automaticamente.",
 
 	"help.topic.admin_projects.title": "📂 Amministrazione progetti",
 	"help.topic.admin_projects.desc":  "Crea codici progetto, gestisci la visibilità e assegna i membri abilitati.",
@@ -3779,7 +3804,7 @@ var it = map[string]string{
 	"help.topic.admin_domains.item1": "🏢 Ambito del dominio: I responsabili di dominio accedono ai report di tutti i team del proprio dominio.",
 
 	"help.topic.admin_holidays.title": "🎌 Giorni festivi",
-	"help.topic.admin_holidays.desc":  "Configura i giorni festivi (facoltativamente assegnati a paesi specifici) e stabilisci se sono consentite imputazioni lavorative straordinarie.",
+	"help.topic.admin_holidays.desc":  "Configura i giorni festivi (globali o per paesi specifici) e i permessi di imputazione. Le festività si applicano in base alla sede assegnata all'utente.",
 	"help.topic.admin_holidays.item1": "🎌 Regole festività: Imposta nome, data, paese associato (es. FR, MA, CZ o Globale) e l'eventuale permesso di imputare tempo in quel giorno.",
 
 	"help.topic.admin_general_settings.title": "⚙️ Impostazioni generali e personalizzazione",
