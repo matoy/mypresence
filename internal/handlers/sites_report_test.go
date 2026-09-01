@@ -530,4 +530,9 @@ func TestSitesReport_TemplateIconsAndScrollbarFix(t *testing.T) {
 	if strings.Contains(html, "min-width:36px") {
 		t.Errorf("found unwanted min-width:36px causing horizontal scrollbar")
 	}
+
+	// Verify xlsx library script is loaded for Excel export
+	if !strings.Contains(html, `/static/js/xlsx.full.min.js`) {
+		t.Errorf("expected /static/js/xlsx.full.min.js to be included for Excel export")
+	}
 }
