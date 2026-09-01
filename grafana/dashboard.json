@@ -7,14 +7,6 @@
       "type": "datasource",
       "pluginId": "prometheus",
       "pluginName": "Prometheus"
-    },
-    {
-      "name": "DS_LOKI",
-      "label": "Loki",
-      "description": "Loki log datasource",
-      "type": "datasource",
-      "pluginId": "loki",
-      "pluginName": "Loki"
     }
   ],
   "__requires": [
@@ -28,12 +20,6 @@
       "type": "datasource",
       "id": "prometheus",
       "name": "Prometheus",
-      "version": "1.0.0"
-    },
-    {
-      "type": "datasource",
-      "id": "loki",
-      "name": "Loki",
       "version": "1.0.0"
     },
     {
@@ -71,18 +57,12 @@
       "id": "barchart",
       "name": "Bar chart",
       "version": ""
-    },
-    {
-      "type": "panel",
-      "id": "logs",
-      "name": "Logs",
-      "version": ""
     }
   ],
   "annotations": {
     "list": []
   },
-  "description": "myPresence – Operational dashboard (HTTP, Auth, Business, DB)",
+  "description": "myPresence – Operational dashboard (Prometheus metrics: HTTP, Auth, Presence, Sites, Projects, DB, Runtime)",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -3249,151 +3229,6 @@
         "x": 0,
         "y": 111
       },
-      "id": 70,
-      "title": "📋 Application Logs",
-      "type": "row"
-    },
-    {
-      "id": 71,
-      "type": "logs",
-      "title": "All application logs",
-      "gridPos": {
-        "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 112
-      },
-      "datasource": {
-        "type": "loki",
-        "uid": "${DS_LOKI}"
-      },
-      "options": {
-        "showTime": true,
-        "showLabels": false,
-        "showCommonLabels": false,
-        "wrapLogMessage": true,
-        "sortOrder": "Descending",
-        "dedupStrategy": "none",
-        "enableLogDetails": true
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "{${loki_stream}}",
-          "datasource": {
-            "type": "loki",
-            "uid": "${DS_LOKI}"
-          }
-        }
-      ]
-    },
-    {
-      "id": 72,
-      "type": "logs",
-      "title": "Auth events",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 120
-      },
-      "datasource": {
-        "type": "loki",
-        "uid": "${DS_LOKI}"
-      },
-      "options": {
-        "showTime": true,
-        "showLabels": false,
-        "wrapLogMessage": true,
-        "sortOrder": "Descending",
-        "dedupStrategy": "none",
-        "enableLogDetails": true
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "{${loki_stream}} | json | msg =~ `auth\\..*`",
-          "datasource": {
-            "type": "loki",
-            "uid": "${DS_LOKI}"
-          }
-        }
-      ]
-    },
-    {
-      "id": 73,
-      "type": "logs",
-      "title": "Presence, project & admin operations",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 120
-      },
-      "datasource": {
-        "type": "loki",
-        "uid": "${DS_LOKI}"
-      },
-      "options": {
-        "showTime": true,
-        "showLabels": false,
-        "wrapLogMessage": true,
-        "sortOrder": "Descending",
-        "dedupStrategy": "none",
-        "enableLogDetails": true
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "{${loki_stream}} | json | msg =~ `(presence|admin|project|impersonate)\\..*`",
-          "datasource": {
-            "type": "loki",
-            "uid": "${DS_LOKI}"
-          }
-        }
-      ]
-    },
-    {
-      "id": 74,
-      "type": "logs",
-      "title": "Errors & warnings",
-      "gridPos": {
-        "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 128
-      },
-      "datasource": {
-        "type": "loki",
-        "uid": "${DS_LOKI}"
-      },
-      "options": {
-        "showTime": true,
-        "showLabels": false,
-        "wrapLogMessage": true,
-        "sortOrder": "Descending",
-        "dedupStrategy": "none",
-        "enableLogDetails": true
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "{${loki_stream}, level=~\"WARN|ERROR\"}",
-          "datasource": {
-            "type": "loki",
-            "uid": "${DS_LOKI}"
-          }
-        }
-      ]
-    },
-    {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 136
-      },
       "id": 75,
       "title": "🔐 PAT / Floorplan / Admin Ops",
       "type": "row"
@@ -3406,7 +3241,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 137
+        "y": 112
       },
       "datasource": {
         "type": "prometheus",
@@ -3445,7 +3280,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 137
+        "y": 112
       },
       "datasource": {
         "type": "prometheus",
@@ -3484,7 +3319,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 137
+        "y": 112
       },
       "datasource": {
         "type": "prometheus",
@@ -3536,37 +3371,6 @@
         "refresh": 1,
         "type": "datasource",
         "label": "Datasource"
-      },
-      {
-        "current": {},
-        "hide": 0,
-        "includeAll": false,
-        "name": "DS_LOKI",
-        "options": [],
-        "query": "loki",
-        "refresh": 1,
-        "type": "datasource",
-        "label": "Loki"
-      },
-      {
-        "type": "textbox",
-        "name": "loki_stream",
-        "label": "Loki stream selector",
-        "description": "LogQL label selector placed inside {}. Example: service_name=\"mypresence-app\"",
-        "current": {
-          "selected": true,
-          "text": "service_name=\"mypresence-app\"",
-          "value": "service_name=\"mypresence-app\""
-        },
-        "options": [
-          {
-            "selected": true,
-            "text": "service_name=\"mypresence-app\"",
-            "value": "service_name=\"mypresence-app\""
-          }
-        ],
-        "query": "service_name=\"mypresence-app\"",
-        "hide": 0
       }
     ]
   },
