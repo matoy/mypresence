@@ -79,7 +79,7 @@ func TestAdminHolidaysTemplate_RendersDuplicateButton(t *testing.T) {
 	if editIdx == -1 || dupIdx == -1 || delIdx == -1 {
 		t.Fatalf("could not find all three action buttons in html (edit=%d, dup=%d, del=%d)", editIdx, dupIdx, delIdx)
 	}
-	if !(editIdx < dupIdx && dupIdx < delIdx) {
+	if editIdx >= dupIdx || dupIdx >= delIdx {
 		t.Errorf("expected duplicate button between edit and delete, got edit=%d, dup=%d, del=%d", editIdx, dupIdx, delIdx)
 	}
 
