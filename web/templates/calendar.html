@@ -94,7 +94,7 @@
     </div>
 
     <!-- Legend -->
-    <div class="flex flex-wrap gap-2 mb-3">
+    <div class="flex flex-wrap items-center gap-2 mb-3">
         {{range .Statuses}}
         <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium text-white shadow-sm"
               :style="'background-color: {{.Color}}'">
@@ -104,6 +104,34 @@
         {{end}}
         <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium bg-gray-200 text-gray-600">
             {{index $.T "cal.not_set"}}
+        </span>
+
+        <span class="h-4 w-px bg-gray-300 mx-1 hidden sm:inline-block"></span>
+
+        {{if not $.DisableFloorplans}}
+        <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 border border-gray-200/80 shadow-xs"
+              title="{{index $.T "cal.desk_reserved"}}">
+            <span class="text-sm leading-none">🖥️</span>
+            <span>{{index $.T "cal.desk_reserved"}}</span>
+        </span>
+        {{end}}
+
+        {{if not $.DisableProjects}}
+        <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 border border-gray-200/80 shadow-xs"
+              title="{{index $.T "cal.project_activity_complete"}}">
+            <span class="text-xs leading-none">🎯</span>
+            <span>{{index $.T "cal.legend.project_activity"}}</span>
+        </span>
+        {{end}}
+
+        <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 border border-gray-200/80 shadow-xs">
+            <span class="text-xs leading-none">✍️</span>
+            <span>{{index $.T "cal.legend.override"}}</span>
+        </span>
+
+        <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 border border-gray-200/80 shadow-xs">
+            <span class="text-xs leading-none">🎌</span>
+            <span>{{index $.T "cal.legend.holiday"}}</span>
         </span>
     </div>
 

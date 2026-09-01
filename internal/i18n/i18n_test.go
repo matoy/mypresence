@@ -268,3 +268,24 @@ func TestNotificationKeys_AllLanguages(t *testing.T) {
 	}
 }
 
+func TestCalendarLegendKeys_AllLanguages(t *testing.T) {
+	requiredKeys := []string{
+		"cal.desk_reserved",
+		"cal.legend.project_activity",
+		"cal.legend.override",
+		"cal.legend.holiday",
+	}
+
+	langs := []string{"en", "fr", "de", "es", "it"}
+	for _, lang := range langs {
+		m := T(lang)
+		for _, key := range requiredKeys {
+			val, ok := m[key]
+			if !ok || val == "" {
+				t.Errorf("lang %q is missing required calendar legend key %q", lang, key)
+			}
+		}
+	}
+}
+
+
