@@ -818,8 +818,8 @@ var en = map[string]string{
 	"help.topic.admin_projects_report.item2": "🔓 Decertification: Authorized managers can decertify a validated month to allow users to correct time declarations.",
 
 	"help.topic.admin_sites_report.title": "🏢 Sites Occupancy Report",
-	"help.topic.admin_sites_report.desc":  "Monitor workstation capacity, headcount ratios, daily presence, and desk reservation trends across sites.",
-	"help.topic.admin_sites_report.item1": "🪑 Workstations & Ratios: Track physical desk capacity against assigned personnel to identify under/over-capacity.",
+	"help.topic.admin_sites_report.desc":  "Monitor seat capacity, headcount ratios, daily presence, and desk reservation trends across sites.",
+	"help.topic.admin_sites_report.item1": "🪑 Seats & Ratios: Track physical seat capacity against assigned personnel to identify under/over-capacity.",
 	"help.topic.admin_sites_report.item2": "📊 Attendance & Booking: Analyze daily physical attendance against reserved desks throughout each month.",
 
 	"help.topic.admin_teams.title": "👥 Teams Administration",
@@ -1626,8 +1626,8 @@ var fr = map[string]string{
 	"help.topic.admin_projects_report.item2": "🔓 Décertification : Les managers autorisés peuvent déverrouiller un mois certifié afin de permettre à un utilisateur de corriger une erreur.",
 
 	"help.topic.admin_sites_report.title": "🏢 Rapport d'occupation des sites",
-	"help.topic.admin_sites_report.desc":  "Suivez la capacité des postes de travail, les ratios d'effectif, la présence quotidienne et les réservations de bureaux par site.",
-	"help.topic.admin_sites_report.item1": "🪑 Postes & Foisonnement : Contrôlez la capacité physique par rapport aux collaborateurs rattachés.",
+	"help.topic.admin_sites_report.desc":  "Suivez la capacité en places, les ratios d'effectif, la présence quotidienne et les réservations de bureaux par site.",
+	"help.topic.admin_sites_report.item1": "🪑 Places & Foisonnement : Contrôlez la capacité physique par rapport aux collaborateurs rattachés.",
 	"help.topic.admin_sites_report.item2": "📊 Fréquentation & Réservations : Comparez les présences réelles et les bureaux réservés jour par jour.",
 
 	"help.topic.admin_teams.title": "👥 Administration des Équipes",
@@ -2435,8 +2435,8 @@ var de = map[string]string{
 	"help.topic.admin_projects_report.item2": "🔓 Entzertifizierung: Autorisierte Manager können einen zertifizierten Monat entsperren, um Korrekturen zu ermöglichen.",
 
 	"help.topic.admin_sites_report.title": "🏢 Standortauslastungsbericht",
-	"help.topic.admin_sites_report.desc":  "Überwachen Sie Arbeitsplatzkapazitäten, Personalkennzahlen, Anwesenheiten und Buchungen je Standort.",
-	"help.topic.admin_sites_report.item1": "🪑 Kapazität & Quote: Vergleichen Sie Arbeitsplätze und zugeordnete Mitarbeiter.",
+	"help.topic.admin_sites_report.desc":  "Überwachen Sie Sitzplatzkapazitäten, Personalkennzahlen, Anwesenheiten und Buchungen je Standort.",
+	"help.topic.admin_sites_report.item1": "🪑 Plätze & Quote: Vergleichen Sie Sitzplätze und zugeordnete Mitarbeiter.",
 	"help.topic.admin_sites_report.item2": "📊 Auslastung & Buchungen: Analysieren Sie tägliche Anwesenheiten und reservierte Plätze.",
 
 	"help.topic.admin_teams.title": "👥 Teamverwaltung",
@@ -4052,8 +4052,8 @@ var it = map[string]string{
 	"help.topic.admin_projects_report.item2": "🔓 Decertificazione: I manager autorizzati possono decertificare un mese per consentire correzioni.",
 
 	"help.topic.admin_sites_report.title": "🏢 Report occupazione sedi",
-	"help.topic.admin_sites_report.desc":  "Monitora la capacità delle postazioni, i rapporti di organico, la presenza giornaliera e le prenotazioni per sede.",
-	"help.topic.admin_sites_report.item1": "🪑 Postazioni e capienza: Controlla la capacità fisica rispetto ai collaboratori assegnati.",
+	"help.topic.admin_sites_report.desc":  "Monitora la capacità dei posti, i rapporti di organico, la presenza giornaliera e le prenotazioni per sede.",
+	"help.topic.admin_sites_report.item1": "🪑 Posti e capienza: Controlla la capacità fisica rispetto ai collaboratori assegnati.",
 	"help.topic.admin_sites_report.item2": "📊 Presenze e prenotazioni: Confronta le presenze reali e le postazioni prenotate giorno per giorno.",
 
 	"help.topic.admin_teams.title": "👥 Amministrazione team",
