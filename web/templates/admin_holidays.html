@@ -192,6 +192,12 @@
                                     {{index $.T "admin.edit"}}
                                 </button>
                             </template>
+                            <template x-if="!editing">
+                                <button @click="duplicateHoliday({date: '{{.Date}}', name: {{json .Name}}, allow_imputed: {{.AllowImputed}}, country_code: '{{.CountryCode}}'})"
+                                        class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
+                                    {{index $.T "admin.duplicate"}}
+                                </button>
+                            </template>
                             <template x-if="editing">
                                 <button @click="save()"
                                         class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
@@ -356,6 +362,42 @@ function holidayAdmin(initialHolidays, countriesCatalog) {
             if (this.filterAllowImputed === '0' && allowImputed) return false;
             if (String(this.filterYear || '').trim() !== '' && !String(date || '').startsWith(String(this.filterYear).trim() + '-')) return false;
             return true;
+        },
+
+        duplicateHoliday(h) {
+            let nextDate = '';
+            if (h && h.date) {
+                const parts = h.date.split('-');
+                if (parts.length === 3) {
+                    const y = parseInt(parts[0], 10);
+                    const m = parts[1];
+                    const d = parts[2];
+                    if (!isNaN(y)) {
+                        const nextYear = y + 1;
+                        if (m === '02' && d === '29') {
+                            const isLeap = (nextYear % 4 === 0 && nextYear % 100 !== 0) || (nextYear % 400 === 0);
+                            nextDate = `${nextYear}-02-${isLeap ? '29' : '28'}`;
+                        } else {
+                            nextDate = `${nextYear}-${m}-${d}`;
+                        }
+                    }
+                }
+                if (!nextDate) {
+                    try {
+                        const dt = new Date(h.date);
+                        dt.setFullYear(dt.getFullYear() + 1);
+                        nextDate = dt.toISOString().split('T')[0];
+                    } catch(e) {
+                        nextDate = h.date;
+                    }
+                }
+            }
+            this.newDate = nextDate;
+            this.newName = h ? (h.name || '') : '';
+            this.newAllowImputed = h ? !!h.allow_imputed : false;
+            this.newCountryCode = h ? (h.country_code || '') : '';
+            this.createError = '';
+            this.showCreateModal = true;
         },
 
         async createHoliday() {

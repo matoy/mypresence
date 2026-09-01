@@ -288,4 +288,15 @@ func TestCalendarLegendKeys_AllLanguages(t *testing.T) {
 	}
 }
 
+func TestHolidayDuplicateKey_AllLanguages(t *testing.T) {
+	langs := []string{"en", "fr", "de", "es", "it"}
+	for _, lang := range langs {
+		m := T(lang)
+		val, ok := m["admin.duplicate"]
+		if !ok || val == "" {
+			t.Errorf("lang %q is missing required key 'admin.duplicate'", lang)
+		}
+	}
+}
+
 
