@@ -250,17 +250,6 @@ func (h *AdminHandler) RemoveTeamMember(w http.ResponseWriter, r *http.Request) 
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
-// isUserInTeam checks whether a user is an active member of the given team.
-func (h *AdminHandler) isUserInTeam(userID, teamID int64) bool {
-	myTeams, _ := h.DB.GetUserTeams(userID)
-	for _, t := range myTeams {
-		if t.ID == teamID {
-			return true
-		}
-	}
-	return false
-}
-
 // UpdateUserSite updates a user's assigned site.
 func (h *AdminHandler) UpdateUserSite(w http.ResponseWriter, r *http.Request) {
 	currentUser := middleware.GetUser(r)
