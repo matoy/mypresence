@@ -536,3 +536,99 @@ func TestSitesReport_TemplateIconsAndScrollbarFix(t *testing.T) {
 		t.Errorf("expected /static/js/xlsx.full.min.js to be included for Excel export")
 	}
 }
+
+func TestSitesReport_OnSiteAttribution(t *testing.T) {
+	d := newExtraTestDB(t)
+	h := &FloorplanHandler{DB: d, DataDir: t.TempDir(), Render: noRender}
+
+	// Status with on_site = 1
+	statusID, err := d.CreateStatus(models.Status{Name: "Bureau", Color: "#00ff00", Billable: true, OnSite: true, SortOrder: 1})
+	if err != nil {
+		t.Fatalf("CreateStatus: %v", err)
+	}
+
+	// Site 1: Paris
+	sParis, err := d.CreateSite(models.Site{Name: "Paris HQ", CountryCode: "FR", Seats: 20})
+	if err != nil {
+		t.Fatalf("CreateSite Paris: %v", err)
+	}
+	fpParis, _ := d.CreateFloorplanWithSite("Etage 1", sParis, 1)
+	seatParis, _ := d.CreateSeat(fpParis, "P1", 10, 10)
+
+	// Site 2: Lyon
+	sLyon, err := d.CreateSite(models.Site{Name: "Lyon Tech", CountryCode: "FR", Seats: 10})
+	if err != nil {
+		t.Fatalf("CreateSite Lyon: %v", err)
+	}
+	fpLyon, _ := d.CreateFloorplanWithSite("Etage Lyon", sLyon, 1)
+	seatLyon, _ := d.CreateSeat(fpLyon, "L1", 10, 10)
+
+	// User 1: No site assigned (SiteID == 0)
+	u1, _ := d.CreateLocalUser("u1@test.com", "User One", "pass")
+	// User 2: Home site Paris
+	u2, _ := d.CreateLocalUser("u2@test.com", "User Two", "pass")
+	_ = d.UpdateUserSite(u2, sParis)
+
+	// Day 1: Tuesday 2026-06-02 -> u1 declares on-site and reserves desk at Paris
+	_ = d.SetPresences(u1, []string{"2026-06-02"}, statusID, "full")
+	_ = d.ReserveSeat(seatParis, u1, "2026-06-02", "full")
+
+	// Day 2: Wednesday 2026-06-03 -> u2 (home site Paris) travels to Lyon, reserves desk at Lyon
+	_ = d.SetPresences(u2, []string{"2026-06-03"}, statusID, "full")
+	_ = d.ReserveSeat(seatLyon, u2, "2026-06-03", "full")
+
+	// Day 3: Thursday 2026-06-04 -> u2 works at Paris (home site), no desk reservation
+	_ = d.SetPresences(u2, []string{"2026-06-04"}, statusID, "full")
+
+	req := createAdminReq(t, d, http.MethodGet, "/api/admin/sites-report?year=2026&month=6&corp=corporate", nil)
+	w := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.SitesReportAPI)).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var data SitesReportPageData
+	if err := json.Unmarshal(w.Body.Bytes(), &data); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	// Find Paris and Lyon summaries
+	var parisSum, lyonSum *models.SiteReportSummary
+	for i := range data.Summaries {
+		if data.Summaries[i].Site.ID == sParis {
+			parisSum = &data.Summaries[i]
+		}
+		if data.Summaries[i].Site.ID == sLyon {
+			lyonSum = &data.Summaries[i]
+		}
+	}
+
+	if parisSum == nil || lyonSum == nil {
+		t.Fatalf("expected Paris and Lyon summaries in data")
+	}
+
+	// Paris should have 2 on-site days: u1 on 2026-06-02 (via reservation) + u2 on 2026-06-04 (via home site)
+	if parisSum.TotalOnSiteDays != 2.0 {
+		t.Errorf("expected Paris TotalOnSiteDays = 2.0, got %f", parisSum.TotalOnSiteDays)
+	}
+	if parisSum.OccupancyRate <= 0 {
+		t.Errorf("expected Paris OccupancyRate > 0, got %f", parisSum.OccupancyRate)
+	}
+
+	// Lyon should have 1 on-site day: u2 on 2026-06-03 (via reservation override)
+	if lyonSum.TotalOnSiteDays != 1.0 {
+		t.Errorf("expected Lyon TotalOnSiteDays = 1.0, got %f", lyonSum.TotalOnSiteDays)
+	}
+	if lyonSum.OccupancyRate <= 0 {
+		t.Errorf("expected Lyon OccupancyRate > 0, got %f", lyonSum.OccupancyRate)
+	}
+
+	// Global KPIs
+	if data.TotalOnSiteDays != 3.0 {
+		t.Errorf("expected global TotalOnSiteDays = 3.0, got %f", data.TotalOnSiteDays)
+	}
+	if data.AvgOccupancyRate <= 0 {
+		t.Errorf("expected global AvgOccupancyRate > 0, got %f", data.AvgOccupancyRate)
+	}
+}
+

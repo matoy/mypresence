@@ -154,6 +154,56 @@ func (h *FloorplanHandler) buildSitesReportData(r *http.Request) (*SitesReportPa
 		}
 	}
 
+	// Seat reservations on floorplans
+	reservations, _ := h.DB.GetMonthlySiteReservations(startDate, endDate)
+	dailySiteReservations := make(map[int64]map[string]float64)
+	for _, s := range allSites {
+		dailySiteReservations[s.ID] = make(map[string]float64)
+	}
+	userDateResSite := make(map[string]int64, len(reservations))
+	for _, r := range reservations {
+		if _, ok := dailySiteReservations[r.SiteID]; !ok {
+			dailySiteReservations[r.SiteID] = make(map[string]float64)
+		}
+		weight := 1.0
+		if r.Half == "AM" || r.Half == "PM" {
+			weight = 0.5
+		}
+		dailySiteReservations[r.SiteID][r.Date] += weight
+		if r.SiteID > 0 {
+			userDateResSite[fmt.Sprintf("%d_%s", r.UserID, r.Date)] = r.SiteID
+		}
+	}
+
+	// Identify single corporate site fallback if applicable
+	var singleCorpSiteID int64
+	var corpCount int
+	for _, s := range allSites {
+		if !s.NotCorporateSite {
+			corpCount++
+			singleCorpSiteID = s.ID
+		}
+	}
+	if corpCount != 1 {
+		singleCorpSiteID = 0
+	}
+	if singleCorpSiteID == 0 && len(allSites) == 1 {
+		singleCorpSiteID = allSites[0].ID
+	}
+
+	// If single corporate site and no users explicitly attached, attach active users
+	if singleCorpSiteID > 0 && len(activeUsersBySite[singleCorpSiteID]) == 0 {
+		var activeList []models.User
+		for _, u := range allUsers {
+			if !u.Disabled && u.SiteID == 0 {
+				activeList = append(activeList, u)
+			}
+		}
+		if len(activeList) > 0 {
+			activeUsersBySite[singleCorpSiteID] = activeList
+		}
+	}
+
 	// Presences on site
 	presences, _ := h.DB.GetMonthlyOnSitePresences(startDate, endDate)
 	dailySiteOnSite := make(map[int64]map[string]float64)
@@ -161,7 +211,19 @@ func (h *FloorplanHandler) buildSitesReportData(r *http.Request) (*SitesReportPa
 		dailySiteOnSite[s.ID] = make(map[string]float64)
 	}
 	for _, p := range presences {
-		sID := userToSite[p.UserID]
+		// Priority 1: Desk reservation on that date
+		sID := userDateResSite[fmt.Sprintf("%d_%s", p.UserID, p.Date)]
+
+		// Priority 2: User's assigned home site
+		if sID == 0 {
+			sID = userToSite[p.UserID]
+		}
+
+		// Priority 3: Fallback if organization has a single primary site
+		if sID == 0 && singleCorpSiteID > 0 {
+			sID = singleCorpSiteID
+		}
+
 		if sID > 0 {
 			if _, ok := dailySiteOnSite[sID]; !ok {
 				dailySiteOnSite[sID] = make(map[string]float64)
@@ -172,23 +234,6 @@ func (h *FloorplanHandler) buildSitesReportData(r *http.Request) (*SitesReportPa
 			}
 			dailySiteOnSite[sID][p.Date] += weight
 		}
-	}
-
-	// Seat reservations on floorplans
-	reservations, _ := h.DB.GetMonthlySiteReservations(startDate, endDate)
-	dailySiteReservations := make(map[int64]map[string]float64)
-	for _, s := range allSites {
-		dailySiteReservations[s.ID] = make(map[string]float64)
-	}
-	for _, r := range reservations {
-		if _, ok := dailySiteReservations[r.SiteID]; !ok {
-			dailySiteReservations[r.SiteID] = make(map[string]float64)
-		}
-		weight := 1.0
-		if r.Half == "AM" || r.Half == "PM" {
-			weight = 0.5
-		}
-		dailySiteReservations[r.SiteID][r.Date] += weight
 	}
 
 	// Compute summaries and daily reports for each site

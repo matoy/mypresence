@@ -638,6 +638,9 @@ created_at %s DEFAULT CURRENT_TIMESTAMP
 	d.presence.Exec(dl.rebind(dl.addColumnIfNotExists("presence_logs", "half", fmt.Sprintf("%s NOT NULL DEFAULT 'full'", dl.varcharType(4)))))      //nolint:errcheck
 	d.presence.Exec(dl.rebind(dl.addColumnIfNotExists("holidays", "country_code", dl.varcharType(10)+" NOT NULL DEFAULT ''")))                      //nolint:errcheck
 
+	// Backfill on_site = true for common on-site presence status names if on_site was defaulted to false
+	d.presence.Exec(dl.rebind(`UPDATE statuses SET on_site = ? WHERE (LOWER(name) LIKE '%on site%' OR LOWER(name) LIKE '%sur site%' OR LOWER(name) LIKE '%bureau%' OR LOWER(name) LIKE '%présent%' OR LOWER(name) LIKE '%present%' OR LOWER(name) LIKE '%office%') AND (on_site = ? OR on_site IS NULL)`), true, false) //nolint:errcheck
+
 	// SQLite-only migration: recreate presences table if 'half' column is missing
 	// (Not needed for network databases which always get the full schema above)
 	if dl.isSQLite() {
@@ -2729,12 +2732,12 @@ type SitePresenceEntry struct {
 
 // GetMonthlyOnSitePresences returns all presences where status has on_site=1 between startDate and endDate.
 func (d *DB) GetMonthlyOnSitePresences(startDate, endDate string) ([]SitePresenceEntry, error) {
-	rows, err := d.presence.Query(`
+	rows, err := d.presence.Query(d.dialect.rebind(`
 SELECT p.user_id, p.date, p.half
 FROM presences p
 JOIN statuses s ON p.status_id = s.id
-WHERE p.date >= ? AND p.date <= ? AND s.on_site = 1
-`, startDate, endDate)
+WHERE p.date >= ? AND p.date <= ? AND s.on_site = ?
+`), startDate, endDate, true)
 	if err != nil {
 		return nil, err
 	}
@@ -2762,13 +2765,13 @@ type SiteReservationEntry struct {
 
 // GetMonthlySiteReservations returns all seat reservations between startDate and endDate for floorplans attached to a site.
 func (d *DB) GetMonthlySiteReservations(startDate, endDate string) ([]SiteReservationEntry, error) {
-	rows, err := d.floorplan.Query(`
+	rows, err := d.floorplan.Query(d.dialect.rebind(`
 SELECT f.site_id, sr.date, sr.half, sr.seat_id, sr.user_id
 FROM seat_reservations sr
 JOIN seats s ON sr.seat_id = s.id
 JOIN floorplans f ON s.floorplan_id = f.id
 WHERE f.site_id > 0 AND sr.date >= ? AND sr.date <= ?
-`, startDate, endDate)
+`), startDate, endDate)
 	if err != nil {
 		return nil, err
 	}
