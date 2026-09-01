@@ -619,15 +619,16 @@ func (d *DB) migrateFloorplan() error {
 	ai := dl.autoincrement()
 	real_ := dl.realType()
 	dt := dl.datetimeType()
+	bool_ := dl.boolType()
 
 	stmts := []string{
 		dl.createTableIfNotExists("sites", fmt.Sprintf(`
 id %s,
 name %s NOT NULL,
 country_code %s NOT NULL DEFAULT '',
-not_corporate_site BOOLEAN NOT NULL DEFAULT 0,
+not_corporate_site %s NOT NULL DEFAULT %s,
 created_at %s DEFAULT CURRENT_TIMESTAMP
-`, ai, dl.varcharType(128), dl.varcharType(64), dt)),
+`, ai, dl.varcharType(128), dl.varcharType(64), bool_, dl.boolDefault(false), dt)),
 
 		dl.createTableIfNotExists("floorplans", fmt.Sprintf(`
 id %s,
@@ -675,7 +676,9 @@ FOREIGN KEY (floorplan_id) REFERENCES floorplans(id) ON DELETE CASCADE
 	}
 
 	// Additive migrations
-	d.floorplan.Exec(dl.rebind(dl.addColumnIfNotExists("floorplans", "site_id", "BIGINT NOT NULL DEFAULT 0"))) //nolint:errcheck
+	d.floorplan.Exec(dl.rebind(dl.addColumnIfNotExists("sites", "country_code", dl.varcharType(64)+" NOT NULL DEFAULT ''")))                                    //nolint:errcheck
+	d.floorplan.Exec(dl.rebind(dl.addColumnIfNotExists("sites", "not_corporate_site", fmt.Sprintf("%s NOT NULL DEFAULT %s", bool_, dl.boolDefault(false))))) //nolint:errcheck
+	d.floorplan.Exec(dl.rebind(dl.addColumnIfNotExists("floorplans", "site_id", "BIGINT NOT NULL DEFAULT 0")))                                              //nolint:errcheck
 
 	return nil
 }

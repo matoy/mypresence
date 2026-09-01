@@ -1,6 +1,7 @@
 package db
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -491,3 +492,24 @@ func TestVarcharType_AllDrivers(t *testing.T) {
 		t.Errorf("sqlserver varcharType(64) = %q, want NVARCHAR(64)", got)
 	}
 }
+
+func TestSites_NotCorporateSite_ColumnDef(t *testing.T) {
+	pg := newDialect("postgres")
+	pgDef := fmt.Sprintf("not_corporate_site %s NOT NULL DEFAULT %s", pg.boolType(), pg.boolDefault(false))
+	if pgDef != "not_corporate_site BOOLEAN NOT NULL DEFAULT FALSE" {
+		t.Errorf("unexpected postgres column def: %q", pgDef)
+	}
+
+	sq := newDialect("sqlite")
+	sqDef := fmt.Sprintf("not_corporate_site %s NOT NULL DEFAULT %s", sq.boolType(), sq.boolDefault(false))
+	if sqDef != "not_corporate_site BOOLEAN NOT NULL DEFAULT 0" {
+		t.Errorf("unexpected sqlite column def: %q", sqDef)
+	}
+
+	ss := newDialect("sqlserver")
+	ssDef := fmt.Sprintf("not_corporate_site %s NOT NULL DEFAULT %s", ss.boolType(), ss.boolDefault(false))
+	if ssDef != "not_corporate_site BIT NOT NULL DEFAULT 0" {
+		t.Errorf("unexpected sqlserver column def: %q", ssDef)
+	}
+}
+
