@@ -87,7 +87,25 @@ var (
 	AdminOpsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "mypresence_admin_operations_total",
 		Help: "Total admin operations by entity/action/result.",
-	}, []string{"entity", "action", "result"}) // entity: team|status|user|role
+	}, []string{"entity", "action", "result"}) // entity: team|status|user|role|site|domain|notification|news
+
+	// SeatReservationDaysTotal counts individual desk-day reservations booked or cancelled.
+	SeatReservationDaysTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "mypresence_seat_reservation_days_total",
+		Help: "Total desk-days booked or cancelled.",
+	}, []string{"action"}) // action: booked|cancelled
+
+	// CertificationsOpsTotal counts presence and project monthly certification operations.
+	CertificationsOpsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "mypresence_certifications_operations_total",
+		Help: "Total certification and decertification operations.",
+	}, []string{"type", "action"}) // type: presence|project  action: certify|decertify
+
+	// ProjectActivityDeclarationsTotal counts individual activity declarations.
+	ProjectActivityDeclarationsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "mypresence_project_activity_declarations_total",
+		Help: "Total project activity declarations by source and action.",
+	}, []string{"source", "action"}) // source: jira|servicenow|other  action: create|update|delete
 )
 
 // ─── Health gauges (collected on each scrape via callback) ───────────────────
@@ -138,15 +156,34 @@ func (c *healthCollector) Collect(ch chan<- prometheus.Metric) {
 
 // DBStats holds point-in-time counts fetched from the database.
 type DBStats struct {
-	Users          float64
-	ActiveSessions float64
-	Teams          float64
-	Statuses       float64
-	Presences      float64
-	Floorplans     float64
-	Seats          float64
-	Projects       float64
-	ProjectEntries float64
+	Users                  float64
+	ActiveSessions         float64
+	Teams                  float64
+	Statuses               float64
+	Presences              float64
+	Floorplans             float64
+	Seats                  float64
+	Projects               float64
+	ProjectEntries         float64
+	Sites                  float64
+	SitesCorporate         float64
+	SitesNonCorporate      float64
+	SiteWorkstations       float64
+	SeatReservations       float64
+	ReservationsToday      float64
+	ActiveProjects         float64
+	ProjectMembers         float64
+	ProjectActivities      float64
+	ProjectActivitiesJira  float64
+	ProjectActivitiesSN    float64
+	ProjectActivitiesOther float64
+	PresenceCertifications float64
+	ProjectCertifications  float64
+	Domains                float64
+	ActivePATs             float64
+	Passkeys               float64
+	Notifications          float64
+	News                   float64
 }
 
 // RegisterDBCollector constructs and registers a custom Prometheus collector
@@ -158,29 +195,67 @@ func RegisterDBCollector(fn func() DBStats) {
 type dbCollector struct {
 	fn func() DBStats
 
-	descUsers      *prometheus.Desc
-	descSessions   *prometheus.Desc
-	descTeams      *prometheus.Desc
-	descStatuses   *prometheus.Desc
-	descPresences  *prometheus.Desc
-	descFloorplans *prometheus.Desc
-	descSeats      *prometheus.Desc
-	descProjects   *prometheus.Desc
-	descProjEntr   *prometheus.Desc
+	descUsers                  *prometheus.Desc
+	descSessions               *prometheus.Desc
+	descTeams                  *prometheus.Desc
+	descStatuses               *prometheus.Desc
+	descPresences              *prometheus.Desc
+	descFloorplans             *prometheus.Desc
+	descSeats                  *prometheus.Desc
+	descProjects               *prometheus.Desc
+	descProjEntr               *prometheus.Desc
+	descSites                  *prometheus.Desc
+	descSitesCorporate         *prometheus.Desc
+	descSitesNonCorporate      *prometheus.Desc
+	descSiteWorkstations       *prometheus.Desc
+	descSeatReservations       *prometheus.Desc
+	descReservationsToday      *prometheus.Desc
+	descActiveProjects         *prometheus.Desc
+	descProjectMembers         *prometheus.Desc
+	descProjectActivities      *prometheus.Desc
+	descProjectActivitiesJira  *prometheus.Desc
+	descProjectActivitiesSN    *prometheus.Desc
+	descProjectActivitiesOther *prometheus.Desc
+	descCertificationsPres     *prometheus.Desc
+	descCertificationsProj     *prometheus.Desc
+	descDomains                *prometheus.Desc
+	descActivePATs             *prometheus.Desc
+	descPasskeys               *prometheus.Desc
+	descNotifications          *prometheus.Desc
+	descNews                   *prometheus.Desc
 }
 
 func newDBCollector(fn func() DBStats) *dbCollector {
 	return &dbCollector{
-		fn:             fn,
-		descUsers:      prometheus.NewDesc("mypresence_db_users_total", "Total registered users.", nil, nil),
-		descSessions:   prometheus.NewDesc("mypresence_db_sessions_active_total", "Currently active sessions.", nil, nil),
-		descTeams:      prometheus.NewDesc("mypresence_db_teams_total", "Total teams.", nil, nil),
-		descStatuses:   prometheus.NewDesc("mypresence_db_statuses_total", "Total presence statuses defined.", nil, nil),
-		descPresences:  prometheus.NewDesc("mypresence_db_presences_total", "Total presence records stored.", nil, nil),
-		descFloorplans: prometheus.NewDesc("mypresence_db_floorplans_total", "Total floor plans.", nil, nil),
-		descSeats:      prometheus.NewDesc("mypresence_db_seats_total", "Total seats defined across all floor plans.", nil, nil),
-		descProjects:   prometheus.NewDesc("mypresence_db_projects_total", "Total projects.", nil, nil),
-		descProjEntr:   prometheus.NewDesc("mypresence_db_project_time_entries_total", "Total project time entries stored.", nil, nil),
+		fn:                         fn,
+		descUsers:                  prometheus.NewDesc("mypresence_db_users_total", "Total registered users.", nil, nil),
+		descSessions:               prometheus.NewDesc("mypresence_db_sessions_active_total", "Currently active sessions.", nil, nil),
+		descTeams:                  prometheus.NewDesc("mypresence_db_teams_total", "Total teams.", nil, nil),
+		descStatuses:               prometheus.NewDesc("mypresence_db_statuses_total", "Total presence statuses defined.", nil, nil),
+		descPresences:              prometheus.NewDesc("mypresence_db_presences_total", "Total presence records stored.", nil, nil),
+		descFloorplans:             prometheus.NewDesc("mypresence_db_floorplans_total", "Total floor plans.", nil, nil),
+		descSeats:                  prometheus.NewDesc("mypresence_db_seats_total", "Total seats defined across all floor plans.", nil, nil),
+		descProjects:               prometheus.NewDesc("mypresence_db_projects_total", "Total projects.", nil, nil),
+		descProjEntr:               prometheus.NewDesc("mypresence_db_project_time_entries_total", "Total project time entries stored.", nil, nil),
+		descSites:                  prometheus.NewDesc("mypresence_db_sites_total", "Total sites.", nil, nil),
+		descSitesCorporate:         prometheus.NewDesc("mypresence_db_sites_corporate_total", "Total corporate sites.", nil, nil),
+		descSitesNonCorporate:      prometheus.NewDesc("mypresence_db_sites_non_corporate_total", "Total non-corporate sites.", nil, nil),
+		descSiteWorkstations:       prometheus.NewDesc("mypresence_db_site_workstations_total", "Total workstations capacity defined across all sites.", nil, nil),
+		descSeatReservations:       prometheus.NewDesc("mypresence_db_seat_reservations_total", "Total seat reservations stored.", nil, nil),
+		descReservationsToday:      prometheus.NewDesc("mypresence_db_seat_reservations_today", "Total seat reservations for today.", nil, nil),
+		descActiveProjects:         prometheus.NewDesc("mypresence_db_projects_active_total", "Total active projects.", nil, nil),
+		descProjectMembers:         prometheus.NewDesc("mypresence_db_project_members_total", "Total project member assignments.", nil, nil),
+		descProjectActivities:      prometheus.NewDesc("mypresence_db_project_activities_total", "Total project activities stored.", nil, nil),
+		descProjectActivitiesJira:  prometheus.NewDesc("mypresence_db_project_activities_jira_total", "Total Jira project activities.", nil, nil),
+		descProjectActivitiesSN:    prometheus.NewDesc("mypresence_db_project_activities_servicenow_total", "Total ServiceNow project activities.", nil, nil),
+		descProjectActivitiesOther: prometheus.NewDesc("mypresence_db_project_activities_other_total", "Total other project activities.", nil, nil),
+		descCertificationsPres:     prometheus.NewDesc("mypresence_db_certifications_presence_total", "Total certified presence months.", nil, nil),
+		descCertificationsProj:     prometheus.NewDesc("mypresence_db_certifications_project_total", "Total certified project months.", nil, nil),
+		descDomains:                prometheus.NewDesc("mypresence_db_domains_total", "Total domains.", nil, nil),
+		descActivePATs:             prometheus.NewDesc("mypresence_db_personal_access_tokens_active_total", "Currently active Personal Access Tokens.", nil, nil),
+		descPasskeys:               prometheus.NewDesc("mypresence_db_passkeys_total", "Total registered WebAuthn / passkey credentials.", nil, nil),
+		descNotifications:          prometheus.NewDesc("mypresence_db_notifications_total", "Total notifications stored.", nil, nil),
+		descNews:                   prometheus.NewDesc("mypresence_db_news_total", "Total news articles published.", nil, nil),
 	}
 }
 
@@ -194,6 +269,25 @@ func (c *dbCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.descSeats
 	ch <- c.descProjects
 	ch <- c.descProjEntr
+	ch <- c.descSites
+	ch <- c.descSitesCorporate
+	ch <- c.descSitesNonCorporate
+	ch <- c.descSiteWorkstations
+	ch <- c.descSeatReservations
+	ch <- c.descReservationsToday
+	ch <- c.descActiveProjects
+	ch <- c.descProjectMembers
+	ch <- c.descProjectActivities
+	ch <- c.descProjectActivitiesJira
+	ch <- c.descProjectActivitiesSN
+	ch <- c.descProjectActivitiesOther
+	ch <- c.descCertificationsPres
+	ch <- c.descCertificationsProj
+	ch <- c.descDomains
+	ch <- c.descActivePATs
+	ch <- c.descPasskeys
+	ch <- c.descNotifications
+	ch <- c.descNews
 }
 
 func (c *dbCollector) Collect(ch chan<- prometheus.Metric) {
@@ -207,6 +301,25 @@ func (c *dbCollector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(c.descSeats, prometheus.GaugeValue, s.Seats)
 	ch <- prometheus.MustNewConstMetric(c.descProjects, prometheus.GaugeValue, s.Projects)
 	ch <- prometheus.MustNewConstMetric(c.descProjEntr, prometheus.GaugeValue, s.ProjectEntries)
+	ch <- prometheus.MustNewConstMetric(c.descSites, prometheus.GaugeValue, s.Sites)
+	ch <- prometheus.MustNewConstMetric(c.descSitesCorporate, prometheus.GaugeValue, s.SitesCorporate)
+	ch <- prometheus.MustNewConstMetric(c.descSitesNonCorporate, prometheus.GaugeValue, s.SitesNonCorporate)
+	ch <- prometheus.MustNewConstMetric(c.descSiteWorkstations, prometheus.GaugeValue, s.SiteWorkstations)
+	ch <- prometheus.MustNewConstMetric(c.descSeatReservations, prometheus.GaugeValue, s.SeatReservations)
+	ch <- prometheus.MustNewConstMetric(c.descReservationsToday, prometheus.GaugeValue, s.ReservationsToday)
+	ch <- prometheus.MustNewConstMetric(c.descActiveProjects, prometheus.GaugeValue, s.ActiveProjects)
+	ch <- prometheus.MustNewConstMetric(c.descProjectMembers, prometheus.GaugeValue, s.ProjectMembers)
+	ch <- prometheus.MustNewConstMetric(c.descProjectActivities, prometheus.GaugeValue, s.ProjectActivities)
+	ch <- prometheus.MustNewConstMetric(c.descProjectActivitiesJira, prometheus.GaugeValue, s.ProjectActivitiesJira)
+	ch <- prometheus.MustNewConstMetric(c.descProjectActivitiesSN, prometheus.GaugeValue, s.ProjectActivitiesSN)
+	ch <- prometheus.MustNewConstMetric(c.descProjectActivitiesOther, prometheus.GaugeValue, s.ProjectActivitiesOther)
+	ch <- prometheus.MustNewConstMetric(c.descCertificationsPres, prometheus.GaugeValue, s.PresenceCertifications)
+	ch <- prometheus.MustNewConstMetric(c.descCertificationsProj, prometheus.GaugeValue, s.ProjectCertifications)
+	ch <- prometheus.MustNewConstMetric(c.descDomains, prometheus.GaugeValue, s.Domains)
+	ch <- prometheus.MustNewConstMetric(c.descActivePATs, prometheus.GaugeValue, s.ActivePATs)
+	ch <- prometheus.MustNewConstMetric(c.descPasskeys, prometheus.GaugeValue, s.Passkeys)
+	ch <- prometheus.MustNewConstMetric(c.descNotifications, prometheus.GaugeValue, s.Notifications)
+	ch <- prometheus.MustNewConstMetric(c.descNews, prometheus.GaugeValue, s.News)
 }
 
 // ─── HTTP instrumentation middleware ─────────────────────────────────────────

@@ -165,7 +165,7 @@ func newIsolatedRegistry(fn func() DBStats) *prometheus.Registry {
 
 func TestDBCollector_Describe_EmitsNineDescs(t *testing.T) {
 	c := newDBCollector(func() DBStats { return DBStats{} })
-	ch := make(chan *prometheus.Desc, 20)
+	ch := make(chan *prometheus.Desc, 50)
 	c.Describe(ch)
 	close(ch)
 
@@ -173,8 +173,8 @@ func TestDBCollector_Describe_EmitsNineDescs(t *testing.T) {
 	for range ch {
 		count++
 	}
-	if count != 9 {
-		t.Errorf("Describe emitted %d descriptors, want 9", count)
+	if count != 28 {
+		t.Errorf("Describe emitted %d descriptors, want 28", count)
 	}
 }
 
@@ -183,30 +183,93 @@ func TestDBCollector_Collect_AllValues(t *testing.T) {
 		Users: 5, ActiveSessions: 3, Teams: 2,
 		Statuses: 7, Presences: 100, Floorplans: 2, Seats: 20,
 		Projects: 4, ProjectEntries: 42,
+		Sites: 3, SitesCorporate: 2, SitesNonCorporate: 1, SiteWorkstations: 85,
+		SeatReservations: 15, ReservationsToday: 6,
+		ActiveProjects: 3, ProjectMembers: 12,
+		ProjectActivities: 30, ProjectActivitiesJira: 18, ProjectActivitiesSN: 7, ProjectActivitiesOther: 5,
+		PresenceCertifications: 8, ProjectCertifications: 4,
+		Domains: 2, ActivePATs: 5, Passkeys: 3, Notifications: 9, News: 4,
 	}
 	reg := newIsolatedRegistry(func() DBStats { return stats })
 
 	// GatherAndCompare checks both value and metadata (HELP/TYPE lines).
 	// Metrics are sorted alphabetically by the text format.
 	expected := strings.NewReader(`
+# HELP mypresence_db_certifications_presence_total Total certified presence months.
+# TYPE mypresence_db_certifications_presence_total gauge
+mypresence_db_certifications_presence_total 8
+# HELP mypresence_db_certifications_project_total Total certified project months.
+# TYPE mypresence_db_certifications_project_total gauge
+mypresence_db_certifications_project_total 4
+# HELP mypresence_db_domains_total Total domains.
+# TYPE mypresence_db_domains_total gauge
+mypresence_db_domains_total 2
 # HELP mypresence_db_floorplans_total Total floor plans.
 # TYPE mypresence_db_floorplans_total gauge
 mypresence_db_floorplans_total 2
+# HELP mypresence_db_news_total Total news articles published.
+# TYPE mypresence_db_news_total gauge
+mypresence_db_news_total 4
+# HELP mypresence_db_notifications_total Total notifications stored.
+# TYPE mypresence_db_notifications_total gauge
+mypresence_db_notifications_total 9
+# HELP mypresence_db_passkeys_total Total registered WebAuthn / passkey credentials.
+# TYPE mypresence_db_passkeys_total gauge
+mypresence_db_passkeys_total 3
+# HELP mypresence_db_personal_access_tokens_active_total Currently active Personal Access Tokens.
+# TYPE mypresence_db_personal_access_tokens_active_total gauge
+mypresence_db_personal_access_tokens_active_total 5
 # HELP mypresence_db_presences_total Total presence records stored.
 # TYPE mypresence_db_presences_total gauge
 mypresence_db_presences_total 100
+# HELP mypresence_db_project_activities_jira_total Total Jira project activities.
+# TYPE mypresence_db_project_activities_jira_total gauge
+mypresence_db_project_activities_jira_total 18
+# HELP mypresence_db_project_activities_other_total Total other project activities.
+# TYPE mypresence_db_project_activities_other_total gauge
+mypresence_db_project_activities_other_total 5
+# HELP mypresence_db_project_activities_servicenow_total Total ServiceNow project activities.
+# TYPE mypresence_db_project_activities_servicenow_total gauge
+mypresence_db_project_activities_servicenow_total 7
+# HELP mypresence_db_project_activities_total Total project activities stored.
+# TYPE mypresence_db_project_activities_total gauge
+mypresence_db_project_activities_total 30
+# HELP mypresence_db_project_members_total Total project member assignments.
+# TYPE mypresence_db_project_members_total gauge
+mypresence_db_project_members_total 12
 # HELP mypresence_db_project_time_entries_total Total project time entries stored.
 # TYPE mypresence_db_project_time_entries_total gauge
 mypresence_db_project_time_entries_total 42
+# HELP mypresence_db_projects_active_total Total active projects.
+# TYPE mypresence_db_projects_active_total gauge
+mypresence_db_projects_active_total 3
 # HELP mypresence_db_projects_total Total projects.
 # TYPE mypresence_db_projects_total gauge
 mypresence_db_projects_total 4
+# HELP mypresence_db_seat_reservations_today Total seat reservations for today.
+# TYPE mypresence_db_seat_reservations_today gauge
+mypresence_db_seat_reservations_today 6
+# HELP mypresence_db_seat_reservations_total Total seat reservations stored.
+# TYPE mypresence_db_seat_reservations_total gauge
+mypresence_db_seat_reservations_total 15
 # HELP mypresence_db_seats_total Total seats defined across all floor plans.
 # TYPE mypresence_db_seats_total gauge
 mypresence_db_seats_total 20
 # HELP mypresence_db_sessions_active_total Currently active sessions.
 # TYPE mypresence_db_sessions_active_total gauge
 mypresence_db_sessions_active_total 3
+# HELP mypresence_db_site_workstations_total Total workstations capacity defined across all sites.
+# TYPE mypresence_db_site_workstations_total gauge
+mypresence_db_site_workstations_total 85
+# HELP mypresence_db_sites_corporate_total Total corporate sites.
+# TYPE mypresence_db_sites_corporate_total gauge
+mypresence_db_sites_corporate_total 2
+# HELP mypresence_db_sites_non_corporate_total Total non-corporate sites.
+# TYPE mypresence_db_sites_non_corporate_total gauge
+mypresence_db_sites_non_corporate_total 1
+# HELP mypresence_db_sites_total Total sites.
+# TYPE mypresence_db_sites_total gauge
+mypresence_db_sites_total 3
 # HELP mypresence_db_statuses_total Total presence statuses defined.
 # TYPE mypresence_db_statuses_total gauge
 mypresence_db_statuses_total 7
@@ -226,24 +289,81 @@ func TestDBCollector_Collect_ZeroStats(t *testing.T) {
 	reg := newIsolatedRegistry(func() DBStats { return DBStats{} })
 	// The metric names must all appear with value 0.
 	if err := testutil.GatherAndCompare(reg, strings.NewReader(`
+# HELP mypresence_db_certifications_presence_total Total certified presence months.
+# TYPE mypresence_db_certifications_presence_total gauge
+mypresence_db_certifications_presence_total 0
+# HELP mypresence_db_certifications_project_total Total certified project months.
+# TYPE mypresence_db_certifications_project_total gauge
+mypresence_db_certifications_project_total 0
+# HELP mypresence_db_domains_total Total domains.
+# TYPE mypresence_db_domains_total gauge
+mypresence_db_domains_total 0
 # HELP mypresence_db_floorplans_total Total floor plans.
 # TYPE mypresence_db_floorplans_total gauge
 mypresence_db_floorplans_total 0
+# HELP mypresence_db_news_total Total news articles published.
+# TYPE mypresence_db_news_total gauge
+mypresence_db_news_total 0
+# HELP mypresence_db_notifications_total Total notifications stored.
+# TYPE mypresence_db_notifications_total gauge
+mypresence_db_notifications_total 0
+# HELP mypresence_db_passkeys_total Total registered WebAuthn / passkey credentials.
+# TYPE mypresence_db_passkeys_total gauge
+mypresence_db_passkeys_total 0
+# HELP mypresence_db_personal_access_tokens_active_total Currently active Personal Access Tokens.
+# TYPE mypresence_db_personal_access_tokens_active_total gauge
+mypresence_db_personal_access_tokens_active_total 0
 # HELP mypresence_db_presences_total Total presence records stored.
 # TYPE mypresence_db_presences_total gauge
 mypresence_db_presences_total 0
+# HELP mypresence_db_project_activities_jira_total Total Jira project activities.
+# TYPE mypresence_db_project_activities_jira_total gauge
+mypresence_db_project_activities_jira_total 0
+# HELP mypresence_db_project_activities_other_total Total other project activities.
+# TYPE mypresence_db_project_activities_other_total gauge
+mypresence_db_project_activities_other_total 0
+# HELP mypresence_db_project_activities_servicenow_total Total ServiceNow project activities.
+# TYPE mypresence_db_project_activities_servicenow_total gauge
+mypresence_db_project_activities_servicenow_total 0
+# HELP mypresence_db_project_activities_total Total project activities stored.
+# TYPE mypresence_db_project_activities_total gauge
+mypresence_db_project_activities_total 0
+# HELP mypresence_db_project_members_total Total project member assignments.
+# TYPE mypresence_db_project_members_total gauge
+mypresence_db_project_members_total 0
 # HELP mypresence_db_project_time_entries_total Total project time entries stored.
 # TYPE mypresence_db_project_time_entries_total gauge
 mypresence_db_project_time_entries_total 0
+# HELP mypresence_db_projects_active_total Total active projects.
+# TYPE mypresence_db_projects_active_total gauge
+mypresence_db_projects_active_total 0
 # HELP mypresence_db_projects_total Total projects.
 # TYPE mypresence_db_projects_total gauge
 mypresence_db_projects_total 0
+# HELP mypresence_db_seat_reservations_today Total seat reservations for today.
+# TYPE mypresence_db_seat_reservations_today gauge
+mypresence_db_seat_reservations_today 0
+# HELP mypresence_db_seat_reservations_total Total seat reservations stored.
+# TYPE mypresence_db_seat_reservations_total gauge
+mypresence_db_seat_reservations_total 0
 # HELP mypresence_db_seats_total Total seats defined across all floor plans.
 # TYPE mypresence_db_seats_total gauge
 mypresence_db_seats_total 0
 # HELP mypresence_db_sessions_active_total Currently active sessions.
 # TYPE mypresence_db_sessions_active_total gauge
 mypresence_db_sessions_active_total 0
+# HELP mypresence_db_site_workstations_total Total workstations capacity defined across all sites.
+# TYPE mypresence_db_site_workstations_total gauge
+mypresence_db_site_workstations_total 0
+# HELP mypresence_db_sites_corporate_total Total corporate sites.
+# TYPE mypresence_db_sites_corporate_total gauge
+mypresence_db_sites_corporate_total 0
+# HELP mypresence_db_sites_non_corporate_total Total non-corporate sites.
+# TYPE mypresence_db_sites_non_corporate_total gauge
+mypresence_db_sites_non_corporate_total 0
+# HELP mypresence_db_sites_total Total sites.
+# TYPE mypresence_db_sites_total gauge
+mypresence_db_sites_total 0
 # HELP mypresence_db_statuses_total Total presence statuses defined.
 # TYPE mypresence_db_statuses_total gauge
 mypresence_db_statuses_total 0
@@ -434,3 +554,37 @@ func labelsMatch(m *dto.Metric, want map[string]string) bool {
 	}
 	return true
 }
+
+func TestNewOperationsCounters(t *testing.T) {
+	// SeatReservationDaysTotal
+	beforeBooked := testutil.ToFloat64(SeatReservationDaysTotal.WithLabelValues("booked"))
+	SeatReservationDaysTotal.WithLabelValues("booked").Add(3)
+	afterBooked := testutil.ToFloat64(SeatReservationDaysTotal.WithLabelValues("booked"))
+	if afterBooked-beforeBooked != 3 {
+		t.Errorf("SeatReservationDaysTotal booked expected delta 3, got %f", afterBooked-beforeBooked)
+	}
+
+	beforeCancelled := testutil.ToFloat64(SeatReservationDaysTotal.WithLabelValues("cancelled"))
+	SeatReservationDaysTotal.WithLabelValues("cancelled").Add(2)
+	afterCancelled := testutil.ToFloat64(SeatReservationDaysTotal.WithLabelValues("cancelled"))
+	if afterCancelled-beforeCancelled != 2 {
+		t.Errorf("SeatReservationDaysTotal cancelled expected delta 2, got %f", afterCancelled-beforeCancelled)
+	}
+
+	// CertificationsOpsTotal
+	beforeCert := testutil.ToFloat64(CertificationsOpsTotal.WithLabelValues("presence", "certify"))
+	CertificationsOpsTotal.WithLabelValues("presence", "certify").Inc()
+	afterCert := testutil.ToFloat64(CertificationsOpsTotal.WithLabelValues("presence", "certify"))
+	if afterCert-beforeCert != 1 {
+		t.Errorf("CertificationsOpsTotal presence certify expected delta 1, got %f", afterCert-beforeCert)
+	}
+
+	// ProjectActivityDeclarationsTotal
+	beforeAct := testutil.ToFloat64(ProjectActivityDeclarationsTotal.WithLabelValues("jira", "create"))
+	ProjectActivityDeclarationsTotal.WithLabelValues("jira", "create").Inc()
+	afterAct := testutil.ToFloat64(ProjectActivityDeclarationsTotal.WithLabelValues("jira", "create"))
+	if afterAct-beforeAct != 1 {
+		t.Errorf("ProjectActivityDeclarationsTotal jira create expected delta 1, got %f", afterAct-beforeAct)
+	}
+}
+

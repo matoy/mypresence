@@ -502,6 +502,7 @@ func (h *CalendarHandler) CertifyMonth(w http.ResponseWriter, r *http.Request) {
 	h.DB.LogAdminAction(user.ID, "user", user.ID, "certify_declaration", fmt.Sprintf("%04d-%02d", req.Year, req.Month))
 	slog.Info("presence.certify", "actor", user.Email, "year", req.Year, "month", req.Month)
 	metrics.AdminOpsTotal.WithLabelValues("certification", "certify", "success").Inc()
+	metrics.CertificationsOpsTotal.WithLabelValues("presence", "certify").Inc()
 
 	jsonOK(w, map[string]string{"status": "ok"})
 }
@@ -543,6 +544,7 @@ func (h *CalendarHandler) DecertifyMonth(w http.ResponseWriter, r *http.Request)
 	h.DB.LogAdminAction(currentUser.ID, "user", req.UserID, "decertify_declaration", fmt.Sprintf("%04d-%02d", req.Year, req.Month))
 	slog.Info("presence.decertify", "actor", currentUser.Email, "target_id", req.UserID, "year", req.Year, "month", req.Month)
 	metrics.AdminOpsTotal.WithLabelValues("certification", "decertify", "success").Inc()
+	metrics.CertificationsOpsTotal.WithLabelValues("presence", "decertify").Inc()
 
 	jsonOK(w, map[string]string{"status": "ok"})
 }

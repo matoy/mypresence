@@ -298,30 +298,77 @@ func (d *DB) SetBcryptCost(cost int) { d.bcryptCost = cost }
 
 // DBCounts holds point-in-time record counts from all databases.
 type DBCounts struct {
-	Users          int64
-	ActiveSessions int64
-	Teams          int64
-	Statuses       int64
-	Presences      int64
-	Floorplans     int64
-	Seats          int64
-	Projects       int64
-	ProjectEntries int64
+	Users                  int64
+	ActiveSessions         int64
+	Teams                  int64
+	Statuses               int64
+	Presences              int64
+	Floorplans             int64
+	Seats                  int64
+	Projects               int64
+	ProjectEntries         int64
+	Sites                  int64
+	SitesCorporate         int64
+	SitesNonCorporate      int64
+	SiteWorkstations       int64
+	SeatReservations       int64
+	ReservationsToday      int64
+	ActiveProjects         int64
+	ProjectMembers         int64
+	ProjectActivities      int64
+	ProjectActivitiesJira  int64
+	ProjectActivitiesSN    int64
+	ProjectActivitiesOther int64
+	PresenceCertifications int64
+	ProjectCertifications  int64
+	Domains                int64
+	ActivePATs             int64
+	Passkeys               int64
+	Notifications          int64
+	News                   int64
 }
 
 // Counts queries lightweight COUNT(*) rows from each database.
 // Errors are silently ignored; missing tables return 0.
 func (d *DB) Counts() DBCounts {
 	var c DBCounts
+	today := time.Now().Format("2006-01-02")
+
+	// core DB
 	d.core.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&c.Users)                                                                     //nolint:errcheck
 	d.core.QueryRow(d.dialect.rebind(`SELECT COUNT(*) FROM sessions WHERE expires_at > ` + d.dialect.now())).Scan(&c.ActiveSessions) //nolint:errcheck
 	d.core.QueryRow(`SELECT COUNT(*) FROM teams`).Scan(&c.Teams)                                                                     //nolint:errcheck
+	d.core.QueryRow(`SELECT COUNT(*) FROM domains`).Scan(&c.Domains)                                                                 //nolint:errcheck
+	d.core.QueryRow(d.dialect.rebind(`SELECT COUNT(*) FROM personal_access_tokens WHERE expires_at IS NULL OR expires_at > ` + d.dialect.now())).Scan(&c.ActivePATs) //nolint:errcheck
+	d.core.QueryRow(`SELECT COUNT(*) FROM webauthn_credentials`).Scan(&c.Passkeys)                                                   //nolint:errcheck
+	d.core.QueryRow(`SELECT COUNT(*) FROM notifications`).Scan(&c.Notifications)                                                     //nolint:errcheck
+	d.core.QueryRow(`SELECT COUNT(*) FROM news`).Scan(&c.News)                                                                       //nolint:errcheck
+
+	// presence DB
 	d.presence.QueryRow(`SELECT COUNT(*) FROM statuses`).Scan(&c.Statuses)                                                           //nolint:errcheck
 	d.presence.QueryRow(`SELECT COUNT(*) FROM presences`).Scan(&c.Presences)                                                         //nolint:errcheck
+	d.presence.QueryRow(`SELECT COUNT(*) FROM declaration_certifications`).Scan(&c.PresenceCertifications)                          //nolint:errcheck
+	d.presence.QueryRow(`SELECT COUNT(*) FROM project_certifications`).Scan(&c.ProjectCertifications)                              //nolint:errcheck
+
+	// floorplan DB
 	d.floorplan.QueryRow(`SELECT COUNT(*) FROM floorplans`).Scan(&c.Floorplans)                                                      //nolint:errcheck
 	d.floorplan.QueryRow(`SELECT COUNT(*) FROM seats`).Scan(&c.Seats)                                                                //nolint:errcheck
+	d.floorplan.QueryRow(`SELECT COUNT(*) FROM sites`).Scan(&c.Sites)                                                                //nolint:errcheck
+	d.floorplan.QueryRow(d.dialect.rebind(`SELECT COUNT(*) FROM sites WHERE not_corporate_site = ? OR not_corporate_site IS NULL`), false).Scan(&c.SitesCorporate) //nolint:errcheck
+	d.floorplan.QueryRow(d.dialect.rebind(`SELECT COUNT(*) FROM sites WHERE not_corporate_site = ?`), true).Scan(&c.SitesNonCorporate)                             //nolint:errcheck
+	d.floorplan.QueryRow(`SELECT COALESCE(SUM(seats), 0) FROM sites`).Scan(&c.SiteWorkstations)                                      //nolint:errcheck
+	d.floorplan.QueryRow(`SELECT COUNT(*) FROM seat_reservations`).Scan(&c.SeatReservations)                                          //nolint:errcheck
+	d.floorplan.QueryRow(d.dialect.rebind(`SELECT COUNT(*) FROM seat_reservations WHERE date = ?`), today).Scan(&c.ReservationsToday) //nolint:errcheck
+
+	// projects DB
 	d.projects.QueryRow(`SELECT COUNT(*) FROM projects`).Scan(&c.Projects)                                                           //nolint:errcheck
+	d.projects.QueryRow(d.dialect.rebind(`SELECT COUNT(*) FROM projects WHERE active = ?`), true).Scan(&c.ActiveProjects)           //nolint:errcheck
+	d.projects.QueryRow(`SELECT COUNT(*) FROM project_members`).Scan(&c.ProjectMembers)                                              //nolint:errcheck
 	d.projects.QueryRow(`SELECT COUNT(*) FROM project_time_entries`).Scan(&c.ProjectEntries)                                         //nolint:errcheck
+	d.projects.QueryRow(`SELECT COUNT(*) FROM project_activities`).Scan(&c.ProjectActivities)                                        //nolint:errcheck
+	d.projects.QueryRow(`SELECT COUNT(*) FROM project_activities WHERE activity_type = 'jira'`).Scan(&c.ProjectActivitiesJira)       //nolint:errcheck
+	d.projects.QueryRow(`SELECT COUNT(*) FROM project_activities WHERE activity_type = 'servicenow'`).Scan(&c.ProjectActivitiesSN)  //nolint:errcheck
+	d.projects.QueryRow(`SELECT COUNT(*) FROM project_activities WHERE activity_type = 'other'`).Scan(&c.ProjectActivitiesOther)   //nolint:errcheck
 	return c
 }
 

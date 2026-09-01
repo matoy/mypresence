@@ -217,6 +217,7 @@ func (h *ProjectsHandler) CreateProjectActivity(w http.ResponseWriter, r *http.R
 		return
 	}
 	metrics.ProjectOpsTotal.WithLabelValues("activity_create", "success").Inc()
+	metrics.ProjectActivityDeclarationsTotal.WithLabelValues(req.ActivityType, "create").Inc()
 	slog.Info("project.activity.create", "user", user.Email, "date", req.Date, "type", req.ActivityType, "percentage", req.Percentage)
 	jsonOK(w, map[string]interface{}{"id": id, "status": "ok"})
 }
@@ -263,6 +264,7 @@ func (h *ProjectsHandler) UpdateProjectActivity(w http.ResponseWriter, r *http.R
 		return
 	}
 	metrics.ProjectOpsTotal.WithLabelValues("activity_update", "success").Inc()
+	metrics.ProjectActivityDeclarationsTotal.WithLabelValues(req.ActivityType, "update").Inc()
 	slog.Info("project.activity.update", "user", user.Email, "activity_id", id)
 	jsonOK(w, map[string]string{"status": "ok"})
 }
@@ -367,6 +369,9 @@ func (h *ProjectsHandler) SetDayActivities(w http.ResponseWriter, r *http.Reques
 	}
 
 	metrics.ProjectOpsTotal.WithLabelValues("activity_day_save", "success").Inc()
+	for _, a := range created {
+		metrics.ProjectActivityDeclarationsTotal.WithLabelValues(a.ActivityType, "create").Inc()
+	}
 	slog.Info("project.activity.day_save", "user", user.Email, "date", req.Date, "count", len(created))
 	jsonOK(w, map[string]interface{}{"status": "ok", "activities": created})
 }
@@ -400,6 +405,7 @@ func (h *ProjectsHandler) DeleteProjectActivity(w http.ResponseWriter, r *http.R
 		return
 	}
 	metrics.ProjectOpsTotal.WithLabelValues("activity_delete", "success").Inc()
+	metrics.ProjectActivityDeclarationsTotal.WithLabelValues(existing.ActivityType, "delete").Inc()
 	slog.Info("project.activity.delete", "user", user.Email, "activity_id", id)
 	jsonOK(w, map[string]string{"status": "ok"})
 }

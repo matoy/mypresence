@@ -81,6 +81,7 @@ func (h *ProjectsHandler) CertifyProjectMonth(w http.ResponseWriter, r *http.Req
 	h.DB.LogAdminAction(user.ID, "user", user.ID, "certify_project_declaration", fmt.Sprintf("%04d-%02d", req.Year, req.Month))
 	slog.Info("project.certify", "actor", user.Email, "year", req.Year, "month", req.Month)
 	metrics.AdminOpsTotal.WithLabelValues("project_certification", "certify", "success").Inc()
+	metrics.CertificationsOpsTotal.WithLabelValues("project", "certify").Inc()
 
 	jsonOK(w, map[string]string{"status": "ok"})
 }
@@ -121,6 +122,7 @@ func (h *ProjectsHandler) DecertifyProjectMonth(w http.ResponseWriter, r *http.R
 	h.DB.LogAdminAction(currentUser.ID, "user", req.UserID, "decertify_project_declaration", fmt.Sprintf("%04d-%02d", req.Year, req.Month))
 	slog.Info("project.decertify", "actor", currentUser.Email, "target_id", req.UserID, "year", req.Year, "month", req.Month)
 	metrics.AdminOpsTotal.WithLabelValues("project_certification", "decertify", "success").Inc()
+	metrics.CertificationsOpsTotal.WithLabelValues("project", "decertify").Inc()
 
 	jsonOK(w, map[string]string{"status": "ok"})
 }

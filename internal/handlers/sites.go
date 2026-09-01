@@ -9,6 +9,7 @@ import (
 
 	"github.com/matoy/mypresence/internal/middleware"
 	"github.com/matoy/mypresence/internal/models"
+	"github.com/matoy/mypresence/internal/metrics"
 )
 
 // AdminSitesPage renders the sites admin page: GET /admin/sites.
@@ -68,11 +69,13 @@ func (h *FloorplanHandler) CreateSite(w http.ResponseWriter, r *http.Request) {
 		FloorplanIDs     []int64 `json:"floorplan_ids"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		metrics.AdminOpsTotal.WithLabelValues("site", "create", "failure").Inc()
 		jsonError(w, "Requête invalide", http.StatusBadRequest)
 		return
 	}
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" {
+		metrics.AdminOpsTotal.WithLabelValues("site", "create", "failure").Inc()
 		jsonError(w, "sites.error_name_required", http.StatusBadRequest)
 		return
 	}
@@ -81,6 +84,7 @@ func (h *FloorplanHandler) CreateSite(w http.ResponseWriter, r *http.Request) {
 	if existingSites, err := h.DB.ListSites(); err == nil {
 		for _, s := range existingSites {
 			if strings.EqualFold(strings.TrimSpace(s.Name), req.Name) {
+				metrics.AdminOpsTotal.WithLabelValues("site", "create", "failure").Inc()
 				jsonError(w, "sites.error_name_exists", http.StatusConflict)
 				return
 			}
@@ -111,10 +115,12 @@ func (h *FloorplanHandler) CreateSite(w http.ResponseWriter, r *http.Request) {
 
 	id, err := h.DB.CreateSite(site)
 	if err != nil {
+		metrics.AdminOpsTotal.WithLabelValues("site", "create", "failure").Inc()
 		jsonError(w, "Erreur lors de la création du site", http.StatusInternalServerError)
 		return
 	}
 
+	metrics.AdminOpsTotal.WithLabelValues("site", "create", "success").Inc()
 	actor := middleware.GetUser(r)
 	if actor != nil {
 		slog.Info("admin.site.create", "actor", actor.Email, "site_id", id, "name", req.Name)
@@ -127,6 +133,7 @@ func (h *FloorplanHandler) CreateSite(w http.ResponseWriter, r *http.Request) {
 func (h *FloorplanHandler) UpdateSite(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil || id <= 0 {
+		metrics.AdminOpsTotal.WithLabelValues("site", "update", "failure").Inc()
 		jsonError(w, "ID invalide", http.StatusBadRequest)
 		return
 	}
@@ -140,11 +147,13 @@ func (h *FloorplanHandler) UpdateSite(w http.ResponseWriter, r *http.Request) {
 		FloorplanIDs     []int64 `json:"floorplan_ids"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		metrics.AdminOpsTotal.WithLabelValues("site", "update", "failure").Inc()
 		jsonError(w, "Requête invalide", http.StatusBadRequest)
 		return
 	}
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" {
+		metrics.AdminOpsTotal.WithLabelValues("site", "update", "failure").Inc()
 		jsonError(w, "sites.error_name_required", http.StatusBadRequest)
 		return
 	}
@@ -153,6 +162,7 @@ func (h *FloorplanHandler) UpdateSite(w http.ResponseWriter, r *http.Request) {
 	if existingSites, err := h.DB.ListSites(); err == nil {
 		for _, s := range existingSites {
 			if s.ID != id && strings.EqualFold(strings.TrimSpace(s.Name), req.Name) {
+				metrics.AdminOpsTotal.WithLabelValues("site", "update", "failure").Inc()
 				jsonError(w, "sites.error_name_exists", http.StatusConflict)
 				return
 			}
@@ -183,10 +193,12 @@ func (h *FloorplanHandler) UpdateSite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.DB.UpdateSite(site); err != nil {
+		metrics.AdminOpsTotal.WithLabelValues("site", "update", "failure").Inc()
 		jsonError(w, "Erreur lors de la mise à jour du site", http.StatusInternalServerError)
 		return
 	}
 
+	metrics.AdminOpsTotal.WithLabelValues("site", "update", "success").Inc()
 	actor := middleware.GetUser(r)
 	if actor != nil {
 		slog.Info("admin.site.update", "actor", actor.Email, "site_id", id, "name", req.Name)
@@ -199,15 +211,18 @@ func (h *FloorplanHandler) UpdateSite(w http.ResponseWriter, r *http.Request) {
 func (h *FloorplanHandler) DeleteSite(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil || id <= 0 {
+		metrics.AdminOpsTotal.WithLabelValues("site", "delete", "failure").Inc()
 		jsonError(w, "ID invalide", http.StatusBadRequest)
 		return
 	}
 
 	if err := h.DB.DeleteSite(id); err != nil {
+		metrics.AdminOpsTotal.WithLabelValues("site", "delete", "failure").Inc()
 		jsonError(w, "Erreur lors de la suppression du site", http.StatusInternalServerError)
 		return
 	}
 
+	metrics.AdminOpsTotal.WithLabelValues("site", "delete", "success").Inc()
 	actor := middleware.GetUser(r)
 	if actor != nil {
 		slog.Info("admin.site.delete", "actor", actor.Email, "site_id", id)

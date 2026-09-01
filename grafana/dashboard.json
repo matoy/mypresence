@@ -1300,7 +1300,7 @@
       "gridPos": {
         "h": 4,
         "w": 4,
-        "x": 12,
+        "x": 0,
         "y": 49
       },
       "datasource": {
@@ -1337,7 +1337,7 @@
       "gridPos": {
         "h": 4,
         "w": 4,
-        "x": 16,
+        "x": 4,
         "y": 49
       },
       "datasource": {
@@ -1379,7 +1379,7 @@
       "gridPos": {
         "h": 4,
         "w": 4,
-        "x": 20,
+        "x": 8,
         "y": 49
       },
       "datasource": {
@@ -1421,7 +1421,7 @@
       "gridPos": {
         "h": 4,
         "w": 4,
-        "x": 8,
+        "x": 12,
         "y": 49
       },
       "datasource": {
@@ -1463,7 +1463,7 @@
       "gridPos": {
         "h": 4,
         "w": 4,
-        "x": 0,
+        "x": 16,
         "y": 49
       },
       "datasource": {
@@ -1505,7 +1505,7 @@
       "gridPos": {
         "h": 4,
         "w": 4,
-        "x": 4,
+        "x": 20,
         "y": 49
       },
       "datasource": {
@@ -1688,6 +1688,743 @@
         "x": 0,
         "y": 61
       },
+      "id": 150,
+      "title": "🏢 Sites & Workplace Capacity",
+      "type": "row"
+    },
+    {
+      "id": 151,
+      "type": "stat",
+      "title": "Total Sites",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 62
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "mypresence_db_sites_total",
+          "legendFormat": "Sites",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 152,
+      "type": "stat",
+      "title": "Corporate Sites",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 62
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "mypresence_db_sites_corporate_total",
+          "legendFormat": "Corporate",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 153,
+      "type": "stat",
+      "title": "Non-Corporate Sites",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 62
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "mypresence_db_sites_non_corporate_total",
+          "legendFormat": "Non-Corporate",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 154,
+      "type": "stat",
+      "title": "Workstations Capacity",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 62
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "mypresence_db_site_workstations_total",
+          "legendFormat": "Workstations",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 155,
+      "type": "stat",
+      "title": "Desk Reservations Today",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 62
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "mypresence_db_seat_reservations_today",
+          "legendFormat": "Today",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 156,
+      "type": "stat",
+      "title": "Total Reservations Stored",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 62
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "mypresence_db_seat_reservations_total",
+          "legendFormat": "Reservations",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 157,
+      "type": "timeseries",
+      "title": "Desk Bookings & Cancellations Rate (days/sec)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 66
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(mypresence_seat_reservation_days_total{action='booked'}[5m])",
+          "legendFormat": "Booked days/s",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "rate(mypresence_seat_reservation_days_total{action='cancelled'}[5m])",
+          "legendFormat": "Cancelled days/s",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 158,
+      "type": "timeseries",
+      "title": "Sites Admin Operations Rate",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 66
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (action, result) (rate(mypresence_admin_operations_total{entity='site'}[5m]))",
+          "legendFormat": "{{action}} ({{result}})",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 74
+      },
+      "id": 160,
+      "title": "💼 Projects & Activities Tracking",
+      "type": "row"
+    },
+    {
+      "id": 161,
+      "type": "stat",
+      "title": "Active Projects",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 75
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "mypresence_db_projects_active_total",
+          "legendFormat": "Active",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 162,
+      "type": "stat",
+      "title": "Total Projects",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 75
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "mypresence_db_projects_total",
+          "legendFormat": "Projects",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 163,
+      "type": "stat",
+      "title": "Project Memberships",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 75
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "mypresence_db_project_members_total",
+          "legendFormat": "Members",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 164,
+      "type": "stat",
+      "title": "Jira Activities",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 75
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "mypresence_db_project_activities_jira_total",
+          "legendFormat": "Jira",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 165,
+      "type": "stat",
+      "title": "ServiceNow Activities",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 75
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "mypresence_db_project_activities_servicenow_total",
+          "legendFormat": "ServiceNow",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 166,
+      "type": "stat",
+      "title": "Other Activities",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 75
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "mypresence_db_project_activities_other_total",
+          "legendFormat": "Other",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 167,
+      "type": "timeseries",
+      "title": "Project Activity Declarations Rate by Source",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 79
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (source, action) (rate(mypresence_project_activity_declarations_total[5m]))",
+          "legendFormat": "{{source}} - {{action}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 168,
+      "type": "timeseries",
+      "title": "Monthly Certifications Operations Rate",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 79
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (type, action) (rate(mypresence_certifications_operations_total[5m]))",
+          "legendFormat": "{{type}} - {{action}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 87
+      },
       "id": 40,
       "title": "🗄️ Database & App",
       "type": "row"
@@ -1699,8 +2436,8 @@
       "gridPos": {
         "h": 4,
         "w": 3,
-        "x": 9,
-        "y": 62
+        "x": 0,
+        "y": 88
       },
       "datasource": {
         "type": "prometheus",
@@ -1736,8 +2473,8 @@
       "gridPos": {
         "h": 4,
         "w": 3,
-        "x": 0,
-        "y": 62
+        "x": 3,
+        "y": 88
       },
       "datasource": {
         "type": "prometheus",
@@ -1773,8 +2510,8 @@
       "gridPos": {
         "h": 4,
         "w": 3,
-        "x": 3,
-        "y": 62
+        "x": 6,
+        "y": 88
       },
       "datasource": {
         "type": "prometheus",
@@ -1810,8 +2547,8 @@
       "gridPos": {
         "h": 4,
         "w": 3,
-        "x": 6,
-        "y": 62
+        "x": 9,
+        "y": 88
       },
       "datasource": {
         "type": "prometheus",
@@ -1848,7 +2585,7 @@
         "h": 4,
         "w": 3,
         "x": 12,
-        "y": 62
+        "y": 88
       },
       "datasource": {
         "type": "prometheus",
@@ -1885,7 +2622,7 @@
         "h": 4,
         "w": 3,
         "x": 15,
-        "y": 62
+        "y": 88
       },
       "datasource": {
         "type": "prometheus",
@@ -1922,7 +2659,7 @@
         "h": 4,
         "w": 3,
         "x": 18,
-        "y": 62
+        "y": 88
       },
       "datasource": {
         "type": "prometheus",
@@ -1959,7 +2696,7 @@
         "h": 4,
         "w": 3,
         "x": 21,
-        "y": 62
+        "y": 88
       },
       "datasource": {
         "type": "prometheus",
@@ -1989,6 +2726,264 @@
       ]
     },
     {
+      "id": 141,
+      "type": "stat",
+      "title": "Sites",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 92
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "mypresence_db_sites_total",
+          "legendFormat": "Sites",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 142,
+      "type": "stat",
+      "title": "Domains",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 92
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "mypresence_db_domains_total",
+          "legendFormat": "Domains",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 143,
+      "type": "stat",
+      "title": "Active PATs",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 92
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "mypresence_db_personal_access_tokens_active_total",
+          "legendFormat": "Active PATs",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 144,
+      "type": "stat",
+      "title": "Passkeys",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 92
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "mypresence_db_passkeys_total",
+          "legendFormat": "Passkeys",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 145,
+      "type": "stat",
+      "title": "Notifications",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 92
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "mypresence_db_notifications_total",
+          "legendFormat": "Notifications",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
+      "id": 146,
+      "type": "stat",
+      "title": "News Banners",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 92
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "mypresence_db_news_total",
+          "legendFormat": "News",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
       "id": 48,
       "type": "timeseries",
       "title": "DB growth — users & presences over time",
@@ -1996,7 +2991,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 66
+        "y": 96
       },
       "datasource": {
         "type": "prometheus",
@@ -2051,12 +3046,68 @@
       ]
     },
     {
+      "id": 147,
+      "type": "timeseries",
+      "title": "Capacity & Seats growth over time",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 96
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "mypresence_db_site_workstations_total",
+          "legendFormat": "Workstations Capacity",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "mypresence_db_seats_total",
+          "legendFormat": "Physical Floorplan Seats",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ]
+    },
+    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 74
+        "y": 104
       },
       "id": 50,
       "title": "⚙️ Go Runtime",
@@ -2069,8 +3120,8 @@
       "gridPos": {
         "h": 6,
         "w": 8,
-        "x": 8,
-        "y": 75
+        "x": 0,
+        "y": 105
       },
       "datasource": {
         "type": "prometheus",
@@ -2120,8 +3171,8 @@
       "gridPos": {
         "h": 6,
         "w": 8,
-        "x": 0,
-        "y": 75
+        "x": 8,
+        "y": 105
       },
       "datasource": {
         "type": "prometheus",
@@ -2160,7 +3211,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 75
+        "y": 105
       },
       "datasource": {
         "type": "prometheus",
@@ -2192,7 +3243,12 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 82 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 111
+      },
       "id": 70,
       "title": "📋 Application Logs",
       "type": "row"
@@ -2201,8 +3257,16 @@
       "id": 71,
       "type": "logs",
       "title": "All application logs",
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 83 },
-      "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 112
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "${DS_LOKI}"
+      },
       "options": {
         "showTime": true,
         "showLabels": false,
@@ -2216,7 +3280,10 @@
         {
           "refId": "A",
           "expr": "{${loki_stream}}",
-          "datasource": { "type": "loki", "uid": "${DS_LOKI}" }
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          }
         }
       ]
     },
@@ -2224,8 +3291,16 @@
       "id": 72,
       "type": "logs",
       "title": "Auth events",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 91 },
-      "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 120
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "${DS_LOKI}"
+      },
       "options": {
         "showTime": true,
         "showLabels": false,
@@ -2238,7 +3313,10 @@
         {
           "refId": "A",
           "expr": "{${loki_stream}} | json | msg =~ `auth\\..*`",
-          "datasource": { "type": "loki", "uid": "${DS_LOKI}" }
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          }
         }
       ]
     },
@@ -2246,8 +3324,16 @@
       "id": 73,
       "type": "logs",
       "title": "Presence, project & admin operations",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 91 },
-      "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 120
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "${DS_LOKI}"
+      },
       "options": {
         "showTime": true,
         "showLabels": false,
@@ -2260,7 +3346,10 @@
         {
           "refId": "A",
           "expr": "{${loki_stream}} | json | msg =~ `(presence|admin|project|impersonate)\\..*`",
-          "datasource": { "type": "loki", "uid": "${DS_LOKI}" }
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          }
         }
       ]
     },
@@ -2268,8 +3357,16 @@
       "id": 74,
       "type": "logs",
       "title": "Errors & warnings",
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 99 },
-      "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 128
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "${DS_LOKI}"
+      },
       "options": {
         "showTime": true,
         "showLabels": false,
@@ -2282,13 +3379,21 @@
         {
           "refId": "A",
           "expr": "{${loki_stream}, level=~\"WARN|ERROR\"}",
-          "datasource": { "type": "loki", "uid": "${DS_LOKI}" }
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          }
         }
       ]
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 107 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 136
+      },
       "id": 75,
       "title": "🔐 PAT / Floorplan / Admin Ops",
       "type": "row"
@@ -2297,15 +3402,27 @@
       "id": 76,
       "type": "timeseries",
       "title": "PAT operations rate (by action/result)",
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 108 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 137
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "options": {
-        "legend": { "displayMode": "list" }
+        "legend": {
+          "displayMode": "list"
+        }
       },
       "fieldConfig": {
         "defaults": {
           "unit": "ops",
-          "custom": { "lineWidth": 2 }
+          "custom": {
+            "lineWidth": 2
+          }
         }
       },
       "targets": [
@@ -2313,7 +3430,10 @@
           "refId": "A",
           "expr": "sum by (action, result) (rate(mypresence_pat_operations_total[5m]))",
           "legendFormat": "{{action}} / {{result}}",
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
         }
       ]
     },
@@ -2321,15 +3441,27 @@
       "id": 77,
       "type": "timeseries",
       "title": "Floorplan operations rate (by action/result)",
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 108 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 137
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "options": {
-        "legend": { "displayMode": "list" }
+        "legend": {
+          "displayMode": "list"
+        }
       },
       "fieldConfig": {
         "defaults": {
           "unit": "ops",
-          "custom": { "lineWidth": 2 }
+          "custom": {
+            "lineWidth": 2
+          }
         }
       },
       "targets": [
@@ -2337,7 +3469,10 @@
           "refId": "A",
           "expr": "sum by (action, result) (rate(mypresence_floorplan_operations_total[5m]))",
           "legendFormat": "{{action}} / {{result}}",
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
         }
       ]
     },
@@ -2345,15 +3480,27 @@
       "id": 78,
       "type": "timeseries",
       "title": "Admin operations rate (by entity/action/result)",
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 108 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 137
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "options": {
-        "legend": { "displayMode": "list" }
+        "legend": {
+          "displayMode": "list"
+        }
       },
       "fieldConfig": {
         "defaults": {
           "unit": "ops",
-          "custom": { "lineWidth": 2 }
+          "custom": {
+            "lineWidth": 2
+          }
         }
       },
       "targets": [
@@ -2361,7 +3508,10 @@
           "refId": "A",
           "expr": "sum by (entity, action, result) (rate(mypresence_admin_operations_total[5m]))",
           "legendFormat": "{{entity}}.{{action}} / {{result}}",
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
         }
       ]
     }

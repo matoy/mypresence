@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/matoy/mypresence/internal/db"
+	"github.com/matoy/mypresence/internal/metrics"
 	"github.com/matoy/mypresence/internal/middleware"
 	"github.com/matoy/mypresence/internal/models"
 )
@@ -127,10 +128,12 @@ func (h *NewsHandler) CreateNews(w http.ResponseWriter, r *http.Request) {
 
 	id, err := h.DB.CreateNewsMessage(req.Title, req.Content, req.StartDate, req.EndDate, req.BgColor, bgOpacity, req.TextColor, req.Recurring)
 	if err != nil {
+		metrics.AdminOpsTotal.WithLabelValues("news", "create", "failure").Inc()
 		slog.Error("admin.news.create_error", "error", err)
 		jsonError(w, "Server error", http.StatusInternalServerError)
 		return
 	}
+	metrics.AdminOpsTotal.WithLabelValues("news", "create", "success").Inc()
 	currentUser := middleware.GetUser(r)
 	if currentUser != nil {
 		h.DB.LogAdminAction(currentUser.ID, "news", id, "create", req.Title)
@@ -143,6 +146,7 @@ func (h *NewsHandler) CreateNews(w http.ResponseWriter, r *http.Request) {
 func (h *NewsHandler) UpdateNews(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
+		metrics.AdminOpsTotal.WithLabelValues("news", "update", "failure").Inc()
 		jsonError(w, "Invalid ID", http.StatusBadRequest)
 		return
 	}
@@ -157,6 +161,7 @@ func (h *NewsHandler) UpdateNews(w http.ResponseWriter, r *http.Request) {
 		Recurring bool   `json:"recurring"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		metrics.AdminOpsTotal.WithLabelValues("news", "update", "failure").Inc()
 		jsonError(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
@@ -183,33 +188,40 @@ func (h *NewsHandler) UpdateNews(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Title == "" || req.Content == "" || req.StartDate == "" || req.EndDate == "" {
+		metrics.AdminOpsTotal.WithLabelValues("news", "update", "failure").Inc()
 		jsonError(w, "news.error.fields_required", http.StatusBadRequest)
 		return
 	}
 	if !isValidDate(req.StartDate) || !isValidDate(req.EndDate) {
+		metrics.AdminOpsTotal.WithLabelValues("news", "update", "failure").Inc()
 		jsonError(w, "news.error.invalid_dates", http.StatusBadRequest)
 		return
 	}
 	if !req.Recurring && req.StartDate > req.EndDate {
+		metrics.AdminOpsTotal.WithLabelValues("news", "update", "failure").Inc()
 		jsonError(w, "news.error.invalid_dates", http.StatusBadRequest)
 		return
 	}
 	if req.Recurring {
 		if err := validateRecurringDays(req.StartDate, req.EndDate); err != nil {
+			metrics.AdminOpsTotal.WithLabelValues("news", "update", "failure").Inc()
 			jsonError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 	}
 	if !hexColorRE.MatchString(req.BgColor) || !hexColorRE.MatchString(req.TextColor) {
+		metrics.AdminOpsTotal.WithLabelValues("news", "update", "failure").Inc()
 		jsonError(w, "news.error.invalid_color", http.StatusBadRequest)
 		return
 	}
 
 	if err := h.DB.UpdateNewsMessage(id, req.Title, req.Content, req.StartDate, req.EndDate, req.BgColor, bgOpacity, req.TextColor, req.Recurring); err != nil {
+		metrics.AdminOpsTotal.WithLabelValues("news", "update", "failure").Inc()
 		slog.Error("admin.news.update_error", "id", id, "error", err)
 		jsonError(w, "Server error", http.StatusInternalServerError)
 		return
 	}
+	metrics.AdminOpsTotal.WithLabelValues("news", "update", "success").Inc()
 	currentUser := middleware.GetUser(r)
 	if currentUser != nil {
 		h.DB.LogAdminAction(currentUser.ID, "news", id, "update", req.Title)
@@ -222,15 +234,18 @@ func (h *NewsHandler) UpdateNews(w http.ResponseWriter, r *http.Request) {
 func (h *NewsHandler) DeleteNews(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
+		metrics.AdminOpsTotal.WithLabelValues("news", "delete", "failure").Inc()
 		jsonError(w, "Invalid ID", http.StatusBadRequest)
 		return
 	}
 	title := h.DB.GetNewsMessageTitle(id)
 	if err := h.DB.DeleteNewsMessage(id); err != nil {
+		metrics.AdminOpsTotal.WithLabelValues("news", "delete", "failure").Inc()
 		slog.Error("admin.news.delete_error", "id", id, "error", err)
 		jsonError(w, "Server error", http.StatusInternalServerError)
 		return
 	}
+	metrics.AdminOpsTotal.WithLabelValues("news", "delete", "success").Inc()
 	currentUser := middleware.GetUser(r)
 	if currentUser != nil {
 		h.DB.LogAdminAction(currentUser.ID, "news", id, "delete", title)

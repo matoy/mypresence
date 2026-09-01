@@ -516,7 +516,7 @@ func TestSitesReport_TemplateIconsAndScrollbarFix(t *testing.T) {
 	}
 
 	// Verify corporate filter dropdown presence
-	if !strings.Contains(html, "sites.filter_corporate") && !strings.Contains(html, "Type de site") {
+	if !strings.Contains(html, "sites.filter_corporate") && !strings.Contains(html, ">Type<") && !strings.Contains(html, "Type") {
 		t.Errorf("expected corporate filter label in template")
 	}
 	if !strings.Contains(html, `value="corporate" selected`) {

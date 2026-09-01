@@ -190,6 +190,7 @@ func (h *FloorplanHandler) ReserveSeat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	metrics.FloorplanOpsTotal.WithLabelValues("reserve", "success").Inc()
+	metrics.SeatReservationDaysTotal.WithLabelValues("booked").Add(1)
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
@@ -203,6 +204,7 @@ func (h *FloorplanHandler) CancelReservation(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	metrics.FloorplanOpsTotal.WithLabelValues("cancel", "success").Inc()
+	metrics.SeatReservationDaysTotal.WithLabelValues("cancelled").Add(1)
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
@@ -647,6 +649,9 @@ func (h *FloorplanHandler) BulkReserveSeats(w http.ResponseWriter, r *http.Reque
 	}
 	count := h.DB.BulkReserveSeat(req.SeatID, targetUserID, req.Dates, req.Half)
 	metrics.FloorplanOpsTotal.WithLabelValues("bulk_reserve", "success").Inc()
+	if count > 0 {
+		metrics.SeatReservationDaysTotal.WithLabelValues("booked").Add(float64(count))
+	}
 	jsonOK(w, map[string]interface{}{"booked": count})
 }
 
@@ -691,5 +696,6 @@ func (h *FloorplanHandler) CancelReservationsByDates(w http.ResponseWriter, r *h
 		return
 	}
 	metrics.FloorplanOpsTotal.WithLabelValues("bulk_cancel", "success").Inc()
+	metrics.SeatReservationDaysTotal.WithLabelValues("cancelled").Add(float64(len(req.Dates)))
 	jsonOK(w, map[string]string{"status": "ok"})
 }

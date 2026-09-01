@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/matoy/mypresence/internal/db"
+	"github.com/matoy/mypresence/internal/metrics"
 	"github.com/matoy/mypresence/internal/middleware"
 	"github.com/matoy/mypresence/internal/models"
 )
@@ -307,6 +308,7 @@ func (h *NotificationsHandler) AdminSendNotification(w http.ResponseWriter, r *h
 	}
 
 	if len(targetUserIDs) > 0 && count == 0 && lastErr != nil {
+		metrics.AdminOpsTotal.WithLabelValues("notification", "send", "failure").Inc()
 		if isJSON {
 			jsonError(w, "Failed to create notification", http.StatusInternalServerError)
 		} else {
@@ -315,6 +317,7 @@ func (h *NotificationsHandler) AdminSendNotification(w http.ResponseWriter, r *h
 		return
 	}
 
+	metrics.AdminOpsTotal.WithLabelValues("notification", "send", "success").Inc()
 	if isJSON {
 		jsonOK(w, map[string]interface{}{
 			"status": "ok",
@@ -329,6 +332,7 @@ func (h *NotificationsHandler) AdminSendNotification(w http.ResponseWriter, r *h
 func (h *NotificationsHandler) AdminDeleteNotification(w http.ResponseWriter, r *http.Request) {
 	currentUser := middleware.GetUser(r)
 	if currentUser == nil || !currentUser.HasRole(models.RoleGlobal) {
+		metrics.AdminOpsTotal.WithLabelValues("notification", "delete", "failure").Inc()
 		if strings.Contains(r.Header.Get("Accept"), "application/json") || strings.Contains(r.Header.Get("Content-Type"), "application/json") {
 			jsonError(w, "Forbidden", http.StatusForbidden)
 		} else {
@@ -343,6 +347,7 @@ func (h *NotificationsHandler) AdminDeleteNotification(w http.ResponseWriter, r 
 	}
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil || id <= 0 {
+		metrics.AdminOpsTotal.WithLabelValues("notification", "delete", "failure").Inc()
 		if strings.Contains(r.Header.Get("Accept"), "application/json") || strings.Contains(r.Header.Get("Content-Type"), "application/json") {
 			jsonError(w, "Invalid notification ID", http.StatusBadRequest)
 		} else {
@@ -352,6 +357,7 @@ func (h *NotificationsHandler) AdminDeleteNotification(w http.ResponseWriter, r 
 	}
 
 	if err := h.DB.DeleteNotification(id); err != nil {
+		metrics.AdminOpsTotal.WithLabelValues("notification", "delete", "failure").Inc()
 		if strings.Contains(r.Header.Get("Accept"), "application/json") || strings.Contains(r.Header.Get("Content-Type"), "application/json") {
 			jsonError(w, "Failed to delete notification", http.StatusInternalServerError)
 		} else {
@@ -360,6 +366,7 @@ func (h *NotificationsHandler) AdminDeleteNotification(w http.ResponseWriter, r 
 		return
 	}
 
+	metrics.AdminOpsTotal.WithLabelValues("notification", "delete", "success").Inc()
 	if strings.Contains(r.Header.Get("Accept"), "application/json") || strings.Contains(r.Header.Get("Content-Type"), "application/json") {
 		jsonOK(w, map[string]string{"status": "ok"})
 	} else {
