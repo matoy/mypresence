@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -101,26 +102,52 @@ func (h *NotificationsHandler) AdminSendNotification(w http.ResponseWriter, r *h
 		return
 	}
 
-	var recipientStr, notifType, title, message, link string
+	var notifType, title, message, link string
+	var rawRecipients []string
 	isJSON := strings.Contains(r.Header.Get("Content-Type"), "application/json")
 
 	if isJSON {
 		var payload struct {
-			Recipient string `json:"recipient"` // "all", "team:<id>", "user:<id>", or user ID
-			UserID    int64  `json:"user_id"`
-			Type      string `json:"type"`
-			Title     string `json:"title"`
-			Message   string `json:"message"`
-			Link      string `json:"link"`
+			Recipient  string   `json:"recipient"` // "all", "team:<id>", "user:<id>", comma-separated or user ID
+			Recipients []string `json:"recipients"`
+			UserIDs    []int64  `json:"user_ids"`
+			TeamIDs    []int64  `json:"team_ids"`
+			UserID     int64    `json:"user_id"`
+			Type       string   `json:"type"`
+			Title      string   `json:"title"`
+			Message    string   `json:"message"`
+			Link       string   `json:"link"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 			jsonError(w, "Invalid JSON payload", http.StatusBadRequest)
 			return
 		}
 		if payload.Recipient != "" {
-			recipientStr = payload.Recipient
-		} else if payload.UserID > 0 {
-			recipientStr = strconv.FormatInt(payload.UserID, 10)
+			for _, part := range strings.Split(payload.Recipient, ",") {
+				if trimmed := strings.TrimSpace(part); trimmed != "" {
+					rawRecipients = append(rawRecipients, trimmed)
+				}
+			}
+		}
+		for _, rStr := range payload.Recipients {
+			for _, part := range strings.Split(rStr, ",") {
+				if trimmed := strings.TrimSpace(part); trimmed != "" {
+					rawRecipients = append(rawRecipients, trimmed)
+				}
+			}
+		}
+		for _, uid := range payload.UserIDs {
+			if uid > 0 {
+				rawRecipients = append(rawRecipients, fmt.Sprintf("user:%d", uid))
+			}
+		}
+		for _, tid := range payload.TeamIDs {
+			if tid > 0 {
+				rawRecipients = append(rawRecipients, fmt.Sprintf("team:%d", tid))
+			}
+		}
+		if payload.UserID > 0 {
+			rawRecipients = append(rawRecipients, strconv.FormatInt(payload.UserID, 10))
 		}
 		notifType = payload.Type
 		title = payload.Title
@@ -128,9 +155,37 @@ func (h *NotificationsHandler) AdminSendNotification(w http.ResponseWriter, r *h
 		link = payload.Link
 	} else {
 		_ = r.ParseForm()
-		recipientStr = r.FormValue("recipient")
-		if recipientStr == "" {
-			recipientStr = r.FormValue("user_id")
+		for _, rVal := range r.Form["recipient"] {
+			for _, part := range strings.Split(rVal, ",") {
+				if trimmed := strings.TrimSpace(part); trimmed != "" {
+					rawRecipients = append(rawRecipients, trimmed)
+				}
+			}
+		}
+		if len(rawRecipients) == 0 {
+			if recVal := r.FormValue("recipient"); recVal != "" {
+				for _, part := range strings.Split(recVal, ",") {
+					if trimmed := strings.TrimSpace(part); trimmed != "" {
+						rawRecipients = append(rawRecipients, trimmed)
+					}
+				}
+			}
+		}
+		for _, rVal := range r.Form["recipients"] {
+			for _, part := range strings.Split(rVal, ",") {
+				if trimmed := strings.TrimSpace(part); trimmed != "" {
+					rawRecipients = append(rawRecipients, trimmed)
+				}
+			}
+		}
+		if uVal := r.FormValue("user_id"); uVal != "" {
+			rawRecipients = append(rawRecipients, uVal)
+		}
+		for _, uVal := range r.Form["user_ids"] {
+			rawRecipients = append(rawRecipients, "user:"+uVal)
+		}
+		for _, tVal := range r.Form["team_ids"] {
+			rawRecipients = append(rawRecipients, "team:"+tVal)
 		}
 		notifType = r.FormValue("type")
 		title = r.FormValue("title")
@@ -138,7 +193,6 @@ func (h *NotificationsHandler) AdminSendNotification(w http.ResponseWriter, r *h
 		link = r.FormValue("link")
 	}
 
-	recipientStr = strings.TrimSpace(recipientStr)
 	title = strings.TrimSpace(title)
 	message = strings.TrimSpace(message)
 	link = strings.TrimSpace(link)
@@ -147,7 +201,7 @@ func (h *NotificationsHandler) AdminSendNotification(w http.ResponseWriter, r *h
 		notifType = "info"
 	}
 
-	if recipientStr == "" {
+	if len(rawRecipients) == 0 {
 		if isJSON {
 			jsonError(w, "Recipient is required", http.StatusBadRequest)
 		} else {
@@ -172,8 +226,59 @@ func (h *NotificationsHandler) AdminSendNotification(w http.ResponseWriter, r *h
 		return
 	}
 
-	count := 0
-	if recipientStr == "all" {
+	isAll := false
+	targetUserIDs := make(map[int64]bool)
+
+	for _, token := range rawRecipients {
+		token = strings.TrimSpace(token)
+		if token == "" {
+			continue
+		}
+		if token == "all" {
+			isAll = true
+			continue
+		}
+		if strings.HasPrefix(token, "team:") {
+			teamIDStr := strings.TrimPrefix(token, "team:")
+			teamID, err := strconv.ParseInt(teamIDStr, 10, 64)
+			if err != nil || teamID <= 0 {
+				if isJSON {
+					jsonError(w, "Invalid recipient ID", http.StatusBadRequest)
+				} else {
+					http.Redirect(w, r, "/admin/notifications?error=invalid_recipient", http.StatusSeeOther)
+				}
+				return
+			}
+			members, err := h.DB.GetTeamMembers(teamID)
+			if err != nil {
+				if isJSON {
+					jsonError(w, "Failed to load team members", http.StatusInternalServerError)
+				} else {
+					http.Redirect(w, r, "/admin/notifications?error=server_error", http.StatusSeeOther)
+				}
+				return
+			}
+			for _, m := range members {
+				if !m.Disabled {
+					targetUserIDs[m.ID] = true
+				}
+			}
+		} else {
+			cleanIDStr := strings.TrimPrefix(token, "user:")
+			targetUserID, err := strconv.ParseInt(cleanIDStr, 10, 64)
+			if err != nil || targetUserID <= 0 {
+				if isJSON {
+					jsonError(w, "Invalid recipient ID", http.StatusBadRequest)
+				} else {
+					http.Redirect(w, r, "/admin/notifications?error=invalid_recipient", http.StatusSeeOther)
+				}
+				return
+			}
+			targetUserIDs[targetUserID] = true
+		}
+	}
+
+	if isAll {
 		users, err := h.DB.ListUsers()
 		if err != nil {
 			if isJSON {
@@ -184,60 +289,30 @@ func (h *NotificationsHandler) AdminSendNotification(w http.ResponseWriter, r *h
 			return
 		}
 		for _, u := range users {
-			if u.Disabled {
-				continue
+			if !u.Disabled {
+				targetUserIDs[u.ID] = true
 			}
-			_, _ = h.DB.CreateNotification(u.ID, currentUser.ID, notifType, title, message, link)
+		}
+	}
+
+	count := 0
+	var lastErr error
+	for uid := range targetUserIDs {
+		_, err := h.DB.CreateNotification(uid, currentUser.ID, notifType, title, message, link)
+		if err != nil {
+			lastErr = err
+		} else {
 			count++
 		}
-	} else if strings.HasPrefix(recipientStr, "team:") {
-		teamIDStr := strings.TrimPrefix(recipientStr, "team:")
-		teamID, err := strconv.ParseInt(teamIDStr, 10, 64)
-		if err != nil || teamID <= 0 {
-			if isJSON {
-				jsonError(w, "Invalid recipient ID", http.StatusBadRequest)
-			} else {
-				http.Redirect(w, r, "/admin/notifications?error=invalid_recipient", http.StatusSeeOther)
-			}
-			return
+	}
+
+	if len(targetUserIDs) > 0 && count == 0 && lastErr != nil {
+		if isJSON {
+			jsonError(w, "Failed to create notification", http.StatusInternalServerError)
+		} else {
+			http.Redirect(w, r, "/admin/notifications?error=send_failed", http.StatusSeeOther)
 		}
-		members, err := h.DB.GetTeamMembers(teamID)
-		if err != nil {
-			if isJSON {
-				jsonError(w, "Failed to load team members", http.StatusInternalServerError)
-			} else {
-				http.Redirect(w, r, "/admin/notifications?error=server_error", http.StatusSeeOther)
-			}
-			return
-		}
-		for _, m := range members {
-			if m.Disabled {
-				continue
-			}
-			_, _ = h.DB.CreateNotification(m.ID, currentUser.ID, notifType, title, message, link)
-			count++
-		}
-	} else {
-		cleanIDStr := strings.TrimPrefix(recipientStr, "user:")
-		targetUserID, err := strconv.ParseInt(cleanIDStr, 10, 64)
-		if err != nil || targetUserID <= 0 {
-			if isJSON {
-				jsonError(w, "Invalid recipient ID", http.StatusBadRequest)
-			} else {
-				http.Redirect(w, r, "/admin/notifications?error=invalid_recipient", http.StatusSeeOther)
-			}
-			return
-		}
-		_, err = h.DB.CreateNotification(targetUserID, currentUser.ID, notifType, title, message, link)
-		if err != nil {
-			if isJSON {
-				jsonError(w, "Failed to create notification", http.StatusInternalServerError)
-			} else {
-				http.Redirect(w, r, "/admin/notifications?error=send_failed", http.StatusSeeOther)
-			}
-			return
-		}
-		count = 1
+		return
 	}
 
 	if isJSON {

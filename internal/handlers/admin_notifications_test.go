@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -465,3 +466,120 @@ func TestAdminDeleteNotification_Forbidden(t *testing.T) {
 		t.Fatalf("expected 403 Forbidden, got %d", rec.Code)
 	}
 }
+
+func TestAdminSendNotification_MultipleUsers_JSON(t *testing.T) {
+	d := newCRUDTestDB(t)
+	h := &NotificationsHandler{DB: d}
+
+	adminID, _ := d.CreateLocalUser("admin_multi_u@test.com", "Admin Multi U", "pass12345")
+	_ = d.UpdateUserRoles(adminID, models.RoleGlobal)
+	adminToken, _ := d.CreateSession(adminID)
+
+	u1, _ := d.CreateLocalUser("multi1@test.com", "Multi 1", "pass12345")
+	u2, _ := d.CreateLocalUser("multi2@test.com", "Multi 2", "pass12345")
+	u3, _ := d.CreateLocalUser("multi3@test.com", "Multi 3", "pass12345")
+
+	payload := map[string]interface{}{
+		"recipient": fmt.Sprintf("user:%d,%d", u1, u2),
+		"user_ids":  []int64{u1, u2},
+		"type":      "info",
+		"title":     "Multi User Announcement",
+		"message":   "Hello to both of you!",
+	}
+	body, _ := json.Marshal(payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/notifications", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: "session", Value: adminToken})
+	rec := httptest.NewRecorder()
+
+	middleware.Auth(d, http.HandlerFunc(h.AdminSendNotification)).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d (%s)", rec.Code, rec.Body.String())
+	}
+
+	for _, uid := range []int64{u1, u2} {
+		notifs, err := d.GetUnreadNotifications(uid)
+		if err != nil || len(notifs) != 1 {
+			t.Fatalf("expected 1 notification for user %d, got %d (err: %v)", uid, len(notifs), err)
+		}
+		if notifs[0].Title != "Multi User Announcement" {
+			t.Errorf("expected title 'Multi User Announcement', got %q", notifs[0].Title)
+		}
+	}
+
+	u3Notifs, _ := d.GetUnreadNotifications(u3)
+	if len(u3Notifs) != 0 {
+		t.Errorf("expected 0 notifications for u3, got %d", len(u3Notifs))
+	}
+}
+
+func TestAdminSendNotification_MultipleTeams_Deduplicated(t *testing.T) {
+	d := newCRUDTestDB(t)
+	h := &NotificationsHandler{DB: d}
+
+	adminID, _ := d.CreateLocalUser("admin_multi_t@test.com", "Admin Multi T", "pass12345")
+	_ = d.UpdateUserRoles(adminID, models.RoleGlobal)
+	adminToken, _ := d.CreateSession(adminID)
+
+	team1, _ := d.CreateTeam("Team Alpha")
+	team2, _ := d.CreateTeam("Team Beta")
+
+	commonUser, _ := d.CreateLocalUser("common@test.com", "Common User", "pass12345")
+	alphaOnly, _ := d.CreateLocalUser("alpha@test.com", "Alpha Only", "pass12345")
+	betaOnly, _ := d.CreateLocalUser("beta@test.com", "Beta Only", "pass12345")
+	outsider, _ := d.CreateLocalUser("outsider@test.com", "Outsider", "pass12345")
+
+	// Common user is in BOTH teams
+	_ = d.AddTeamMember(team1, commonUser)
+	_ = d.AddTeamMember(team2, commonUser)
+
+	_ = d.AddTeamMember(team1, alphaOnly)
+	_ = d.AddTeamMember(team2, betaOnly)
+
+	payload := map[string]interface{}{
+		"recipient": fmt.Sprintf("team:%d,%d", team1, team2),
+		"team_ids":  []int64{team1, team2},
+		"type":      "success",
+		"title":     "Cross-Team Event",
+		"message":   "Joint event this Friday",
+	}
+	body, _ := json.Marshal(payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/notifications", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: "session", Value: adminToken})
+	rec := httptest.NewRecorder()
+
+	middleware.Auth(d, http.HandlerFunc(h.AdminSendNotification)).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d (%s)", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]interface{}
+	_ = json.NewDecoder(rec.Body).Decode(&resp)
+	if resp["count"] != float64(3) {
+		t.Errorf("expected count 3 (deduplicated), got %v", resp["count"])
+	}
+
+	// Common user must have received EXACTLY 1 notification (not 2)
+	notifsCommon, err := d.GetUnreadNotifications(commonUser)
+	if err != nil || len(notifsCommon) != 1 {
+		t.Fatalf("expected exactly 1 notification for common user, got %d", len(notifsCommon))
+	}
+
+	for _, uid := range []int64{alphaOnly, betaOnly} {
+		notifs, _ := d.GetUnreadNotifications(uid)
+		if len(notifs) != 1 {
+			t.Errorf("expected 1 notification for %d, got %d", uid, len(notifs))
+		}
+	}
+
+	notifsOutsider, _ := d.GetUnreadNotifications(outsider)
+	if len(notifsOutsider) != 0 {
+		t.Errorf("expected 0 notifications for outsider, got %d", len(notifsOutsider))
+	}
+}
+

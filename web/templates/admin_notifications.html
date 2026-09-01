@@ -88,125 +88,235 @@
                         </button>
                     </div>
 
-                    <!-- Mode: USER (Searchable Dropdown) -->
-                    <div x-show="recipientMode === 'user'" class="relative" x-data="{ open: false }" @click.outside="open = false">
-                        <button type="button"
-                                @click="open = !open; if(open) $nextTick(() => $refs.userSearchInput?.focus())"
-                                class="w-full flex items-center justify-between px-3 py-2 text-xs bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-left hover:border-gray-400 transition">
-                            <span x-show="!selectedUser" class="text-gray-400">-- {{index $.T "notifications.select_user"}} --</span>
-                            <span x-show="selectedUser" class="font-semibold text-gray-900 flex items-center gap-1.5 truncate">
-                                <svg class="h-3.5 w-3.5 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-                                </svg>
-                                <span x-text="selectedUser ? (selectedUser.name + ' (' + selectedUser.email + ')') : ''"></span>
-                            </span>
-                            <svg class="h-4 w-4 text-gray-400 flex-shrink-0 transition-transform" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                            </svg>
-                        </button>
-                        
-                        <div x-show="open"
-                             x-cloak
-                             x-transition:enter="transition ease-out duration-100"
-                             x-transition:enter-start="opacity-0 scale-95"
-                             x-transition:enter-end="opacity-100 scale-100"
-                             x-transition:leave="transition ease-in duration-75"
-                             x-transition:leave-start="opacity-100 scale-100"
-                             x-transition:leave-end="opacity-0 scale-95"
-                             class="absolute z-30 mt-1 w-full bg-white rounded-xl shadow-xl border border-gray-200 p-2 space-y-1.5">
-                            <div class="relative">
-                                <input type="text"
-                                       x-ref="userSearchInput"
-                                       x-model="userSearch"
-                                       placeholder="{{index $.T "notifications.search_placeholder"}}"
-                                       class="w-full pl-7 pr-6 py-1 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:bg-white">
-                                <svg class="h-3 w-3 text-gray-400 absolute left-2 top-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                                </svg>
-                                <button type="button" x-show="userSearch" @click="userSearch = ''" class="absolute right-1.5 top-1.5 text-gray-400 hover:text-gray-600">
-                                    <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    <!-- Mode: USER (Multi-select Searchable Dropdown) -->
+                    <div x-show="recipientMode === 'user'" class="space-y-2">
+                        <!-- Selected Users Chips Container -->
+                        <div x-show="selectedUserIds.length > 0" class="space-y-1">
+                            <div class="flex items-center justify-between">
+                                <span class="text-[11px] font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
+                                    <span class="w-2 h-2 rounded-full bg-primary inline-block"></span>
+                                    <span x-text="selectedUserIds.length"></span>
+                                    <span>{{index $.T "notifications.selected_users_label"}}</span>
+                                </span>
+                                <button type="button" @click="clearSelectedUsers()" class="text-[11px] text-red-500 hover:text-red-700 font-medium transition cursor-pointer">
+                                    {{index $.T "notifications.clear_all"}}
                                 </button>
                             </div>
-                            <div class="max-h-48 overflow-y-auto space-y-0.5 custom-scrollbar">
-                                <template x-for="u in filteredUsers" :key="u.id">
-                                    <button type="button"
-                                            @click="selectedUserId = u.id; open = false; userSearch = ''"
-                                            class="w-full flex items-center justify-between px-2 py-1.5 text-xs rounded-lg hover:bg-primary/5 transition text-left"
-                                            :class="String(selectedUserId) === String(u.id) ? 'bg-primary/10 text-primary font-semibold' : 'text-gray-500 font-medium'">
-                                        <div class="truncate">
-                                            <span class="font-medium" x-text="u.name"></span>
-                                            <span class="text-gray-400 text-[10px] block truncate" x-text="u.email + (u.disabled ? ' [Disabled]' : '')"></span>
-                                        </div>
-                                        <svg x-show="String(selectedUserId) === String(u.id)" class="h-3.5 w-3.5 text-primary flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            <div class="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-2 bg-gray-50 rounded-xl border border-gray-200">
+                                <template x-for="uid in selectedUserIds" :key="uid">
+                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white text-gray-800 border border-gray-200 rounded-lg text-xs font-medium shadow-xs">
+                                        <svg class="h-3 w-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
                                         </svg>
-                                    </button>
+                                        <span x-text="getUserName(uid)" class="truncate max-w-[150px]"></span>
+                                        <button type="button" @click.stop="toggleUser(uid)" class="text-gray-400 hover:text-red-500 rounded-full p-0.5 transition cursor-pointer" title="Retirer">
+                                            <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                        </button>
+                                    </span>
                                 </template>
-                                <div x-show="filteredUsers.length === 0" class="py-2.5 text-center text-xs text-gray-400">
-                                    Aucun utilisateur trouvé
+                            </div>
+                        </div>
+
+                        <!-- User Selector Dropdown -->
+                        <div class="relative" x-data="{ open: false }" @click.outside="open = false">
+                            <button type="button"
+                                    @click="open = !open; if(open) $nextTick(() => $refs.userSearchInput?.focus())"
+                                    class="w-full flex items-center justify-between px-3 py-2 text-xs bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-left hover:border-gray-400 transition cursor-pointer">
+                                <span x-show="selectedUserIds.length === 0" class="text-gray-400">-- {{index $.T "notifications.select_users"}} --</span>
+                                <span x-show="selectedUserIds.length > 0" class="font-semibold text-gray-900 flex items-center gap-2 truncate">
+                                    <svg class="h-3.5 w-3.5 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                                    </svg>
+                                    <span x-text="selectedUserIds.length === 1 ? getUserLabel(selectedUserIds[0]) : (selectedUserIds.length + ' {{index $.T "notifications.selected_users_label"}}')"></span>
+                                </span>
+                                <div class="flex items-center gap-1.5 flex-shrink-0">
+                                    <span x-show="selectedUserIds.length > 1" class="px-2 py-0.5 text-[10px] bg-primary/10 text-primary font-bold rounded-full" x-text="selectedUserIds.length"></span>
+                                    <svg class="h-4 w-4 text-gray-400 transition-transform duration-200" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                    </svg>
+                                </div>
+                            </button>
+                            
+                            <div x-show="open"
+                                 x-cloak
+                                 x-transition:enter="transition ease-out duration-100"
+                                 x-transition:enter-start="opacity-0 scale-95"
+                                 x-transition:enter-end="opacity-100 scale-100"
+                                 x-transition:leave="transition ease-in duration-75"
+                                 x-transition:leave-start="opacity-100 scale-100"
+                                 x-transition:leave-end="opacity-0 scale-95"
+                                 class="absolute z-30 mt-1 w-full bg-white rounded-xl shadow-xl border border-gray-200 p-2 space-y-2">
+                                <div class="relative">
+                                    <input type="text"
+                                           x-ref="userSearchInput"
+                                           x-model="userSearch"
+                                           placeholder="{{index $.T "notifications.search_placeholder"}}"
+                                           class="w-full pl-7 pr-6 py-1 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:bg-white">
+                                    <svg class="h-3 w-3 text-gray-400 absolute left-2 top-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                                    </svg>
+                                    <button type="button" x-show="userSearch" @click="userSearch = ''" class="absolute right-1.5 top-1.5 text-gray-400 hover:text-gray-600 cursor-pointer">
+                                        <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                    </button>
+                                </div>
+                                <div class="flex items-center justify-between px-1 py-1 text-[11px] border-b border-gray-100 text-gray-500">
+                                    <div class="flex items-center gap-2">
+                                        <button type="button" @click="selectAllFilteredUsers()" class="text-primary hover:underline font-medium cursor-pointer">
+                                            {{index $.T "notifications.select_all"}}
+                                        </button>
+                                        <span>&bull;</span>
+                                        <button type="button" @click="clearSelectedUsers()" class="text-gray-400 hover:text-red-500 transition cursor-pointer">
+                                            {{index $.T "notifications.deselect_all"}}
+                                        </button>
+                                    </div>
+                                    <span class="text-gray-400 font-medium" x-text="selectedUserIds.length + ' {{index $.T "notifications.selected_users_label"}}'"></span>
+                                </div>
+                                <div class="max-h-48 overflow-y-auto space-y-0.5 custom-scrollbar">
+                                    <template x-for="u in filteredUsers" :key="u.id">
+                                        <button type="button"
+                                                @click="toggleUser(u.id)"
+                                                class="w-full flex items-center justify-between px-2.5 py-1.5 text-xs rounded-lg transition text-left cursor-pointer"
+                                                :class="isUserSelected(u.id) ? 'bg-primary/10 text-primary font-semibold' : 'text-gray-500 font-medium hover:bg-gray-50'">
+                                            <div class="flex items-center gap-2 truncate">
+                                                <input type="checkbox"
+                                                       :checked="isUserSelected(u.id)"
+                                                       class="h-3.5 w-3.5 text-primary rounded border-gray-300 pointer-events-none">
+                                                <div class="truncate">
+                                                    <span class="font-medium" x-text="u.name"></span>
+                                                    <span class="text-gray-400 text-[10px] block truncate" x-text="u.email + (u.disabled ? ' [Disabled]' : '')"></span>
+                                                </div>
+                                            </div>
+                                            <svg x-show="isUserSelected(u.id)" class="h-3.5 w-3.5 text-primary flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                            </svg>
+                                        </button>
+                                    </template>
+                                    <div x-show="filteredUsers.length === 0" class="py-2.5 text-center text-xs text-gray-400">
+                                        Aucun utilisateur trouvé
+                                    </div>
+                                </div>
+                                <div class="pt-1 border-t border-gray-100 flex justify-end">
+                                    <button type="button" @click="open = false" class="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-md transition cursor-pointer">
+                                        {{index $.T "notifications.done"}}
+                                    </button>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Mode: TEAM (Searchable Dropdown) -->
-                    <div x-show="recipientMode === 'team'" class="relative" x-data="{ open: false }" @click.outside="open = false">
-                        <button type="button"
-                                @click="open = !open; if(open) $nextTick(() => $refs.teamSearchInput?.focus())"
-                                class="w-full flex items-center justify-between px-3 py-2 text-xs bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-left hover:border-gray-400 transition">
-                            <span x-show="!selectedTeam" class="text-gray-400">-- {{index $.T "notifications.select_team"}} --</span>
-                            <span x-show="selectedTeam" class="font-semibold text-gray-900 flex items-center gap-1.5 truncate">
-                                <svg class="h-3.5 w-3.5 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
-                                </svg>
-                                <span x-text="selectedTeam ? selectedTeam.name : ''"></span>
-                            </span>
-                            <svg class="h-4 w-4 text-gray-400 flex-shrink-0 transition-transform" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                            </svg>
-                        </button>
-                        
-                        <div x-show="open"
-                             x-cloak
-                             x-transition:enter="transition ease-out duration-100"
-                             x-transition:enter-start="opacity-0 scale-95"
-                             x-transition:enter-end="opacity-100 scale-100"
-                             x-transition:leave="transition ease-in duration-75"
-                             x-transition:leave-start="opacity-100 scale-100"
-                             x-transition:leave-end="opacity-0 scale-95"
-                             class="absolute z-30 mt-1 w-full bg-white rounded-xl shadow-xl border border-gray-200 p-2 space-y-1.5">
-                            <div class="relative">
-                                <input type="text"
-                                       x-ref="teamSearchInput"
-                                       x-model="teamSearch"
-                                       placeholder="{{index $.T "notifications.search_placeholder"}}"
-                                       class="w-full pl-7 pr-6 py-1 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:bg-white">
-                                <svg class="h-3 w-3 text-gray-400 absolute left-2 top-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                                </svg>
-                                <button type="button" x-show="teamSearch" @click="teamSearch = ''" class="absolute right-1.5 top-1.5 text-gray-400 hover:text-gray-600">
-                                    <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    <!-- Mode: TEAM (Multi-select Searchable Dropdown) -->
+                    <div x-show="recipientMode === 'team'" class="space-y-2">
+                        <!-- Selected Teams Chips Container -->
+                        <div x-show="selectedTeamIds.length > 0" class="space-y-1">
+                            <div class="flex items-center justify-between">
+                                <span class="text-[11px] font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
+                                    <span class="w-2 h-2 rounded-full bg-blue-600 inline-block"></span>
+                                    <span x-text="selectedTeamIds.length"></span>
+                                    <span>{{index $.T "notifications.selected_teams_label"}}</span>
+                                </span>
+                                <button type="button" @click="clearSelectedTeams()" class="text-[11px] text-red-500 hover:text-red-700 font-medium transition cursor-pointer">
+                                    {{index $.T "notifications.clear_all"}}
                                 </button>
                             </div>
-                            <div class="max-h-48 overflow-y-auto space-y-0.5 custom-scrollbar">
-                                <template x-for="t in filteredTeams" :key="t.id">
-                                    <button type="button"
-                                            @click="selectedTeamId = t.id; open = false; teamSearch = ''"
-                                            class="w-full flex items-center justify-between px-2 py-1.5 text-xs rounded-lg hover:bg-primary/5 transition text-left"
-                                            :class="String(selectedTeamId) === String(t.id) ? 'bg-primary/10 text-primary font-semibold' : 'text-gray-500 font-medium'">
-                                        <span class="truncate flex items-center gap-1.5">
-                                            <svg class="h-3.5 w-3.5 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
-                                            </svg>
-                                            <span x-text="t.name"></span>
-                                        </span>
-                                        <svg x-show="String(selectedTeamId) === String(t.id)" class="h-3.5 w-3.5 text-primary flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            <div class="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-2 bg-gray-50 rounded-xl border border-gray-200">
+                                <template x-for="tid in selectedTeamIds" :key="tid">
+                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white text-gray-800 border border-gray-200 rounded-lg text-xs font-medium shadow-xs">
+                                        <svg class="h-3 w-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
                                         </svg>
-                                    </button>
+                                        <span x-text="getTeamName(tid)" class="truncate max-w-[150px]"></span>
+                                        <button type="button" @click.stop="toggleTeam(tid)" class="text-gray-400 hover:text-red-500 rounded-full p-0.5 transition cursor-pointer" title="Retirer">
+                                            <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                        </button>
+                                    </span>
                                 </template>
-                                <div x-show="filteredTeams.length === 0" class="py-2.5 text-center text-xs text-gray-400">
-                                    Aucune équipe trouvée
+                            </div>
+                        </div>
+
+                        <!-- Team Selector Dropdown -->
+                        <div class="relative" x-data="{ open: false }" @click.outside="open = false">
+                            <button type="button"
+                                    @click="open = !open; if(open) $nextTick(() => $refs.teamSearchInput?.focus())"
+                                    class="w-full flex items-center justify-between px-3 py-2 text-xs bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-left hover:border-gray-400 transition cursor-pointer">
+                                <span x-show="selectedTeamIds.length === 0" class="text-gray-400">-- {{index $.T "notifications.select_teams"}} --</span>
+                                <span x-show="selectedTeamIds.length > 0" class="font-semibold text-gray-900 flex items-center gap-2 truncate">
+                                    <svg class="h-3.5 w-3.5 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                                    </svg>
+                                    <span x-text="selectedTeamIds.length === 1 ? getTeamName(selectedTeamIds[0]) : (selectedTeamIds.length + ' {{index $.T "notifications.selected_teams_label"}}')"></span>
+                                </span>
+                                <div class="flex items-center gap-1.5 flex-shrink-0">
+                                    <span x-show="selectedTeamIds.length > 1" class="px-2 py-0.5 text-[10px] bg-primary/10 text-primary font-bold rounded-full" x-text="selectedTeamIds.length"></span>
+                                    <svg class="h-4 w-4 text-gray-400 transition-transform duration-200" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                    </svg>
+                                </div>
+                            </button>
+                            
+                            <div x-show="open"
+                                 x-cloak
+                                 x-transition:enter="transition ease-out duration-100"
+                                 x-transition:enter-start="opacity-0 scale-95"
+                                 x-transition:enter-end="opacity-100 scale-100"
+                                 x-transition:leave="transition ease-in duration-75"
+                                 x-transition:leave-start="opacity-100 scale-100"
+                                 x-transition:leave-end="opacity-0 scale-95"
+                                 class="absolute z-30 mt-1 w-full bg-white rounded-xl shadow-xl border border-gray-200 p-2 space-y-2">
+                                <div class="relative">
+                                    <input type="text"
+                                           x-ref="teamSearchInput"
+                                           x-model="teamSearch"
+                                           placeholder="{{index $.T "notifications.search_placeholder"}}"
+                                           class="w-full pl-7 pr-6 py-1 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:bg-white">
+                                    <svg class="h-3 w-3 text-gray-400 absolute left-2 top-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                                    </svg>
+                                    <button type="button" x-show="teamSearch" @click="teamSearch = ''" class="absolute right-1.5 top-1.5 text-gray-400 hover:text-gray-600 cursor-pointer">
+                                        <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                    </button>
+                                </div>
+                                <div class="flex items-center justify-between px-1 py-1 text-[11px] border-b border-gray-100 text-gray-500">
+                                    <div class="flex items-center gap-2">
+                                        <button type="button" @click="selectAllFilteredTeams()" class="text-primary hover:underline font-medium cursor-pointer">
+                                            {{index $.T "notifications.select_all"}}
+                                        </button>
+                                        <span>&bull;</span>
+                                        <button type="button" @click="clearSelectedTeams()" class="text-gray-400 hover:text-red-500 transition cursor-pointer">
+                                            {{index $.T "notifications.deselect_all"}}
+                                        </button>
+                                    </div>
+                                    <span class="text-gray-400 font-medium" x-text="selectedTeamIds.length + ' {{index $.T "notifications.selected_teams_label"}}'"></span>
+                                </div>
+                                <div class="max-h-48 overflow-y-auto space-y-0.5 custom-scrollbar">
+                                    <template x-for="t in filteredTeams" :key="t.id">
+                                        <button type="button"
+                                                @click="toggleTeam(t.id)"
+                                                class="w-full flex items-center justify-between px-2.5 py-1.5 text-xs rounded-lg transition text-left cursor-pointer"
+                                                :class="isTeamSelected(t.id) ? 'bg-primary/10 text-primary font-semibold' : 'text-gray-500 font-medium hover:bg-gray-50'">
+                                            <div class="flex items-center gap-2 truncate">
+                                                <input type="checkbox"
+                                                       :checked="isTeamSelected(t.id)"
+                                                       class="h-3.5 w-3.5 text-primary rounded border-gray-300 pointer-events-none">
+                                                <span class="truncate flex items-center gap-1.5">
+                                                    <svg class="h-3.5 w-3.5 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                                                    </svg>
+                                                    <span x-text="t.name"></span>
+                                                </span>
+                                            </div>
+                                            <svg x-show="isTeamSelected(t.id)" class="h-3.5 w-3.5 text-primary flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                            </svg>
+                                        </button>
+                                    </template>
+                                    <div x-show="filteredTeams.length === 0" class="py-2.5 text-center text-xs text-gray-400">
+                                        Aucune équipe trouvée
+                                    </div>
+                                </div>
+                                <div class="pt-1 border-t border-gray-100 flex justify-end">
+                                    <button type="button" @click="open = false" class="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-md transition cursor-pointer">
+                                        {{index $.T "notifications.done"}}
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -540,6 +650,8 @@ function adminNotifications() {
         teams: Array.isArray(teams) ? teams : [],
         notifications: Array.isArray(notifications) ? notifications : [],
         recipientMode: 'user', // 'user', 'team', 'all'
+        selectedTeamIds: [],
+        selectedUserIds: [],
         selectedTeamId: '',
         selectedUserId: '',
         teamSearch: '',
@@ -562,11 +674,13 @@ function adminNotifications() {
         },
 
         get selectedTeam() {
-            return this.teams.find(t => String(t.id) === String(this.selectedTeamId));
+            if (this.selectedTeamIds.length === 0) return null;
+            return this.teams.find(t => String(t.id) === String(this.selectedTeamIds[0]));
         },
 
         get selectedUser() {
-            return this.users.find(u => String(u.id) === String(this.selectedUserId));
+            if (this.selectedUserIds.length === 0) return null;
+            return this.users.find(u => String(u.id) === String(this.selectedUserIds[0]));
         },
 
         get filteredTeams() {
@@ -582,6 +696,82 @@ function adminNotifications() {
                 (u.name && u.name.toLowerCase().includes(q)) || 
                 (u.email && u.email.toLowerCase().includes(q))
             );
+        },
+
+        toggleUser(id) {
+            id = Number(id);
+            const idx = this.selectedUserIds.indexOf(id);
+            if (idx >= 0) {
+                this.selectedUserIds.splice(idx, 1);
+            } else {
+                this.selectedUserIds.push(id);
+            }
+            this.selectedUserId = this.selectedUserIds.length > 0 ? String(this.selectedUserIds[0]) : '';
+        },
+
+        isUserSelected(id) {
+            return this.selectedUserIds.includes(Number(id));
+        },
+
+        selectAllFilteredUsers() {
+            const activeFiltered = this.filteredUsers.filter(u => !u.disabled);
+            for (const u of activeFiltered) {
+                const id = Number(u.id);
+                if (!this.selectedUserIds.includes(id)) {
+                    this.selectedUserIds.push(id);
+                }
+            }
+            this.selectedUserId = this.selectedUserIds.length > 0 ? String(this.selectedUserIds[0]) : '';
+        },
+
+        clearSelectedUsers() {
+            this.selectedUserIds = [];
+            this.selectedUserId = '';
+        },
+
+        getUserName(id) {
+            const u = this.users.find(usr => Number(usr.id) === Number(id));
+            return u ? u.name : ('User #' + id);
+        },
+
+        getUserLabel(id) {
+            const u = this.users.find(usr => Number(usr.id) === Number(id));
+            return u ? (u.name + ' (' + u.email + ')') : ('User #' + id);
+        },
+
+        toggleTeam(id) {
+            id = Number(id);
+            const idx = this.selectedTeamIds.indexOf(id);
+            if (idx >= 0) {
+                this.selectedTeamIds.splice(idx, 1);
+            } else {
+                this.selectedTeamIds.push(id);
+            }
+            this.selectedTeamId = this.selectedTeamIds.length > 0 ? String(this.selectedTeamIds[0]) : '';
+        },
+
+        isTeamSelected(id) {
+            return this.selectedTeamIds.includes(Number(id));
+        },
+
+        selectAllFilteredTeams() {
+            for (const t of this.filteredTeams) {
+                const id = Number(t.id);
+                if (!this.selectedTeamIds.includes(id)) {
+                    this.selectedTeamIds.push(id);
+                }
+            }
+            this.selectedTeamId = this.selectedTeamIds.length > 0 ? String(this.selectedTeamIds[0]) : '';
+        },
+
+        clearSelectedTeams() {
+            this.selectedTeamIds = [];
+            this.selectedTeamId = '';
+        },
+
+        getTeamName(id) {
+            const t = this.teams.find(tm => Number(tm.id) === Number(id));
+            return t ? t.name : ('Team #' + id);
         },
 
         get sortedAndFilteredNotifications() {
@@ -619,8 +809,12 @@ function adminNotifications() {
 
         getRecipientValue() {
             if (this.recipientMode === 'all') return 'all';
-            if (this.recipientMode === 'team') return this.selectedTeamId ? ('team:' + this.selectedTeamId) : '';
-            if (this.recipientMode === 'user') return this.selectedUserId ? ('user:' + this.selectedUserId) : '';
+            if (this.recipientMode === 'team') {
+                return this.selectedTeamIds.length > 0 ? ('team:' + this.selectedTeamIds.join(',')) : '';
+            }
+            if (this.recipientMode === 'user') {
+                return this.selectedUserIds.length > 0 ? ('user:' + this.selectedUserIds.join(',')) : '';
+            }
             return '';
         },
 
@@ -630,12 +824,26 @@ function adminNotifications() {
                 return (t['notifications.all_users'] || 'All active users') + ' (' + this.activeUsersCount + ')';
             }
             if (this.recipientMode === 'team') {
-                const team = this.teams.find(tm => String(tm.id) === String(this.selectedTeamId));
-                return team ? team.name : 'Équipe sélectionnée';
+                if (this.selectedTeamIds.length === 0) return '';
+                if (this.selectedTeamIds.length === 1) {
+                    return this.getTeamName(this.selectedTeamIds[0]);
+                }
+                const names = this.selectedTeamIds.map(id => this.getTeamName(id));
+                if (names.length <= 3) {
+                    return names.length + ' équipes : ' + names.join(', ');
+                }
+                return names.length + ' équipes sélectionnées (' + names.slice(0, 2).join(', ') + '...)';
             }
             if (this.recipientMode === 'user') {
-                const u = this.users.find(usr => String(usr.id) === String(this.selectedUserId));
-                return u ? (u.name + ' (' + u.email + ')') : 'Utilisateur sélectionné';
+                if (this.selectedUserIds.length === 0) return '';
+                if (this.selectedUserIds.length === 1) {
+                    return this.getUserLabel(this.selectedUserIds[0]);
+                }
+                const names = this.selectedUserIds.map(id => this.getUserName(id));
+                if (names.length <= 3) {
+                    return names.length + ' utilisateurs : ' + names.join(', ');
+                }
+                return names.length + ' utilisateurs sélectionnés (' + names.slice(0, 2).join(', ') + '...)';
             }
             return '';
         },
@@ -675,6 +883,8 @@ function adminNotifications() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         recipient: this.getRecipientValue(),
+                        user_ids: this.recipientMode === 'user' ? this.selectedUserIds : [],
+                        team_ids: this.recipientMode === 'team' ? this.selectedTeamIds : [],
                         type: this.notifType,
                         title: this.title.trim(),
                         message: this.message.trim(),
@@ -687,6 +897,10 @@ function adminNotifications() {
                     this.title = '';
                     this.message = '';
                     this.link = '';
+                    this.selectedUserIds = [];
+                    this.selectedTeamIds = [];
+                    this.selectedUserId = '';
+                    this.selectedTeamId = '';
                     setTimeout(() => { window.location.reload(); }, 800);
                 } else {
                     const data = await resp.json().catch(() => ({}));
