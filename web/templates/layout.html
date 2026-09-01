@@ -121,6 +121,12 @@
                         {{index .T "nav.projects_report"}}
                     </a>
                     {{end}}
+                    {{if and (not .DisableFloorplans) (.User.HasRole "floorplan_manager")}}
+                    <a href="/admin/sites-report" class="inline-flex items-center gap-1.5 text-white/80 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition {{if eq .Page "admin_sites_report"}}bg-white/20 text-white{{end}}">
+                        <span aria-hidden="true">🏢</span>
+                        {{index .T "nav.sites_report"}}
+                    </a>
+                    {{end}}
                     <!-- Online Help Button -->
                     <div class="border-l border-white/30 pl-3">
                         <button @click="$dispatch('open-help', '{{.Page}}')"
@@ -333,6 +339,12 @@
                     {{index .T "nav.projects_report"}}
                 </a>
                 {{end}}
+                {{if and (not .DisableFloorplans) (.User.HasRole "floorplan_manager")}}
+                <a href="/admin/sites-report" class="inline-flex items-center gap-1.5 text-white/80 hover:text-white px-3 py-2 rounded-md text-sm">
+                    <span aria-hidden="true">🏢</span>
+                    {{index .T "nav.sites_report"}}
+                </a>
+                {{end}}
                 {{if $hasAdminNav}}
                 <div class="border-t border-white/20 pt-2 mt-2">
                     <p class="px-3 text-xs font-semibold text-white/50 uppercase tracking-wide">Admin</p>
@@ -525,6 +537,7 @@
                         {{end}}
                         {{if and (not .DisableFloorplans) (.User.HasRole "floorplan_manager")}}
                         <option value="admin_floorplans">{{index $.T "help.topic.admin_floorplans.title"}}</option>
+                        <option value="admin_sites_report">{{index $.T "help.topic.admin_sites_report.title"}}</option>
                         {{end}}
                         {{if or (and (not .DisableFloorplans) (.User.HasRole "floorplan_manager")) (.User.HasRole "global")}}
                         <option value="admin_sites">{{index $.T "help.topic.admin_sites.title"}}</option>
@@ -622,6 +635,20 @@
                     <div class="space-y-2.5">
                         <div class="p-3 rounded-xl bg-gray-50 border border-gray-100"><p class="text-xs text-gray-700 leading-relaxed">{{index $.T "help.topic.admin_projects_report.item1"}}</p></div>
                         <div class="p-3 rounded-xl bg-gray-50 border border-gray-100"><p class="text-xs text-gray-700 leading-relaxed">{{index $.T "help.topic.admin_projects_report.item2"}}</p></div>
+                    </div>
+                </div>
+                {{end}}
+
+                {{if and (not .DisableFloorplans) (.User.HasRole "floorplan_manager")}}
+                <!-- Sites Report -->
+                <div x-show="topic === 'admin_sites_report'" class="space-y-4">
+                    <div>
+                        <h4 class="text-base font-bold text-gray-900 mb-1">{{index $.T "help.topic.admin_sites_report.title"}}</h4>
+                        <p class="text-xs text-gray-500 leading-relaxed">{{index $.T "help.topic.admin_sites_report.desc"}}</p>
+                    </div>
+                    <div class="space-y-2.5">
+                        <div class="p-3 rounded-xl bg-gray-50 border border-gray-100"><p class="text-xs text-gray-700 leading-relaxed">{{index $.T "help.topic.admin_sites_report.item1"}}</p></div>
+                        <div class="p-3 rounded-xl bg-gray-50 border border-gray-100"><p class="text-xs text-gray-700 leading-relaxed">{{index $.T "help.topic.admin_sites_report.item2"}}</p></div>
                     </div>
                 </div>
                 {{end}}

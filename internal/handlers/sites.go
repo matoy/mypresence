@@ -63,6 +63,8 @@ func (h *FloorplanHandler) CreateSite(w http.ResponseWriter, r *http.Request) {
 		Name             string  `json:"name"`
 		CountryCode      string  `json:"country_code"`
 		NotCorporateSite bool    `json:"not_corporate_site"`
+		Seats            int     `json:"seats"`
+		Workstations     int     `json:"workstations"`
 		FloorplanIDs     []int64 `json:"floorplan_ids"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -75,16 +77,35 @@ func (h *FloorplanHandler) CreateSite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check for duplicate site name
+	if existingSites, err := h.DB.ListSites(); err == nil {
+		for _, s := range existingSites {
+			if strings.EqualFold(strings.TrimSpace(s.Name), req.Name) {
+				jsonError(w, "sites.error_name_exists", http.StatusConflict)
+				return
+			}
+		}
+	}
+
 	countryCode := strings.TrimSpace(req.CountryCode)
 	if idx := strings.Index(countryCode, ","); idx != -1 {
 		countryCode = countryCode[:idx]
 	}
 	countryCode = strings.ToUpper(strings.TrimSpace(countryCode))
 
+	seats := req.Seats
+	if seats <= 0 && req.Workstations > 0 {
+		seats = req.Workstations
+	}
+	if seats < 0 {
+		seats = 0
+	}
+
 	site := models.Site{
 		Name:             req.Name,
 		CountryCode:      countryCode,
 		NotCorporateSite: req.NotCorporateSite,
+		Seats:            seats,
 		FloorplanIDs:     req.FloorplanIDs,
 	}
 
@@ -114,6 +135,8 @@ func (h *FloorplanHandler) UpdateSite(w http.ResponseWriter, r *http.Request) {
 		Name             string  `json:"name"`
 		CountryCode      string  `json:"country_code"`
 		NotCorporateSite bool    `json:"not_corporate_site"`
+		Seats            int     `json:"seats"`
+		Workstations     int     `json:"workstations"`
 		FloorplanIDs     []int64 `json:"floorplan_ids"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -126,17 +149,36 @@ func (h *FloorplanHandler) UpdateSite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check for duplicate site name on another site
+	if existingSites, err := h.DB.ListSites(); err == nil {
+		for _, s := range existingSites {
+			if s.ID != id && strings.EqualFold(strings.TrimSpace(s.Name), req.Name) {
+				jsonError(w, "sites.error_name_exists", http.StatusConflict)
+				return
+			}
+		}
+	}
+
 	countryCode := strings.TrimSpace(req.CountryCode)
 	if idx := strings.Index(countryCode, ","); idx != -1 {
 		countryCode = countryCode[:idx]
 	}
 	countryCode = strings.ToUpper(strings.TrimSpace(countryCode))
 
+	seats := req.Seats
+	if seats <= 0 && req.Workstations > 0 {
+		seats = req.Workstations
+	}
+	if seats < 0 {
+		seats = 0
+	}
+
 	site := models.Site{
 		ID:               id,
 		Name:             req.Name,
 		CountryCode:      countryCode,
 		NotCorporateSite: req.NotCorporateSite,
+		Seats:            seats,
 		FloorplanIDs:     req.FloorplanIDs,
 	}
 

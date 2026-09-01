@@ -240,7 +240,12 @@ func (d *DB) SetProjectMembers(projectID int64, userIDs []int64) error {
 	if _, err := tx.Exec(`DELETE FROM project_members WHERE project_id = ?`, projectID); err != nil {
 		return err
 	}
+	seen := make(map[int64]bool)
 	for _, uid := range userIDs {
+		if uid <= 0 || seen[uid] {
+			continue
+		}
+		seen[uid] = true
 		if _, err := tx.Exec(
 			`INSERT INTO project_members (project_id, user_id) VALUES (?, ?)`,
 			projectID, uid,

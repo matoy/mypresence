@@ -427,6 +427,7 @@ type Site struct {
 	Name             string       `json:"name"`
 	CountryCode      string       `json:"country_code"`
 	NotCorporateSite bool         `json:"not_corporate_site"`
+	Seats            int          `json:"seats"`
 	FloorplanIDs     []int64      `json:"floorplan_ids,omitempty"`
 	Floorplans       []*Floorplan `json:"floorplans,omitempty"`
 }
@@ -646,3 +647,30 @@ type ProjectReportRow struct {
 	TotalToDateDays float64 // sum of displayed months (past + current)
 	TotalDays       float64 // sum of all months including future
 }
+
+// SiteReportSummary represents monthly aggregated stats for a site.
+type SiteReportSummary struct {
+	Site                  *Site
+	Seats                 int
+	AttachedPeople        int
+	PeopleVsSeats         float64
+	WorkingDays           int
+	TotalOnSiteDays       float64
+	AvgOnSitePerDay       float64
+	OccupancyRate         float64 // (TotalOnSiteDays / (Seats * WorkingDays)) * 100
+	TotalReservations     float64
+	AvgReservationsPerDay float64
+	ReservationRate       float64 // (TotalReservations / (Seats * WorkingDays)) * 100
+}
+
+// SiteDailyReport represents daily breakdown metrics for a site.
+type SiteDailyReport struct {
+	Site              *Site
+	DailyOnSite       map[string]float64 // date -> count of on-site presences
+	DailyReservations map[string]float64 // date -> count of seat reservations
+	DailyOccupancy    map[string]float64 // date -> occupancy percentage
+	DailyResRate      map[string]float64 // date -> reservation percentage
+	TotalOnSite       float64
+	TotalReservations float64
+}
+

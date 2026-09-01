@@ -111,7 +111,21 @@ func buildTemplateFuncMap(cfg *config.Config) template.FuncMap {
 			return d
 		},
 		"intToInt64": func(i int) int64 { return int64(i) },
-		"upper":      strings.ToUpper,
+		"int": func(v interface{}) int {
+			switch n := v.(type) {
+			case int:
+				return n
+			case int64:
+				return int(n)
+			case float64:
+				return int(n)
+			case float32:
+				return int(n)
+			default:
+				return 0
+			}
+		},
+		"upper":   strings.ToUpper,
 		"percent":    tmplPercent,
 		"hasRole": func(user *models.User, role string) bool {
 			if user == nil {
@@ -130,7 +144,7 @@ func loadTemplates(funcMap template.FuncMap) map[string]*template.Template {
 		"admin_holidays", "admin_users", "admin_user_logs", "floorplan", "admin_floorplans", "admin_sites",
 		"pat", "settings_change_password", "settings_passkeys", "forgot_password", "reset_password",
 		"impersonate", "projects", "admin_projects", "admin_projects_report",
-		"admin_general_settings", "admin_news", "admin_notifications",
+		"admin_general_settings", "admin_news", "admin_notifications", "admin_sites_report",
 	}
 	templates := make(map[string]*template.Template)
 	for _, page := range pages {

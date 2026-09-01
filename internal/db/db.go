@@ -627,6 +627,7 @@ id %s,
 name %s NOT NULL,
 country_code %s NOT NULL DEFAULT '',
 not_corporate_site %s NOT NULL DEFAULT %s,
+seats INTEGER NOT NULL DEFAULT 0,
 created_at %s DEFAULT CURRENT_TIMESTAMP
 `, ai, dl.varcharType(128), dl.varcharType(64), bool_, dl.boolDefault(false), dt)),
 
@@ -678,6 +679,8 @@ FOREIGN KEY (floorplan_id) REFERENCES floorplans(id) ON DELETE CASCADE
 	// Additive migrations
 	d.floorplan.Exec(dl.rebind(dl.addColumnIfNotExists("sites", "country_code", dl.varcharType(64)+" NOT NULL DEFAULT ''")))                                    //nolint:errcheck
 	d.floorplan.Exec(dl.rebind(dl.addColumnIfNotExists("sites", "not_corporate_site", fmt.Sprintf("%s NOT NULL DEFAULT %s", bool_, dl.boolDefault(false))))) //nolint:errcheck
+	d.floorplan.Exec(dl.rebind(dl.addColumnIfNotExists("sites", "seats", "INTEGER NOT NULL DEFAULT 0")))                                                      //nolint:errcheck
+	d.floorplan.Exec(dl.rebind("UPDATE sites SET seats = workstations WHERE seats = 0 AND workstations > 0"))                                                 //nolint:errcheck
 	d.floorplan.Exec(dl.rebind(dl.addColumnIfNotExists("floorplans", "site_id", "BIGINT NOT NULL DEFAULT 0")))                                              //nolint:errcheck
 
 	return nil
@@ -2571,8 +2574,8 @@ func resolveAdminLogEntityName(l models.AdminLog, teamNames, statusNames, holida
 
 func (d *DB) CreateSite(s models.Site) (int64, error) {
 	id, err := d.floorplan.InsertGetID(
-		"INSERT INTO sites (name, country_code, not_corporate_site) VALUES (?, ?, ?)",
-		s.Name, s.CountryCode, s.NotCorporateSite,
+		"INSERT INTO sites (name, country_code, not_corporate_site, seats) VALUES (?, ?, ?, ?)",
+		s.Name, s.CountryCode, s.NotCorporateSite, s.Seats,
 	)
 	if err != nil {
 		return 0, err
@@ -2586,8 +2589,8 @@ func (d *DB) CreateSite(s models.Site) (int64, error) {
 func (d *DB) GetSite(id int64) (*models.Site, error) {
 	var s models.Site
 	err := d.floorplan.QueryRow(
-		"SELECT id, name, country_code, not_corporate_site FROM sites WHERE id = ?", id,
-	).Scan(&s.ID, &s.Name, &s.CountryCode, &s.NotCorporateSite)
+		"SELECT id, name, country_code, not_corporate_site, seats FROM sites WHERE id = ?", id,
+	).Scan(&s.ID, &s.Name, &s.CountryCode, &s.NotCorporateSite, &s.Seats)
 	if err != nil {
 		return nil, err
 	}
@@ -2602,7 +2605,7 @@ func (d *DB) GetSite(id int64) (*models.Site, error) {
 }
 
 func (d *DB) ListSites() ([]*models.Site, error) {
-	rows, err := d.floorplan.Query("SELECT id, name, country_code, not_corporate_site FROM sites ORDER BY name, id")
+	rows, err := d.floorplan.Query("SELECT id, name, country_code, not_corporate_site, seats FROM sites ORDER BY name, id")
 	if err != nil {
 		return nil, err
 	}
@@ -2612,7 +2615,7 @@ func (d *DB) ListSites() ([]*models.Site, error) {
 	siteMap := make(map[int64]*models.Site)
 	for rows.Next() {
 		var s models.Site
-		if err := rows.Scan(&s.ID, &s.Name, &s.CountryCode, &s.NotCorporateSite); err != nil {
+		if err := rows.Scan(&s.ID, &s.Name, &s.CountryCode, &s.NotCorporateSite, &s.Seats); err != nil {
 			return nil, err
 		}
 		s.Floorplans = []*models.Floorplan{}
@@ -2643,8 +2646,8 @@ func (d *DB) ListSites() ([]*models.Site, error) {
 
 func (d *DB) UpdateSite(s models.Site) error {
 	_, err := d.floorplan.Exec(
-		"UPDATE sites SET name = ?, country_code = ?, not_corporate_site = ? WHERE id = ?",
-		s.Name, s.CountryCode, s.NotCorporateSite, s.ID,
+		"UPDATE sites SET name = ?, country_code = ?, not_corporate_site = ?, seats = ? WHERE id = ?",
+		s.Name, s.CountryCode, s.NotCorporateSite, s.Seats, s.ID,
 	)
 	if err != nil {
 		return err
@@ -2653,6 +2656,86 @@ func (d *DB) UpdateSite(s models.Site) error {
 		return d.SetSiteFloorplans(s.ID, s.FloorplanIDs)
 	}
 	return nil
+}
+
+// GetActiveUsersBySite returns a map of site_id -> list of active (non-disabled) users attached to that site.
+func (d *DB) GetActiveUsersBySite() (map[int64][]models.User, error) {
+	users, err := d.ListUsers()
+	if err != nil {
+		return nil, err
+	}
+	res := make(map[int64][]models.User)
+	for _, u := range users {
+		if !u.Disabled && u.SiteID > 0 {
+			res[u.SiteID] = append(res[u.SiteID], u)
+		}
+	}
+	return res, nil
+}
+
+// SitePresenceEntry represents a user's on-site presence record.
+type SitePresenceEntry struct {
+	UserID int64
+	Date   string
+	Half   string
+}
+
+// GetMonthlyOnSitePresences returns all presences where status has on_site=1 between startDate and endDate.
+func (d *DB) GetMonthlyOnSitePresences(startDate, endDate string) ([]SitePresenceEntry, error) {
+	rows, err := d.presence.Query(`
+SELECT p.user_id, p.date, p.half
+FROM presences p
+JOIN statuses s ON p.status_id = s.id
+WHERE p.date >= ? AND p.date <= ? AND s.on_site = 1
+`, startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() //nolint:errcheck
+
+	var list []SitePresenceEntry
+	for rows.Next() {
+		var e SitePresenceEntry
+		if err := rows.Scan(&e.UserID, &e.Date, &e.Half); err != nil {
+			return nil, err
+		}
+		list = append(list, e)
+	}
+	return list, rows.Err()
+}
+
+// SiteReservationEntry represents a seat reservation joined with its site.
+type SiteReservationEntry struct {
+	SiteID int64
+	Date   string
+	Half   string
+	SeatID int64
+	UserID int64
+}
+
+// GetMonthlySiteReservations returns all seat reservations between startDate and endDate for floorplans attached to a site.
+func (d *DB) GetMonthlySiteReservations(startDate, endDate string) ([]SiteReservationEntry, error) {
+	rows, err := d.floorplan.Query(`
+SELECT f.site_id, sr.date, sr.half, sr.seat_id, sr.user_id
+FROM seat_reservations sr
+JOIN seats s ON sr.seat_id = s.id
+JOIN floorplans f ON s.floorplan_id = f.id
+WHERE f.site_id > 0 AND sr.date >= ? AND sr.date <= ?
+`, startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() //nolint:errcheck
+
+	var list []SiteReservationEntry
+	for rows.Next() {
+		var e SiteReservationEntry
+		if err := rows.Scan(&e.SiteID, &e.Date, &e.Half, &e.SeatID, &e.UserID); err != nil {
+			return nil, err
+		}
+		list = append(list, e)
+	}
+	return list, rows.Err()
 }
 
 func (d *DB) DeleteSite(id int64) error {

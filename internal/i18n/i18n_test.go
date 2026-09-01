@@ -299,4 +299,64 @@ func TestHolidayDuplicateKey_AllLanguages(t *testing.T) {
 	}
 }
 
+func TestSitesReportKeys_AllLanguages(t *testing.T) {
+	requiredKeys := []string{
+		"nav.sites_report",
+		"sites.seats",
+		"sites.seats_title",
+		"sites.workstations",
+		"sites.workstations_title",
+		"sites_report.title",
+		"sites_report.site",
+		"sites_report.all_sites",
+		"sites_report.kpi_seats",
+		"sites_report.kpi_workstations",
+		"sites_report.capacity_days",
+		"sites_report.kpi_attached_people",
+		"sites_report.ratio",
+		"sites_report.people_per_seat",
+		"sites_report.people_per_desk",
+		"sites_report.kpi_avg_occupancy",
+		"sites_report.onsite_days",
+		"sites_report.kpi_reservations",
+		"sites_report.reservations_count",
+		"sites_report.summary",
+		"sites_report.col_site",
+		"sites_report.col_country",
+		"sites_report.col_seats",
+		"sites_report.col_workstations",
+		"sites_report.col_people",
+		"sites_report.col_ratio",
+		"sites_report.col_working_days",
+		"sites_report.col_avg_onsite",
+		"sites_report.col_occupancy_rate",
+		"sites_report.col_avg_reservations",
+		"sites_report.col_reservation_rate",
+		"sites_report.total_row",
+		"sites_report.no_sites",
+		"sites_report.daily",
+		"sites_report.daily_hint",
+		"sites_report.metric",
+		"sites_report.monthly_total",
+		"sites_report.daily_presences",
+		"sites_report.daily_reservations",
+		"help.topic.admin_sites_report.title",
+		"help.topic.admin_sites_report.desc",
+		"help.topic.admin_sites_report.item1",
+		"help.topic.admin_sites_report.item2",
+	}
+
+	langs := []string{"en", "fr", "de", "es", "it"}
+	for _, lang := range langs {
+		m := T(lang)
+		for _, key := range requiredKeys {
+			val, ok := m[key]
+			if !ok || val == "" {
+				t.Errorf("lang %q is missing required sites report key %q", lang, key)
+			}
+		}
+	}
+}
+
+
 

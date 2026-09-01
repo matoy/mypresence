@@ -61,31 +61,31 @@ $SITE=1; $REMOTE=2; $TRIP=3; $LEAVE=4; $SICK=5; $TRAINING=6
 # ── 1. Create users ───────────────────────────────────────────────────────────
 Write-Host "`nCreating users..."
 $users = @(
-    @{ email="alice.martin@corp.local";  name="Alice Martin";  password="demo1234"; role="team_manager" },
-    @{ email="bob.dupont@corp.local";    name="Bob Dupont";    password="demo1234"; role="basic" },
-    @{ email="claire.leroy@corp.local";  name="Claire Leroy";  password="demo1234"; role="basic" },
-    @{ email="david.simon@corp.local";   name="David Simon";   password="demo1234"; role="basic" },
-    @{ email="emma.garcia@corp.local";   name="Emma Garcia";   password="demo1234"; role="activity_viewer" },
-    @{ email="felix.nguyen@corp.local";  name="Felix Nguyen";  password="demo1234"; role="basic" },
-    @{ email="grace.chen@corp.local";    name="Grace Chen";    password="demo1234"; role="basic" },
-    @{ email="hugo.moreau@corp.local";   name="Hugo Moreau";   password="demo1234"; role="basic" },
-    @{ email="iris.blanc@corp.local";    name="Iris Blanc";    password="demo1234"; role="basic" },
-    @{ email="julien.roux@corp.local";   name="Julien Roux";   password="demo1234"; role="basic" }
+    @{ email="alice.martin@corp.local";  name="Alice Martin";  password="demo1234"; role="team_manager";   site="Siège Social Paris" },
+    @{ email="bob.dupont@corp.local";    name="Bob Dupont";    password="demo1234"; role="basic";          site="Siège Social Paris" },
+    @{ email="claire.leroy@corp.local";  name="Claire Leroy";  password="demo1234"; role="basic";          site="Siège Social Paris" },
+    @{ email="david.simon@corp.local";   name="David Simon";   password="demo1234"; role="basic";          site="Site Logistique Troyes" },
+    @{ email="emma.garcia@corp.local";   name="Emma Garcia";   password="demo1234"; role="activity_viewer"; site="Siège Social Paris" },
+    @{ email="felix.nguyen@corp.local";  name="Felix Nguyen";  password="demo1234"; role="basic";          site="Hub Régional Casablanca" },
+    @{ email="grace.chen@corp.local";    name="Grace Chen";    password="demo1234"; role="basic";          site="Siège Social Paris" },
+    @{ email="hugo.moreau@corp.local";   name="Hugo Moreau";   password="demo1234"; role="basic";          site="Site Logistique Troyes" },
+    @{ email="iris.blanc@corp.local";    name="Iris Blanc";    password="demo1234"; role="basic";          site="Hub Régional Casablanca" },
+    @{ email="julien.roux@corp.local";   name="Julien Roux";   password="demo1234"; role="basic";          site="Espace Coworking Lyon" }
 )
 $userIDs = @{}
 $userIDs["admin"] = 1
-foreach ($u in $users) {
-    $r = PostJSON "$Base/admin/users" @{ email=$u.email; name=$u.name; password=$u.password }
+foreach ($userItem in $users) {
+    $r = PostJSON "$Base/admin/users" @{ email=$userItem.email; name=$userItem.name; password=$userItem.password }
     if ($r -and $r.id) {
-        $userIDs[$u.email] = [int]$r.id
-        Write-Host "  '$($u.name)' id=$($r.id)"
+        $userIDs[$userItem.email] = [int]$r.id
+        Write-Host "  '$($userItem.name)' id=$($r.id)"
         # Set roles (skip if basic — that's the default)
-        if ($u.role -and $u.role -ne "basic") {
-            $roleArray = @($u.role -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" })
+        if ($userItem.role -and $userItem.role -ne "basic") {
+            $roleArray = @($userItem.role -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" })
             PutJSON "$Base/api/users/$($r.id)/roles" @{ roles=$roleArray }
         }
     } else {
-        Write-Warning "  Failed to create '$($u.name)' (may already exist)"
+        Write-Warning "  Failed to create '$($userItem.name)' (may already exist)"
     }
 }
 # Resolve IDs for users that already existed
@@ -161,26 +161,48 @@ function Get-WorkingDays ($year, $month) {
 
 Write-Host "`nCreating sites..."
 $siteItems = @(
-    @{ name="Siège Social Paris";        country_code="FR"; not_corporate_site=$false },
-    @{ name="Site Logistique Troyes";    country_code="FR"; not_corporate_site=$false },
-    @{ name="Hub Régional Casablanca";   country_code="MA"; not_corporate_site=$false },
-    @{ name="Espace Coworking Lyon";     country_code="FR"; not_corporate_site=$true }
+    @{ name="Siège Social Paris";        country_code="FR"; not_corporate_site=$false; seats=50 },
+    @{ name="Site Logistique Troyes";    country_code="FR"; not_corporate_site=$false; seats=20 },
+    @{ name="Hub Régional Casablanca";   country_code="MA"; not_corporate_site=$false; seats=15 },
+    @{ name="Espace Coworking Lyon";     country_code="FR"; not_corporate_site=$true;  seats=10 }
 )
 $siteIDs = @{}
-foreach ($si in $siteItems) {
-    $r = PostJSON "$Base/admin/sites" $si
-    if ($r -and $r.id) {
-        $siteIDs[$si.name] = [int]$r.id
-        Write-Host "  Site '$($si.name)' [$($si.country_code)] id=$($r.id)"
-    } else {
-        Write-Warning "  Site '$($si.name)' may already exist"
+
+# Check existing sites first so we do NOT recreate them
+$existSites = Invoke-RestMethod "$Base/api/admin/sites" -Headers $jh -ErrorAction SilentlyContinue
+if ($existSites) {
+    foreach ($es in $existSites) {
+        if (-not $siteIDs[$es.name]) {
+            $siteIDs[$es.name] = [int]$es.id
+        } elseif ($siteItems | Where-Object { $_.name -eq $es.name }) {
+            # Duplicate site with same name found from prior runs: clean it up
+            try {
+                Invoke-RestMethod "$Base/api/admin/sites/$($es.id)" -Method DELETE -Headers $jh -ErrorAction SilentlyContinue | Out-Null
+                Write-Host "  Removed duplicate site '$($es.name)' id=$($es.id)"
+            } catch {}
+        }
     }
 }
-if ($siteIDs.Count -eq 0) {
-    $existSites = Invoke-RestMethod "$Base/api/admin/sites" -Headers $jh -ErrorAction SilentlyContinue
-    if ($existSites) {
-        foreach ($es in $existSites) {
-            $siteIDs[$es.name] = [int]$es.id
+
+foreach ($si in $siteItems) {
+    if ($siteIDs[$si.name]) {
+        # Site already exists: do not recreate, update properties (including seats)
+        $sid = $siteIDs[$si.name]
+        $null = PutJSON "$Base/api/admin/sites/$sid" @{
+            name = $si.name
+            country_code = $si.country_code
+            not_corporate_site = $si.not_corporate_site
+            seats = $si.seats
+        }
+        Write-Host "  Site '$($si.name)' [$($si.country_code)] seats=$($si.seats) id=$sid (existing)"
+    } else {
+        # Site does not exist: create it
+        $r = PostJSON "$Base/admin/sites" $si
+        if ($r -and $r.id) {
+            $siteIDs[$si.name] = [int]$r.id
+            Write-Host "  Site '$($si.name)' [$($si.country_code)] seats=$($si.seats) id=$($r.id) (created)"
+        } else {
+            Write-Warning "  Failed to create site '$($si.name)'"
         }
     }
 }
@@ -235,62 +257,64 @@ function Upload-FloorplanImage ($fpId, [byte[]]$imgBytes, [string]$filename = "f
 }
 
 Write-Host "`nCreating floorplan..."
-$fp = PostJSON "$Base/admin/floorplans" @{ name="HQ Open Space"; site_id=$parisSiteId }
-if ($fp -and $fp.id) {
-    $fpID = [int]$fp.id
-    Write-Host "  Floorplan id=$fpID"
-
-    # Use provided demo image if available, otherwise generate a fallback PNG
-    $localImg = Join-Path $PSScriptRoot "demo-floorplan.jpg"
-    if (Test-Path $localImg) {
-        Write-Host "  Using local image: $localImg"
-        Upload-FloorplanImage $fpID ([System.IO.File]::ReadAllBytes($localImg)) "demo-floorplan.jpg" "image/jpeg"
-    } else {
-        Write-Host "  No demo-floorplan.jpg found — generating placeholder image"
-        Write-Host "  (Save the floor plan image as scripts\demo-floorplan.jpg for a realistic plan)"
-        try { Upload-FloorplanImage $fpID (New-FloorplanPNG) "floorplan.png" "image/png" }
-        catch { Write-Warning "  Could not generate floor plan image: $_" }
-    }
-
-    # Seat positions calibrated for the 3D perspective office photo (demo-floorplan.jpg).
-    # The image shows: left open space (Zone A), right open space (Zone B), meeting room (bottom-right).
-    # x_pct = % from left edge, y_pct = % from top edge of the image.
-    $seats = @(
-        # Zone A — left open space, 4 rows of workstations visible in perspective
-        @{ label="A1"; x_pct=7.0; y_pct=76.0 },   # front-left row, left seat
-        @{ label="A2"; x_pct=13.0; y_pct=70.0 },   # front-left row, right seat
-        @{ label="A3"; x_pct=7.0; y_pct=66.0 },   # 2nd row, left
-        @{ label="A4"; x_pct=20.0; y_pct=58.0 },   # 2nd row, right
-        @{ label="A5"; x_pct=16.0; y_pct=51.0 },   # 3rd row, left
-        @{ label="A6"; x_pct=24.0; y_pct=50.0 },   # 3rd row, right
-        @{ label="A7"; x_pct=26.0; y_pct=37.0 },   # back row, left
-        @{ label="A8"; x_pct=33.0; y_pct=36.0 },   # back row, right
-
-        # Zone B — right open space, workstations seen from back-right angle
-        @{ label="B1"; x_pct=58.0; y_pct=41.0 },
-        @{ label="B2"; x_pct=61.0; y_pct=35.0 },
-        @{ label="B3"; x_pct=64.0; y_pct=45.0 },
-        @{ label="B4"; x_pct=66.0; y_pct=39.0 },
-        @{ label="B5"; x_pct=65.0; y_pct=28.0 }
-    )
-    $seatIDs = @{}
-    foreach ($s in $seats) {
-        $sr = PostJSON "$Base/admin/floorplans/$fpID/seats" $s
-        if ($sr -and $sr.id) {
-            $seatIDs[$s.label] = [int]$sr.id
-            Write-Host "  Seat '$($s.label)' id=$($sr.id)"
+$fpID = 0
+$seatIDs = @{}
+$fpList = Invoke-RestMethod "$Base/api/floorplans" -Headers $jh -ErrorAction SilentlyContinue
+if ($fpList) {
+    foreach ($efp in $fpList) {
+        if ($efp.name -eq "HQ Open Space") {
+            $fpID = [int]$efp.id
+            Write-Host "  Using existing floorplan 'HQ Open Space' id=$fpID"
+            $existSeats = Invoke-RestMethod "$Base/api/seats?floorplan_id=$fpID" -Headers $jh -ErrorAction SilentlyContinue
+            if ($existSeats) { foreach ($s in $existSeats) { $seatIDs[$s.label] = [int]$s.id } }
+            break
         }
     }
-} else {
-    Write-Warning "  Failed to create floorplan (may already exist) — skipping seats"
-    # Try to get existing floorplan
-    $fpList = Invoke-RestMethod "$Base/api/floorplans" -Headers $jh -ErrorAction SilentlyContinue
-    if ($fpList -and $fpList.Count -gt 0) {
-        $fpID = [int]$fpList[0].id
-        Write-Host "  Using existing floorplan id=$fpID"
-        $existSeats = Invoke-RestMethod "$Base/api/seats?floorplan_id=$fpID" -Headers $jh -ErrorAction SilentlyContinue
-        $seatIDs = @{}
-        if ($existSeats) { foreach ($s in $existSeats) { $seatIDs[$s.label] = [int]$s.id } }
+}
+
+if ($fpID -eq 0) {
+    $fp = PostJSON "$Base/admin/floorplans" @{ name="HQ Open Space"; site_id=$parisSiteId }
+    if ($fp -and $fp.id) {
+        $fpID = [int]$fp.id
+        Write-Host "  Floorplan id=$fpID (created)"
+
+        # Use provided demo image if available, otherwise generate a fallback PNG
+        $localImg = Join-Path $PSScriptRoot "demo-floorplan.jpg"
+        if (Test-Path $localImg) {
+            Write-Host "  Using local image: $localImg"
+            Upload-FloorplanImage $fpID ([System.IO.File]::ReadAllBytes($localImg)) "demo-floorplan.jpg" "image/jpeg"
+        } else {
+            Write-Host "  No demo-floorplan.jpg found — generating placeholder image"
+            Write-Host "  (Save the floor plan image as scripts\demo-floorplan.jpg for a realistic plan)"
+            try { Upload-FloorplanImage $fpID (New-FloorplanPNG) "floorplan.png" "image/png" }
+            catch { Write-Warning "  Could not generate floor plan image: $_" }
+        }
+
+        # Seat positions calibrated for the 3D perspective office photo (demo-floorplan.jpg).
+        $seats = @(
+            @{ label="A1"; x_pct=7.0; y_pct=76.0 },
+            @{ label="A2"; x_pct=13.0; y_pct=70.0 },
+            @{ label="A3"; x_pct=7.0; y_pct=66.0 },
+            @{ label="A4"; x_pct=20.0; y_pct=58.0 },
+            @{ label="A5"; x_pct=16.0; y_pct=51.0 },
+            @{ label="A6"; x_pct=24.0; y_pct=50.0 },
+            @{ label="A7"; x_pct=26.0; y_pct=37.0 },
+            @{ label="A8"; x_pct=33.0; y_pct=36.0 },
+            @{ label="B1"; x_pct=58.0; y_pct=41.0 },
+            @{ label="B2"; x_pct=61.0; y_pct=35.0 },
+            @{ label="B3"; x_pct=64.0; y_pct=45.0 },
+            @{ label="B4"; x_pct=66.0; y_pct=39.0 },
+            @{ label="B5"; x_pct=65.0; y_pct=28.0 }
+        )
+        foreach ($s in $seats) {
+            $sr = PostJSON "$Base/admin/floorplans/$fpID/seats" $s
+            if ($sr -and $sr.id) {
+                $seatIDs[$s.label] = [int]$sr.id
+                Write-Host "  Seat '$($s.label)' id=$($sr.id)"
+            }
+        }
+    } else {
+        Write-Warning "  Failed to create floorplan — skipping seats"
     }
 }
 
@@ -341,25 +365,20 @@ foreach ($mt in $manualTeams) {
 
 # ── 4b. Assign users to sites ────────────────────────────────────────────────
 Write-Host "`nAssigning user sites..."
-$userSiteMap = @{
-    admin  = $parisSiteId
-    alice  = $parisSiteId
-    bob    = $parisSiteId
-    claire = $parisSiteId
-    david  = if ($siteIDs["Site Logistique Troyes"]) { $siteIDs["Site Logistique Troyes"] } else { $parisSiteId }
-    emma   = $parisSiteId
-    felix  = if ($siteIDs["Hub Régional Casablanca"]) { $siteIDs["Hub Régional Casablanca"] } else { $parisSiteId }
-    grace  = $parisSiteId
-    hugo   = if ($siteIDs["Site Logistique Troyes"]) { $siteIDs["Site Logistique Troyes"] } else { $parisSiteId }
-    iris   = if ($siteIDs["Hub Régional Casablanca"]) { $siteIDs["Hub Régional Casablanca"] } else { $parisSiteId }
-    julien = if ($siteIDs["Espace Coworking Lyon"]) { $siteIDs["Espace Coworking Lyon"] } else { $parisSiteId }
+$adminId = if ($U.admin) { $U.admin } else { 1 }
+if ($adminId -and $parisSiteId) {
+    PutJSON "$Base/api/admin/users/$adminId/site" @{ site_id=[int]$parisSiteId }
+    Write-Host "  Administrator (id=$adminId) -> site 'Siège Social Paris' (id=$parisSiteId)"
 }
-foreach ($k in $userSiteMap.Keys) {
-    $uid = $U[$k]
-    $sid = $userSiteMap[$k]
-    if ($uid -and $sid) {
+
+foreach ($userItem in $users) {
+    $uid = $userIDs[$userItem.email]
+    if (-not $uid) { continue }
+    $sname = $userItem.site
+    $sid = if ($sname -and $siteIDs[$sname]) { $siteIDs[$sname] } else { $parisSiteId }
+    if ($sid) {
         PutJSON "$Base/api/admin/users/$uid/site" @{ site_id=[int]$sid }
-        Write-Host "  $k (id=$uid) -> site id=$sid"
+        Write-Host "  $($userItem.name) (id=$uid) -> site '$sname' (id=$sid)"
     }
 }
 
@@ -485,7 +504,8 @@ if ($r) { Write-Host "  Seat A1 reserved: $($r.booked) days" }
 # ── 9. Projects ───────────────────────────────────────────────────────────────
 Write-Host "`nCreating projects..."
 # Give alice projects_manager role (in addition to her team_manager role)
-PutJSON "$Base/api/users/$($U.alice)/roles" @{ roles=@("team_manager","projects_manager") } | Out-Null
+$aliceId = if ($U.alice) { $U.alice } elseif ($userIDs["alice.martin@corp.local"]) { $userIDs["alice.martin@corp.local"] } else { 2 }
+PutJSON "$Base/api/users/$aliceId/roles" @{ roles=@("team_manager","projects_manager") } | Out-Null
 Write-Host "  alice: roles set to team_manager + projects_manager"
 
 $projIDs = @{}
@@ -544,7 +564,7 @@ Write-Host "`nAssigning project members..."
 function SetMembers ($projCode, [int[]]$userKeys) {
     $projId = $projIDs[$projCode]
     if (-not $projId) { Write-Warning "  Project '$projCode' not found"; return }
-    $uids = @($userKeys | ForEach-Object { [int]$_ })
+    $uids = @($userKeys | ForEach-Object { [int]$_ } | Where-Object { $_ -gt 0 } | Select-Object -Unique)
     $body = @{ user_ids = $uids } | ConvertTo-Json -Compress
     try {
         Invoke-RestMethod "$Base/api/admin/projects/$projId/members" -Method PUT -Headers $jh -Body $body | Out-Null

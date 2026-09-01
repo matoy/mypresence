@@ -1150,6 +1150,7 @@ function sitesAdmin(initialSites) {
         newSiteName: '',
         newSiteCountryCode: '',
         newSiteNotCorporate: false,
+        newSiteSeats: 0,
         newSiteFloorplanSearch: '',
         newSiteFloorplanIds: [],
 
@@ -1208,6 +1209,7 @@ function sitesAdmin(initialSites) {
                     name: this.newSiteName.trim(),
                     country_code: (this.newSiteCountryCode || '').trim().toUpperCase(),
                     not_corporate_site: !!this.newSiteNotCorporate,
+                    seats: parseInt(this.newSiteSeats || 0, 10),
                     floorplan_ids: this.newSiteFloorplanIds
                 })
             });
@@ -1224,7 +1226,7 @@ function sitesAdmin(initialSites) {
             }
         },
 
-        async saveSiteDetails(id, name, countryCode, notCorporate, floorplanIds) {
+        async saveSiteDetails(id, name, countryCode, notCorporate, seats, floorplanIds) {
             await fetch(`/admin/sites/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
@@ -1232,6 +1234,7 @@ function sitesAdmin(initialSites) {
                     name: (name || '').trim(),
                     country_code: (countryCode || '').trim(),
                     not_corporate_site: !!notCorporate,
+                    seats: parseInt(seats || 0, 10),
                     floorplan_ids: floorplanIds || []
                 })
             });

@@ -63,6 +63,7 @@
          data-site-name="{{.Name}}"
          data-country-code="{{.CountryCode}}"
          data-not-corporate="{{if .NotCorporateSite}}true{{else}}false{{end}}"
+         data-seats="{{.Seats}}"
          data-floor-count="{{$floorsCount}}"
          data-floor-ids="{{range $i, $id := .FloorplanIDs}}{{if $i}},{{end}}{{$id}}{{end}}"
          x-data="{
@@ -70,6 +71,7 @@
             editNameValue: '',
             editCountryCode: '',
             editNotCorporate: false,
+            editSeats: 0,
             editFloorSearch: '',
             editFloorIds: []
          }"
@@ -77,6 +79,7 @@
             editNameValue = $el.dataset.siteName || '';
             editCountryCode = $el.dataset.countryCode || '';
             editNotCorporate = $el.dataset.notCorporate === 'true';
+            editSeats = parseInt($el.dataset.seats) || 0;
             editFloorIds = ($el.dataset.floorIds ? $el.dataset.floorIds.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n)) : []);
          "
          x-show="matchesSite($el.dataset.siteName, $el.dataset.countryCode, $el.dataset.notCorporate === 'true', parseInt($el.dataset.floorCount) || 0)"
@@ -96,6 +99,7 @@
                             {{if .NotCorporateSite}}
                             <span class="text-xs bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full font-medium">🏢 {{index $.T "sites.not_corporate"}}</span>
                             {{end}}
+                            <span class="text-xs bg-indigo-50 text-indigo-700 px-2.5 py-0.5 rounded-full font-medium">🪑 {{.Seats}} {{index $.T "sites.seats"}}</span>
                             <span class="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-medium" x-text="editFloorIds.length + ' {{index $.T "sites.floors_assigned"}}'"></span>
                         </div>
                         {{if .Floorplans}}
@@ -152,6 +156,12 @@
                             </label>
                             <p class="text-xs text-gray-400 mt-0.5 ml-6">{{index $.T "sites.not_corporate_hint"}}</p>
                         </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-500 mb-0.5">{{index $.T "sites.seats"}}</label>
+                            <input type="number" min="0" x-model.number="editSeats"
+                                   placeholder="0"
+                                   class="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary/50">
+                        </div>
                         <div class="mt-2">
                             <label class="block text-xs font-medium text-gray-500 mb-0.5">{{index $.T "sites.floors"}}</label>
                             <p class="text-xs text-gray-400 mb-1.5">{{index $.T "sites.floors_hint"}}</p>
@@ -178,7 +188,7 @@
                                x-text="editFloorIds.length + ' {{index $.T "sites.floors_assigned"}}'"></p>
                         </div>
                         <div class="flex gap-2 mt-2">
-                            <button @click="saveSiteDetails({{.ID}}, editNameValue, editCountryCode, editNotCorporate, editFloorIds); editSite = false"
+                            <button @click="saveSiteDetails({{.ID}}, editNameValue, editCountryCode, editNotCorporate, editSeats, editFloorIds); editSite = false"
                                     type="button"
                                     class="text-xs px-2.5 py-1.5 bg-primary text-white rounded-lg font-medium hover:opacity-90 transition">
                                 {{index $.T "admin.save"}}
@@ -267,6 +277,11 @@
                             <span class="font-medium">{{index $.T "sites.not_corporate"}}</span>
                         </label>
                         <p class="text-xs text-gray-400 mt-0.5 ml-6">{{index $.T "sites.not_corporate_hint"}}</p>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">{{index $.T "sites.seats"}}</label>
+                        <input type="number" min="0" x-model.number="newSiteSeats" placeholder="0"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary/50">
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-gray-600 mb-0.5">{{index $.T "sites.floors"}}</label>

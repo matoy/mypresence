@@ -82,6 +82,16 @@ func TestSitesAPI_CRUDAndAccessControl(t *testing.T) {
 		t.Fatalf("invalid created site ID %d", siteID)
 	}
 
+	// 3b. CreateSite: duplicate name should be rejected with 409 Conflict
+	wDup := httptest.NewRecorder()
+	reqDup := createAuthedReq(t, d, http.MethodPost, "/api/admin/sites",
+		"fp_admin2b@test.com", "FP Admin 2b", "password123", models.RoleFloorplanManager,
+		createBody)
+	middleware.Auth(d, middleware.RequireRole(models.RoleFloorplanManager)(http.HandlerFunc(h.CreateSite))).ServeHTTP(wDup, reqDup)
+	if wDup.Code != http.StatusConflict {
+		t.Fatalf("expected 409 for duplicate site name, got %d: %s", wDup.Code, wDup.Body.String())
+	}
+
 	// 4. AdminListSites
 	reqList := createAuthedReq(t, d, http.MethodGet, "/api/admin/sites",
 		"fp_admin3@test.com", "FP Admin 3", "password123", models.RoleFloorplanManager,
