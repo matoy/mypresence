@@ -1002,17 +1002,61 @@ function teamsAdmin(initialTeams, countriesCatalog, allUsers, initialSites) {
             });
         },
 
+        getCountryFlag(code) {
+            if (!code) return '';
+            const c = (this.countriesCatalog || []).find(item => item.code.toUpperCase() === code.toUpperCase());
+            if (c && c.flag) return c.flag;
+            if (code.length === 2) {
+                try {
+                    return String.fromCodePoint(...[...code.toUpperCase()].map(ch => 0x1F1E6 + ch.charCodeAt(0) - 65));
+                } catch (e) {
+                    return '';
+                }
+            }
+            return '';
+        },
+
         async setMemberSite(teamId, userId, siteId) {
-            const r = await fetch(`/admin/teams/${teamId}/members/${userId}/site`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ site_id: parseInt(siteId) || 0 })
-            });
-            if (r.ok) {
-                window.location.reload();
-            } else {
-                const d = await r.json().catch(() => ({}));
-                alert(d.error || 'Erreur');
+            try {
+                const r = await fetch(`/admin/teams/${teamId}/members/${userId}/site`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ site_id: parseInt(siteId) || 0 })
+                });
+                if (r.ok) {
+                    const data = await r.json().catch(() => ({}));
+                    const updatedSiteId = data.site_id || 0;
+                    const updatedSiteName = data.site_name || '';
+                    const updatedCountry = data.site_country_code || '';
+
+                    if (this.allUsers) {
+                        const u = this.allUsers.find(user => user.id === userId);
+                        if (u) {
+                            u.site_id = updatedSiteId;
+                            u.site_name = updatedSiteName;
+                            u.site_country_code = updatedCountry;
+                        }
+                    }
+
+                    window.dispatchEvent(new CustomEvent('user-site-updated', {
+                        detail: {
+                            userId: userId,
+                            siteId: updatedSiteId,
+                            siteName: updatedSiteName,
+                            siteCountryCode: updatedCountry
+                        }
+                    }));
+                    return data;
+                } else {
+                    const d = await r.json().catch(() => ({}));
+                    alert(d.error || 'Erreur lors de la mise à jour du site');
+                    window.dispatchEvent(new CustomEvent('user-site-error', { detail: { userId: userId } }));
+                    return null;
+                }
+            } catch (err) {
+                alert('Erreur réseau lors de la mise à jour du site');
+                window.dispatchEvent(new CustomEvent('user-site-error', { detail: { userId: userId } }));
+                return null;
             }
         },
 

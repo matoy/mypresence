@@ -276,19 +276,40 @@
 
                 <!-- Member Site Selector / Badge -->
                 <div class="flex items-center gap-3 shrink-0">
-                    <div class="relative" x-data="{ openSite: false, siteSearch: '', memberId: {{.ID}}, memberSiteId: {{.SiteID}}, teamId: {{$teamItem.Team.ID}} }">
+                    <div class="relative"
+                         x-data="{
+                             openSite: false,
+                             siteSearch: '',
+                             memberId: {{.ID}},
+                             memberSiteId: {{.SiteID}},
+                             memberSiteName: {{json .SiteName}},
+                             memberSiteCountry: {{json .SiteCountryCode}},
+                             teamId: {{$teamItem.Team.ID}},
+                             isUpdating: false
+                         }"
+                         @user-site-updated.window="if ($event.detail.userId === memberId) {
+                             memberSiteId = $event.detail.siteId;
+                             memberSiteName = $event.detail.siteName;
+                             memberSiteCountry = $event.detail.siteCountryCode;
+                             isUpdating = false;
+                         }"
+                         @user-site-error.window="if ($event.detail.userId === memberId) {
+                             isUpdating = false;
+                         }">
                         {{if $teamItem.CanEdit}}
                         <button type="button" @click="openSite = !openSite; siteSearch = ''"
+                                :disabled="isUpdating"
                                 class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border transition cursor-pointer"
                                 :class="memberSiteId > 0 ? 'bg-indigo-50 border-indigo-200 text-indigo-800 hover:bg-indigo-100' : 'bg-white border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-50'"
                                 title="{{index $.T "teams.member_site"}}">
                             <span>🏢</span>
-                            {{if .SiteID}}
-                            <span class="font-semibold">{{if .SiteCountryCode}}{{flagFor .SiteCountryCode}} {{end}}{{.SiteName}}</span>
-                            {{else}}
-                            <span class="italic text-gray-400">{{index $.T "teams.no_site"}}</span>
-                            {{end}}
-                            <svg class="h-3 w-3 opacity-60 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <span x-show="memberSiteId > 0" class="font-semibold inline-flex items-center gap-1">
+                                <span x-show="memberSiteCountry" x-text="getCountryFlag(memberSiteCountry)">{{if .SiteCountryCode}}{{flagFor .SiteCountryCode}}{{end}}</span>
+                                <span x-text="memberSiteName">{{.SiteName}}</span>
+                            </span>
+                            <span x-show="!memberSiteId || memberSiteId === 0" class="italic text-gray-400">{{index $.T "teams.no_site"}}</span>
+                            <span x-show="isUpdating" class="animate-spin text-primary ml-0.5">⟳</span>
+                            <svg x-show="!isUpdating" class="h-3 w-3 opacity-60 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                             </svg>
                         </button>
@@ -302,7 +323,7 @@
                                        class="w-full px-2.5 py-1 border border-gray-200 rounded-lg text-xs focus:ring-1 focus:ring-primary focus:outline-none">
                             </div>
                             <!-- No site option -->
-                            <div @click="setMemberSite(teamId, memberId, 0); openSite = false"
+                            <div @click="isUpdating = true; openSite = false; setMemberSite(teamId, memberId, 0)"
                                  class="px-3 py-1.5 hover:bg-gray-100 cursor-pointer text-gray-500 italic flex items-center justify-between border-b border-gray-100">
                                 <span>{{index $.T "teams.no_site"}}</span>
                                 <span x-show="memberSiteId === 0" class="text-primary font-bold">✓</span>
@@ -314,7 +335,7 @@
                                          x-text="(grp.flag ? grp.flag + ' ' : '') + grp.countryName + (grp.country ? ' (' + grp.country + ')' : '')">
                                     </div>
                                     <template x-for="st in grp.sites" :key="'m_' + memberId + '_st_' + st.id">
-                                        <div @click="setMemberSite(teamId, memberId, st.id); openSite = false"
+                                        <div @click="isUpdating = true; openSite = false; setMemberSite(teamId, memberId, st.id)"
                                              class="pl-6 pr-3 py-1.5 hover:bg-indigo-50 cursor-pointer flex items-center justify-between transition"
                                              :class="st.id === memberSiteId ? 'bg-indigo-50/70 text-primary font-semibold' : 'text-gray-500 font-medium'">
                                             <span class="truncate flex items-center gap-1.5">
@@ -332,12 +353,11 @@
                             </div>
                         </div>
                         {{else}}
-                        {{if .SiteID}}
-                        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-indigo-50 text-indigo-700">
+                        <span x-show="memberSiteId > 0" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-indigo-50 text-indigo-700">
                             <span>🏢</span>
-                            <span>{{if .SiteCountryCode}}{{flagFor .SiteCountryCode}} {{end}}{{.SiteName}}</span>
+                            <span x-show="memberSiteCountry" x-text="getCountryFlag(memberSiteCountry)">{{if .SiteCountryCode}}{{flagFor .SiteCountryCode}} {{end}}</span>
+                            <span x-text="memberSiteName">{{.SiteName}}</span>
                         </span>
-                        {{end}}
                         {{end}}
                     </div>
 
