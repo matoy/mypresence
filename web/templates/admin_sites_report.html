@@ -46,15 +46,6 @@
                 </select>
             </div>
         </div>
-        <div class="flex items-center gap-2">
-            <button onclick="exportTable('sites-summary-table', 'sites_report_{{index $.T (printf `cal.month.%d` .Month)}}_{{.Year}}', '{{index $.T (printf `cal.month.%d` .Month)}} {{.Year}}')"
-                    class="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 shadow-sm transition">
-                <svg class="h-4 w-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
-                </svg>
-                {{index $.T "admin.export"}}
-            </button>
-        </div>
     </div>
 
     <!-- KPI Cards -->
@@ -94,7 +85,7 @@
             <div>
                 <div class="text-2xl font-bold text-emerald-600">{{fmtF .AvgOccupancyRate}}%</div>
                 <p class="text-xs text-gray-400 mt-1">
-                    {{fmtF .TotalOnSiteDays}} {{index $.T "sites_report.onsite_days"}} (~{{fmtF .AvgOnSitePerWorkingDay}}/j)
+                    {{fmtF .TotalOnSiteDays}} {{index $.T "sites_report.onsite_days"}} {{printf (index $.T "sites_report.kpi_onsite_detail") (fmtF .AvgOnSitePerWorkingDay)}}
                 </p>
             </div>
         </div>
@@ -107,18 +98,28 @@
             </div>
             <div>
                 <div class="text-2xl font-bold text-purple-600">{{fmtF .AvgReservationRate}}%</div>
-                <p class="text-xs text-gray-400 mt-1">
-                    {{fmtF .TotalReservations}} {{index $.T "sites_report.reservations_count"}} (~{{fmtF .AvgResPerWorkingDay}}/j)
+                <p class="text-xs text-gray-500 mt-1 font-medium">
+                    {{.TotalReservableSeats}} {{index $.T "sites_report.reservable_seats"}}
+                </p>
+                <p class="text-xs text-gray-400 mt-0.5">
+                    {{fmtF .TotalReservations}} {{index $.T "sites_report.reservations_count"}} {{printf (index $.T "sites_report.kpi_res_detail") (fmtF .AvgResPerWorkingDay)}}
                 </p>
             </div>
         </div>
     </div>
 
     <!-- Executive Summary Table -->
+    <div class="flex items-center justify-between mb-3">
+        <h2 class="text-lg font-semibold text-gray-800">{{index $.T "sites_report.summary"}}</h2>
+        <button onclick="exportTable('sites-summary-table', 'sites_report_{{index $.T (printf `cal.month.%d` .Month)}}_{{.Year}}', '{{index $.T (printf `cal.month.%d` .Month)}} {{.Year}}')"
+                class="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 shadow-sm transition">
+            <svg class="h-4 w-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+            </svg>
+            {{index $.T "admin.export"}}
+        </button>
+    </div>
     <div class="bg-white rounded-xl shadow-md overflow-x-auto mb-6 border border-gray-100">
-        <div class="flex items-center justify-between px-4 pt-4 pb-2">
-            <h2 class="text-lg font-semibold text-gray-800">{{index $.T "sites_report.summary"}}</h2>
-        </div>
         <table id="sites-summary-table" class="w-full border-collapse">
             <thead>
                 <tr class="bg-gray-50 border-b border-gray-200">
@@ -189,7 +190,7 @@
                         <span class="text-sm font-medium text-purple-800">{{fmtF .AvgReservationsPerDay}} / j</span>
                     </td>
                     <td class="px-4 py-3 text-center bg-purple-50">
-                        {{if .Seats}}
+                        {{if .ReservableSeats}}
                         <span class="text-sm font-bold text-purple-700">{{fmtF .ReservationRate}}%</span>
                         {{else}}
                         <span class="text-gray-300">—</span>
@@ -237,10 +238,7 @@
 
     <!-- Daily Breakdown Table -->
     <div class="flex items-center justify-between mb-3">
-        <div>
-            <h2 class="text-lg font-semibold text-gray-800">{{index $.T "sites_report.daily"}}</h2>
-            <p class="text-xs text-gray-400 mt-0.5">{{index $.T "sites_report.daily_hint"}}</p>
-        </div>
+        <h2 class="text-lg font-semibold text-gray-800">{{index $.T "sites_report.daily"}}</h2>
         <button onclick="exportTable('sites-daily-table', 'daily_sites_{{index $.T (printf `cal.month.%d` .Month)}}_{{.Year}}', '{{index $.T (printf `cal.month.%d` .Month)}} {{.Year}}')"
                 class="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 shadow-sm transition">
             <svg class="h-4 w-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -249,11 +247,11 @@
             {{index $.T "admin.export"}}
         </button>
     </div>
-    <div class="bg-white rounded-xl shadow-md overflow-x-auto mb-10 border border-gray-100">
+    <div class="bg-white rounded-xl shadow-md overflow-hidden mb-10 border border-gray-100">
         <table id="sites-daily-table" class="w-full table-fixed border-collapse text-xs">
             <colgroup>
-                <col style="width:140px">
-                <col style="width:90px">
+                <col style="width:120px">
+                <col style="width:75px">
                 {{range $days}}<col>{{end}}
                 <col style="width:65px">
             </colgroup>
@@ -262,7 +260,7 @@
                     <th class="px-2 py-1.5 text-left text-xs font-semibold text-gray-500 uppercase border-b border-r border-gray-200 sticky left-0 bg-gray-50 z-10 truncate">
                         {{index $.T "sites_report.col_site"}}
                     </th>
-                    <th class="px-1 py-1.5 text-center text-[11px] font-semibold text-gray-500 uppercase border-b border-r border-gray-200 bg-gray-50 whitespace-nowrap">
+                    <th class="px-1 py-1.5 text-center text-[10px] font-semibold text-gray-500 uppercase border-b border-r border-gray-200 bg-gray-50 whitespace-nowrap">
                         {{index $.T "sites_report.metric"}}
                     </th>
                     {{range $days}}
@@ -273,7 +271,7 @@
                         {{if .IsHoliday}}<div class="text-[8px] leading-none">🎌</div>{{end}}
                     </th>
                     {{end}}
-                    <th class="px-1 py-1.5 text-center text-[11px] font-semibold text-gray-600 uppercase border-b border-l border-gray-200 bg-gray-50 whitespace-nowrap">
+                    <th class="px-1 py-1 text-center text-[10px] font-semibold text-gray-600 uppercase border-b border-l border-gray-200 bg-gray-50 leading-tight">
                         {{index $.T "sites_report.monthly_total"}}
                     </th>
                 </tr>

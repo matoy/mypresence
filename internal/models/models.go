@@ -652,6 +652,7 @@ type ProjectReportRow struct {
 type SiteReportSummary struct {
 	Site                  *Site
 	Seats                 int
+	ReservableSeats       int
 	AttachedPeople        int
 	PeopleVsSeats         float64
 	WorkingDays           int
@@ -660,7 +661,7 @@ type SiteReportSummary struct {
 	OccupancyRate         float64 // (TotalOnSiteDays / (Seats * WorkingDays)) * 100
 	TotalReservations     float64
 	AvgReservationsPerDay float64
-	ReservationRate       float64 // (TotalReservations / (Seats * WorkingDays)) * 100
+	ReservationRate       float64 // (TotalReservations / (ReservableSeats * WorkingDays)) * 100
 }
 
 // SiteDailyReport represents daily breakdown metrics for a site.

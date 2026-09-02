@@ -632,3 +632,93 @@ func TestSitesReport_OnSiteAttribution(t *testing.T) {
 	}
 }
 
+func TestSitesReport_ReservableSeatsRatio(t *testing.T) {
+	d := newExtraTestDB(t)
+	h := &FloorplanHandler{DB: d, DataDir: t.TempDir(), Render: noRender}
+
+	// Status with on_site = 1
+	statusID, err := d.CreateStatus(models.Status{Name: "Bureau", Color: "#00ff00", Billable: true, OnSite: true, SortOrder: 1})
+	if err != nil {
+		t.Fatalf("CreateStatus: %v", err)
+	}
+
+	// Site A: Declared 100 physical seats, but has 2 floors with 3 + 2 = 5 reservable seats
+	siteAID, err := d.CreateSite(models.Site{Name: "Site Alpha", CountryCode: "FR", Seats: 100})
+	if err != nil {
+		t.Fatalf("CreateSite: %v", err)
+	}
+	fp1, _ := d.CreateFloorplanWithSite("Floor 1", siteAID, 1)
+	s1, _ := d.CreateSeat(fp1, "A1", 10, 10)
+	_, _ = d.CreateSeat(fp1, "A2", 20, 20)
+	_, _ = d.CreateSeat(fp1, "A3", 30, 30)
+
+	fp2, _ := d.CreateFloorplanWithSite("Floor 2", siteAID, 2)
+	_, _ = d.CreateSeat(fp2, "B1", 10, 10)
+	_, _ = d.CreateSeat(fp2, "B2", 20, 20)
+
+	// Site B: 50 declared seats, 0 floors / 0 reservable seats
+	siteBID, err := d.CreateSite(models.Site{Name: "Site Beta", CountryCode: "FR", Seats: 50})
+	if err != nil {
+		t.Fatalf("CreateSite Beta: %v", err)
+	}
+
+	u1, _ := d.CreateLocalUser("alpha_user@test.com", "Alpha User", "pass")
+	_ = d.UpdateUserSite(u1, siteAID)
+
+	// Tuesday 2026-06-02 (working day): u1 reserves seat A1 on Floor 1
+	_ = d.SetPresences(u1, []string{"2026-06-02"}, statusID, "full")
+	_ = d.ReserveSeat(s1, u1, "2026-06-02", "full")
+
+	req := createAdminReq(t, d, http.MethodGet, "/api/admin/sites-report?year=2026&month=6&corp=corporate", nil)
+	w := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.SitesReportAPI)).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var data SitesReportPageData
+	if err := json.Unmarshal(w.Body.Bytes(), &data); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if data.TotalReservableSeats != 5 {
+		t.Errorf("expected TotalReservableSeats = 5, got %d", data.TotalReservableSeats)
+	}
+
+	var sumA, sumB *models.SiteReportSummary
+	for i := range data.Summaries {
+		if data.Summaries[i].Site.ID == siteAID {
+			sumA = &data.Summaries[i]
+		}
+		if data.Summaries[i].Site.ID == siteBID {
+			sumB = &data.Summaries[i]
+		}
+	}
+
+	if sumA == nil || sumB == nil {
+		t.Fatalf("expected both summaries to exist")
+	}
+
+	if sumA.ReservableSeats != 5 {
+		t.Errorf("expected Site A ReservableSeats = 5, got %d", sumA.ReservableSeats)
+	}
+	if sumB.ReservableSeats != 0 {
+		t.Errorf("expected Site B ReservableSeats = 0, got %d", sumB.ReservableSeats)
+	}
+
+	// Working days in June 2026: June 2026 has 22 working days (no FR holidays or 1 depending on calendar)
+	expectedResRate := (1.0 / float64(5*sumA.WorkingDays)) * 100
+	if sumA.ReservationRate != expectedResRate {
+		t.Errorf("expected Site A ReservationRate = %f, got %f", expectedResRate, sumA.ReservationRate)
+	}
+
+	if sumB.ReservationRate != 0 {
+		t.Errorf("expected Site B ReservationRate = 0, got %f", sumB.ReservationRate)
+	}
+
+	if data.AvgReservationRate != expectedResRate {
+		t.Errorf("expected global AvgReservationRate = %f, got %f", expectedResRate, data.AvgReservationRate)
+	}
+}
+
+

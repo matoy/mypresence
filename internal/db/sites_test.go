@@ -169,3 +169,33 @@ func TestSites_CRUDAndFloorplanAttachment(t *testing.T) {
 		t.Errorf("expected floorplan site_id to be reset to 0 after site deletion, got %d", fp1AfterDelete.SiteID)
 	}
 }
+
+func TestGetSiteReservableSeats(t *testing.T) {
+	d := newTestDB(t)
+
+	sID1, _ := d.CreateSite(models.Site{Name: "Site 1", CountryCode: "FR", Seats: 50})
+	sID2, _ := d.CreateSite(models.Site{Name: "Site 2", CountryCode: "MA", Seats: 30})
+
+	fp1, _ := d.CreateFloorplanWithSite("FP 1", sID1, 1)
+	_, _ = d.CreateSeat(fp1, "S1", 10, 10)
+	_, _ = d.CreateSeat(fp1, "S2", 20, 20)
+
+	fp2, _ := d.CreateFloorplanWithSite("FP 2", sID1, 2)
+	_, _ = d.CreateSeat(fp2, "S3", 30, 30)
+
+	fp3, _ := d.CreateFloorplanWithSite("FP 3", sID2, 1)
+	_, _ = d.CreateSeat(fp3, "S4", 40, 40)
+
+	resMap, err := d.GetSiteReservableSeats()
+	if err != nil {
+		t.Fatalf("GetSiteReservableSeats failed: %v", err)
+	}
+
+	if resMap[sID1] != 3 {
+		t.Errorf("expected Site 1 to have 3 seats, got %d", resMap[sID1])
+	}
+	if resMap[sID2] != 1 {
+		t.Errorf("expected Site 2 to have 1 seat, got %d", resMap[sID2])
+	}
+}
+

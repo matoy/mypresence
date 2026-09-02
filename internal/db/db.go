@@ -2788,6 +2788,32 @@ WHERE f.site_id > 0 AND sr.date >= ? AND sr.date <= ?
 	return list, rows.Err()
 }
 
+// GetSiteReservableSeats returns a map of site_id -> count of reservable seats on floorplans attached to that site.
+func (d *DB) GetSiteReservableSeats() (map[int64]int, error) {
+	rows, err := d.floorplan.Query(`
+SELECT f.site_id, COUNT(s.id)
+FROM seats s
+JOIN floorplans f ON s.floorplan_id = f.id
+WHERE f.site_id > 0
+GROUP BY f.site_id
+`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() //nolint:errcheck
+
+	result := make(map[int64]int)
+	for rows.Next() {
+		var siteID int64
+		var count int
+		if err := rows.Scan(&siteID, &count); err != nil {
+			return nil, err
+		}
+		result[siteID] = count
+	}
+	return result, rows.Err()
+}
+
 func (d *DB) DeleteSite(id int64) error {
 	// Detach floorplans and users first
 	_, _ = d.core.Exec("UPDATE users SET site_id = 0 WHERE site_id = ?", id)

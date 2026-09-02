@@ -26,6 +26,7 @@ type SitesReportPageData struct {
 	Summaries              []models.SiteReportSummary
 	DailyReports           []models.SiteDailyReport
 	TotalSeats             int
+	TotalReservableSeats   int
 	TotalAttachedPeople    int
 	PeopleVsSeats          float64
 	TotalCapacity          float64
@@ -236,13 +237,20 @@ func (h *FloorplanHandler) buildSitesReportData(r *http.Request) (*SitesReportPa
 		}
 	}
 
+	reservableSeatsBySite, _ := h.DB.GetSiteReservableSeats()
+	if reservableSeatsBySite == nil {
+		reservableSeatsBySite = make(map[int64]int)
+	}
+
 	// Compute summaries and daily reports for each site
 	var summaries []models.SiteReportSummary
 	var dailyReports []models.SiteDailyReport
 
 	var totalSeats int
+	var totalReservableSeats int
 	var totalAttachedPeople int
 	var totalCapacity float64
+	var totalResCapacity float64
 	var totalOnSiteDays float64
 	var totalReservations float64
 	var totalWorkingDaysSum float64
@@ -266,6 +274,8 @@ func (h *FloorplanHandler) buildSitesReportData(r *http.Request) (*SitesReportPa
 			siteWorkingDays = 0
 		}
 
+		siteReservableSeats := reservableSeatsBySite[s.ID]
+
 		var siteOnSiteWorkingDays float64
 		var siteResWorkingDays float64
 
@@ -278,7 +288,9 @@ func (h *FloorplanHandler) buildSitesReportData(r *http.Request) (*SitesReportPa
 
 			if s.Seats > 0 {
 				dailyOcc[d.Date] = (onSiteVal / float64(s.Seats)) * 100
-				dailyRes[d.Date] = (resVal / float64(s.Seats)) * 100
+			}
+			if siteReservableSeats > 0 {
+				dailyRes[d.Date] = (resVal / float64(siteReservableSeats)) * 100
 			}
 
 			// Only count working days in the monthly totals
@@ -297,14 +309,16 @@ func (h *FloorplanHandler) buildSitesReportData(r *http.Request) (*SitesReportPa
 		}
 
 		siteCapacity := float64(s.Seats * siteWorkingDays)
+		siteResCapacity := float64(siteReservableSeats * siteWorkingDays)
+
 		var occRate float64
 		if siteCapacity > 0 {
 			occRate = (siteOnSiteWorkingDays / siteCapacity) * 100
 		}
 
 		var resRate float64
-		if siteCapacity > 0 {
-			resRate = (siteResWorkingDays / siteCapacity) * 100
+		if siteResCapacity > 0 {
+			resRate = (siteResWorkingDays / siteResCapacity) * 100
 		}
 
 		var avgOnSite float64
@@ -317,6 +331,7 @@ func (h *FloorplanHandler) buildSitesReportData(r *http.Request) (*SitesReportPa
 		sum := models.SiteReportSummary{
 			Site:                  s,
 			Seats:                 s.Seats,
+			ReservableSeats:       siteReservableSeats,
 			AttachedPeople:        attachedCount,
 			PeopleVsSeats:         peopleRatio,
 			WorkingDays:           siteWorkingDays,
@@ -341,8 +356,10 @@ func (h *FloorplanHandler) buildSitesReportData(r *http.Request) (*SitesReportPa
 		dailyReports = append(dailyReports, dailyRep)
 
 		totalSeats += s.Seats
+		totalReservableSeats += siteReservableSeats
 		totalAttachedPeople += attachedCount
 		totalCapacity += siteCapacity
+		totalResCapacity += siteResCapacity
 		totalOnSiteDays += siteOnSiteWorkingDays
 		totalReservations += siteResWorkingDays
 		totalWorkingDaysSum += float64(siteWorkingDays)
@@ -357,8 +374,8 @@ func (h *FloorplanHandler) buildSitesReportData(r *http.Request) (*SitesReportPa
 		avgOccupancyRate = (totalOnSiteDays / totalCapacity) * 100
 	}
 	var avgReservationRate float64
-	if totalCapacity > 0 {
-		avgReservationRate = (totalReservations / totalCapacity) * 100
+	if totalResCapacity > 0 {
+		avgReservationRate = (totalReservations / totalResCapacity) * 100
 	}
 
 	var avgOnSitePerWorkingDay float64
@@ -383,6 +400,7 @@ func (h *FloorplanHandler) buildSitesReportData(r *http.Request) (*SitesReportPa
 		Summaries:              summaries,
 		DailyReports:           dailyReports,
 		TotalSeats:             totalSeats,
+		TotalReservableSeats:   totalReservableSeats,
 		TotalAttachedPeople:    totalAttachedPeople,
 		PeopleVsSeats:          globalPeopleRatio,
 		TotalCapacity:          totalCapacity,
