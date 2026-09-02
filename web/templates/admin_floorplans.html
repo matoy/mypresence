@@ -142,7 +142,7 @@
                                              @mousedown.prevent.stop="startDragSeat(seat, $event)"
                                              @click.stop
                                              :title="seat.label">
-                                            <span x-text="seat.label.length<=3?seat.label:seat.label.substring(0,3)"></span>
+                                            <span x-text="(seat.label || '').length<=3 ? seat.label : (seat.label || '').substring(0,3)"></span>
                                             <!-- Hover: delete button (hidden while dragging) -->
                                             <button x-show="draggingSeat !== seat.id"
                                                     @mousedown.stop
@@ -244,6 +244,21 @@ function adminFloorplanApp(allFloorplans, allSites) {
         showToast(message, error = false) {
             this.toast = { show: true, message, error };
             setTimeout(() => this.toast.show = false, 3000);
+        },
+
+        async init() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const fpParam = parseInt(urlParams.get('fp') || urlParams.get('id'), 10);
+            let target = null;
+            if (fpParam) {
+                target = this.allFloorplans.find(f => f.id === fpParam);
+            }
+            if (!target && this.allFloorplans.length > 0) {
+                target = this.allFloorplans[0];
+            }
+            if (target) {
+                await this.selectFP(target.id, target.name);
+            }
         },
 
         async selectFP(id, name) {
