@@ -777,8 +777,17 @@ docker compose down && docker compose up -d --build
 ### Personal Calendar (April 2026)
 ![Calendar with presence data](docs/screenshots/02-calendar.png)
 
+### Project Time Imputation
+![Project time imputation](docs/screenshots/09-projects-imputation.png)
+
 ### Activity Report
 ![Activity report for Engineering team](docs/screenshots/07-activity.png)
+
+### Projects Report
+![Projects report](docs/screenshots/10-projects-report.png)
+
+### Sites Report
+![Sites report](docs/screenshots/11-sites-report.png)
 
 ### Teams
 ![Teams management](docs/screenshots/05-teams.png)
@@ -798,11 +807,6 @@ docker compose down && docker compose up -d --build
 ### Floor Plans
 ![Floor plan with seat reservations](docs/screenshots/08-floorplan.png)
 
-### Project Time Imputation
-![Project time imputation](docs/screenshots/09-projects-imputation.png)
-
-### Projects Report
-![Projects report](docs/screenshots/10-projects-report.png)
-
 ### Grafana Dashboard
 ![Grafana dashboard](docs/screenshots/09-grafana.png)
+

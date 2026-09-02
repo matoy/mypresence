@@ -252,6 +252,9 @@ try {
     # 10. Projects report
     $cmdId = Take-Screenshot $ws $cmdId "$BaseUrl/admin/projects-report"       "10-projects-report"      2500
 
+    # 11. Sites report
+    $cmdId = Take-Screenshot $ws $cmdId "$BaseUrl/admin/sites-report?year=$ScreenshotYear&month=$ScreenshotMonth" "11-sites-report" 2500
+
     $ws.CloseAsync([System.Net.WebSockets.WebSocketCloseStatus]::NormalClosure, "", [Threading.CancellationToken]::None) | Out-Null
 
     Write-Host ""
