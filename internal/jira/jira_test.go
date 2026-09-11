@@ -44,7 +44,7 @@ func TestSearchRecentTickets_LegacyBasicAuth_Success(t *testing.T) {
 	if gotAuth != wantAuth {
 		t.Errorf("Authorization header: want %q, got %q", wantAuth, gotAuth)
 	}
-	if !strings.Contains(gotJQL, "project = \"PROJ\"") || !strings.Contains(gotJQL, "updated >= -30d") {
+	if !strings.Contains(gotJQL, "project = \"PROJ\"") || !strings.Contains(gotJQL, "issuetype = \"Epic\"") || !strings.Contains(gotJQL, "issuetype = \"Epic (main topic)\"") || !strings.Contains(gotJQL, "updated >= -30d") {
 		t.Errorf("unexpected JQL: %q", gotJQL)
 	}
 }
@@ -80,7 +80,7 @@ func TestSearchRecentTickets_ScopedBearerAuth_Success(t *testing.T) {
 	if gotAuth != wantAuth {
 		t.Errorf("Authorization header: want %q, got %q", wantAuth, gotAuth)
 	}
-	if !strings.Contains(gotJQL, "project = \"PROJ\"") {
+	if !strings.Contains(gotJQL, "project = \"PROJ\"") || !strings.Contains(gotJQL, "issuetype = \"Epic\"") {
 		t.Errorf("unexpected JQL: %q", gotJQL)
 	}
 }

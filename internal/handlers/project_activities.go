@@ -410,8 +410,8 @@ func (h *ProjectsHandler) DeleteProjectActivity(w http.ResponseWriter, r *http.R
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
-// ListJiraTicketsAPI returns Jira tickets updated in the last 30 days for the
-// current user's manual-timesheet team. GET /api/project-activities/jira-tickets
+// ListJiraTicketsAPI returns Jira tickets (all Epics and other tickets updated in the
+// last 30 days) for the current user's manual-timesheet team. GET /api/project-activities/jira-tickets
 func (h *ProjectsHandler) ListJiraTicketsAPI(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 

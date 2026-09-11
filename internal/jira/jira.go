@@ -56,11 +56,11 @@ type searchResponse struct {
 const maxSearchPages = 100
 
 // SearchRecentTickets returns all tickets from the given Jira project key that
-// were updated within the last 30 days, ordered by most recently updated
-// first. Results are paginated by the Jira API, so this fetches every page
-// until the API reports there are no more results.
+// are epics (Epic or Epic (main topic)) or were updated within the last 30 days,
+// ordered by most recently updated first. Results are paginated by the Jira API,
+// so this fetches every page until the API reports there are no more results.
 func (c *Client) SearchRecentTickets(projectKey string) ([]models.JiraTicket, error) {
-	jql := fmt.Sprintf("project = %q AND updated >= -30d ORDER BY updated DESC", projectKey)
+	jql := fmt.Sprintf("project = %q AND (issuetype = \"Epic\" OR issuetype = \"Epic (main topic)\" OR updated >= -30d) ORDER BY updated DESC", projectKey)
 
 	tickets := make([]models.JiraTicket, 0)
 	pageToken := ""
