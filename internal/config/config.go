@@ -7,7 +7,7 @@ import (
 )
 
 // Version is the application version, updated manually for each release (format: YYYYMMDD-X).
-const Version = "20260910-1"
+const Version = "20260911-1"
 
 // Config holds all application configuration loaded from environment variables.
 //
