@@ -3373,9 +3373,10 @@ func (d *DB) CancelUserReservationsForDates(userID int64, dates []string, target
 		args = append(args, date)
 	}
 	whereClause := "WHERE user_id = ? AND date IN (" + strings.Join(placeholders, ",") + ")"
-	if targetType == "self" {
+	switch targetType {
+	case "self":
 		whereClause += " AND (guest_name IS NULL OR guest_name = '')"
-	} else if targetType == "guest" {
+	case "guest":
 		whereClause += " AND guest_name IS NOT NULL AND guest_name != ''"
 	}
 	_, err := d.floorplan.Exec(

@@ -38,14 +38,15 @@ func TestGuestReservation_DBFlow(t *testing.T) {
 		t.Fatalf("expected 2 seats, got %d", len(seatsHost))
 	}
 	for _, s := range seatsHost {
-		if s.ID == seat1 {
+		switch s.ID {
+		case seat1:
 			if s.Status != "mine" {
 				t.Errorf("seat1 expected status 'mine', got %q", s.Status)
 			}
 			if s.GuestName != "" {
 				t.Errorf("seat1 expected empty GuestName, got %q", s.GuestName)
 			}
-		} else if s.ID == seat2 {
+		case seat2:
 			if s.Status != "mine_guest" {
 				t.Errorf("seat2 expected status 'mine_guest', got %q", s.Status)
 			}
