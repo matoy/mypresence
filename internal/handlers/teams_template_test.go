@@ -81,8 +81,14 @@ func TestAdminTeamsTemplate_RendersCleanly(t *testing.T) {
 	if !strings.Contains(html, "teamsAdmin(") {
 		t.Error("expected teamsAdmin call in rendered HTML")
 	}
-	if !strings.Contains(html, "matchesTeam($el.dataset.teamName") {
-		t.Error("expected matchesTeam with dataset variables in rendered HTML")
+	if !strings.Contains(html, "matchesTeamById(") {
+		t.Error("expected matchesTeamById in rendered HTML")
+	}
+	if !strings.Contains(html, "matchesMemberSite(") {
+		t.Error("expected matchesMemberSite in rendered HTML")
+	}
+	if !strings.Contains(html, "filterSite") {
+		t.Error("expected filterSite in rendered HTML")
 	}
 	if !strings.Contains(html, "triggerTeamReminders") {
 		t.Error("expected triggerTeamReminders button for global admin")

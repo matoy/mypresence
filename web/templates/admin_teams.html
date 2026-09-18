@@ -32,23 +32,48 @@
     <!-- Filters -->
     <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
         <div class="flex flex-wrap gap-3 items-end">
-            <div class="flex-1 min-w-[220px]">
+            <div class="flex-1 min-w-[200px]">
                 <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "admin.search"}}</label>
-                <input type="text" x-model="filterText" placeholder="{{index $.T "teams.team_name"}}"
+                <input type="text" x-model="filterText" placeholder="{{index $.T "teams.filter_search_placeholder"}}"
                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
             </div>
             <div>
-                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "admin.filter"}}</label>
+                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "teams.filter_members"}}</label>
                 <select x-model="filterMembers"
                         class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
-                    <option value="all">{{index $.T "admin.all"}}</option>
-                    <option value="with">{{index $.T "admin.yes"}}</option>
-                    <option value="empty">{{index $.T "admin.no"}}</option>
+                    <option value="all">{{index $.T "teams.filter_members_all"}}</option>
+                    <option value="with">{{index $.T "teams.filter_members_with"}}</option>
+                    <option value="empty">{{index $.T "teams.filter_members_empty"}}</option>
                 </select>
             </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "teams.filter_site"}}</label>
+                <select x-model="filterSite"
+                        class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm"
+                        :class="filterSite === 'unassigned' ? 'border-amber-400 bg-amber-50/40 text-amber-900 font-medium' : (filterSite !== 'all' ? 'border-indigo-400 bg-indigo-50/40 text-indigo-900 font-medium' : '')">
+                    <option value="all">{{index $.T "teams.filter_site_all"}}</option>
+                    <option value="unassigned">{{index $.T "teams.filter_site_unassigned"}}</option>
+                    {{range $allSites}}
+                    <option value="{{.ID}}">{{if .CountryCode}}{{flagFor .CountryCode}} {{end}}{{.Name}}</option>
+                    {{end}}
+                </select>
+            </div>
+            {{if $domains}}
+            <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "teams.filter_domain"}}</label>
+                <select x-model="filterDomain"
+                        class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+                    <option value="all">{{index $.T "teams.filter_domain_all"}}</option>
+                    <option value="none">{{index $.T "teams.filter_domain_none"}}</option>
+                    {{range $domains}}
+                    <option value="{{.ID}}">{{.Name}}</option>
+                    {{end}}
+                </select>
+            </div>
+            {{end}}
             <button @click="resetFilters()"
                     type="button"
-                    class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
+                    class="text-xs px-2.5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
                 {{index $.T "admin.reset"}}
             </button>
         </div>
@@ -100,7 +125,7 @@
             editActivityDays = parseInt($el.dataset.activityDays) || 3;
             editLeaderIds = ($el.dataset.leaderIds ? $el.dataset.leaderIds.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n)) : []);
          "
-         x-show="matchesTeam($el.dataset.teamName, parseInt($el.dataset.activeMembers) || 0)"
+         x-show="matchesTeamById({{.Team.ID}})"
          x-cloak>
         <div class="flex items-center justify-between mb-4">
             <div class="flex items-center gap-3 flex-1 min-w-0">
@@ -319,7 +344,27 @@
         <div class="space-y-2">
             {{if .Members}}
             {{range .Members}}
-            <div class="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 py-2 px-3 {{if .LeftAt}}bg-gray-100{{else}}bg-gray-50{{end}} rounded-lg {{if .LeftAt}}opacity-70{{end}}">
+            <div class="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 py-2 px-3 {{if .LeftAt}}bg-gray-100{{else}}bg-gray-50{{end}} rounded-lg {{if .LeftAt}}opacity-70{{end}}"
+                 x-data="{
+                     openSite: false,
+                     siteSearch: '',
+                     memberId: {{.ID}},
+                     memberSiteId: {{if .SiteID}}{{.SiteID}}{{else}}0{{end}},
+                     memberSiteName: {{json .SiteName}},
+                     memberSiteCountry: {{json .SiteCountryCode}},
+                     teamId: {{$teamItem.Team.ID}},
+                     isUpdating: false
+                 }"
+                 x-show="matchesMemberSite(memberSiteId)"
+                 @user-site-updated.window="if ($event.detail.userId === memberId) {
+                     memberSiteId = $event.detail.siteId;
+                     memberSiteName = $event.detail.siteName;
+                     memberSiteCountry = $event.detail.siteCountryCode;
+                     isUpdating = false;
+                 }"
+                 @user-site-error.window="if ($event.detail.userId === memberId) {
+                     isUpdating = false;
+                 }">
                 <div class="flex items-center gap-2 min-w-0 flex-1">
                     <div class="h-8 w-8 rounded-full {{if .LeftAt}}bg-gray-300{{else}}bg-primary/20{{end}} flex items-center justify-center text-xs font-bold {{if .LeftAt}}text-gray-500{{else}}text-primary{{end}} shrink-0">
                         {{slice .Name 0 1}}
@@ -340,26 +385,7 @@
 
                 <!-- Member Site Selector / Badge -->
                 <div class="flex items-center gap-3 shrink-0">
-                    <div class="relative"
-                         x-data="{
-                             openSite: false,
-                             siteSearch: '',
-                             memberId: {{.ID}},
-                             memberSiteId: {{.SiteID}},
-                             memberSiteName: {{json .SiteName}},
-                             memberSiteCountry: {{json .SiteCountryCode}},
-                             teamId: {{$teamItem.Team.ID}},
-                             isUpdating: false
-                         }"
-                         @user-site-updated.window="if ($event.detail.userId === memberId) {
-                             memberSiteId = $event.detail.siteId;
-                             memberSiteName = $event.detail.siteName;
-                             memberSiteCountry = $event.detail.siteCountryCode;
-                             isUpdating = false;
-                         }"
-                         @user-site-error.window="if ($event.detail.userId === memberId) {
-                             isUpdating = false;
-                         }">
+                    <div class="relative">
                         {{if $teamItem.CanEdit}}
                         <button type="button" @click="openSite = !openSite; siteSearch = ''"
                                 :disabled="isUpdating"

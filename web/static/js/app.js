@@ -969,31 +969,119 @@ function teamsAdmin(initialTeams, countriesCatalog, allUsers, initialSites) {
         showCreateModal: false,
         filterText: '',
         filterMembers: 'all',
+        filterSite: 'all',
+        filterDomain: 'all',
 
         get totalCount() {
             return (this.teams || []).length;
         },
 
         get filteredCount() {
-            return (this.teams || []).filter(t => {
-                const members = t.Members || t.members || [];
-                const activeMemberCount = members.filter(m => !m.left_at).length;
-                const teamName = (t.Team && (t.Team.name || t.Team.Name)) || (t.team && (t.team.name || t.team.Name)) || '';
-                return this.matchesTeam(teamName, activeMemberCount);
-            }).length;
+            return (this.teams || []).filter(t => this.matchesTeam(t)).length;
         },
 
         resetFilters() {
             this.filterText = '';
             this.filterMembers = 'all';
+            this.filterSite = 'all';
+            this.filterDomain = 'all';
         },
 
-        matchesTeam(name, memberCount) {
+        matchesTeam(teamOrName, memberCount) {
+            let t = null;
+            if (typeof teamOrName === 'object' && teamOrName !== null) {
+                t = teamOrName;
+            } else if (typeof teamOrName === 'number') {
+                t = (this.teams || []).find(item => {
+                    const tid = (item.Team && (item.Team.id || item.Team.ID)) || (item.team && (item.team.id || item.team.ID));
+                    return tid === teamOrName;
+                });
+            } else {
+                // Look up by team name string
+                t = (this.teams || []).find(item => {
+                    const name = (item.Team && (item.Team.name || item.Team.Name)) || (item.team && (item.team.name || item.team.Name));
+                    return name === teamOrName;
+                });
+            }
+
+            if (!t) {
+                // Fallback to basic string check if team not found in this.teams
+                const q = (this.filterText || '').trim().toLowerCase();
+                if (q && typeof teamOrName === 'string' && !teamOrName.toLowerCase().includes(q)) return false;
+                if (this.filterMembers === 'with' && memberCount <= 0) return false;
+                if (this.filterMembers === 'empty' && memberCount > 0) return false;
+                return true;
+            }
+
+            const team = t.Team || t.team || {};
+            const members = t.Members || t.members || [];
+            const leaders = t.Leaders || t.leaders || [];
+            const activeMembers = members.filter(m => !m.left_at && !m.LeftAt);
+            const activeMemberCount = activeMembers.length;
+
+            // 1. Members filter
+            if (this.filterMembers === 'with' && activeMemberCount <= 0) return false;
+            if (this.filterMembers === 'empty' && activeMemberCount > 0) return false;
+
+            // 2. Domain filter
+            if (this.filterDomain !== 'all') {
+                const domainId = team.domain_id || team.DomainID || 0;
+                if (this.filterDomain === 'none') {
+                    if (domainId !== 0) return false;
+                } else {
+                    if (domainId !== parseInt(this.filterDomain, 10)) return false;
+                }
+            }
+
+            // 3. Site filter
+            if (this.filterSite !== 'all') {
+                if (this.filterSite === 'unassigned') {
+                    const hasUnassigned = activeMembers.some(m => {
+                        const sid = m.site_id || m.SiteID || 0;
+                        return sid === 0;
+                    });
+                    if (!hasUnassigned) return false;
+                } else {
+                    const targetSiteId = parseInt(this.filterSite, 10);
+                    const hasSite = activeMembers.some(m => {
+                        const sid = m.site_id || m.SiteID || 0;
+                        return sid === targetSiteId;
+                    });
+                    if (!hasSite) return false;
+                }
+            }
+
+            // 4. Search text filter
             const q = (this.filterText || '').trim().toLowerCase();
-            if (q && !(name || '').toLowerCase().includes(q)) return false;
-            if (this.filterMembers === 'with' && memberCount <= 0) return false;
-            if (this.filterMembers === 'empty' && memberCount > 0) return false;
+            if (q) {
+                const name = (team.name || team.Name || '').toLowerCase();
+                const jiraKey = (team.jira_space_key || team.JiraSpaceKey || '').toLowerCase();
+                const matchTeam = name.includes(q) || jiraKey.includes(q);
+                const matchMember = members.some(m =>
+                    (m.name || m.Name || '').toLowerCase().includes(q) ||
+                    (m.email || m.Email || '').toLowerCase().includes(q)
+                );
+                const matchLeader = leaders.some(l =>
+                    (l.name || l.Name || '').toLowerCase().includes(q) ||
+                    (l.email || l.Email || '').toLowerCase().includes(q)
+                );
+                if (!matchTeam && !matchMember && !matchLeader) return false;
+            }
+
             return true;
+        },
+
+        matchesTeamById(teamId) {
+            return this.matchesTeam(parseInt(teamId, 10));
+        },
+
+        matchesMemberSite(memberSiteId) {
+            if (this.filterSite === 'all') return true;
+            const sid = parseInt(memberSiteId, 10) || 0;
+            if (this.filterSite === 'unassigned') {
+                return sid === 0;
+            }
+            return sid === parseInt(this.filterSite, 10);
         },
 
         getGroupedSites(searchText) {
@@ -1057,11 +1145,27 @@ function teamsAdmin(initialTeams, countriesCatalog, allUsers, initialSites) {
                     const updatedCountry = data.site_country_code || '';
 
                     if (this.allUsers) {
-                        const u = this.allUsers.find(user => user.id === userId);
+                        const u = this.allUsers.find(user => (user.id || user.ID) === userId);
                         if (u) {
                             u.site_id = updatedSiteId;
                             u.site_name = updatedSiteName;
                             u.site_country_code = updatedCountry;
+                        }
+                    }
+
+                    if (this.teams) {
+                        for (const t of this.teams) {
+                            const members = t.Members || t.members || [];
+                            for (const m of members) {
+                                if ((m.id || m.ID) === userId) {
+                                    m.site_id = updatedSiteId;
+                                    m.SiteID = updatedSiteId;
+                                    m.site_name = updatedSiteName;
+                                    m.SiteName = updatedSiteName;
+                                    m.site_country_code = updatedCountry;
+                                    m.SiteCountryCode = updatedCountry;
+                                }
+                            }
                         }
                     }
 

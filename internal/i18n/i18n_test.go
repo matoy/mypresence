@@ -394,5 +394,29 @@ func TestSitesReportKeys_AllLanguages(t *testing.T) {
 	}
 }
 
+func TestTeamsFilterKeys_AllLanguages(t *testing.T) {
+	requiredKeys := []string{
+		"teams.filter_search_placeholder",
+		"teams.filter_members",
+		"teams.filter_members_all",
+		"teams.filter_members_with",
+		"teams.filter_members_empty",
+		"teams.filter_site",
+		"teams.filter_site_all",
+		"teams.filter_site_unassigned",
+		"teams.filter_domain",
+		"teams.filter_domain_all",
+		"teams.filter_domain_none",
+	}
 
-
+	langs := []string{"en", "fr", "de", "es", "it"}
+	for _, lang := range langs {
+		m := T(lang)
+		for _, key := range requiredKeys {
+			val, ok := m[key]
+			if !ok || val == "" {
+				t.Errorf("lang %q is missing required teams filter key %q", lang, key)
+			}
+		}
+	}
+}

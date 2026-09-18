@@ -367,6 +367,17 @@ var en = map[string]string{
 	"teams.no_site":           "— No site —",
 	"teams.search_site":       "Search site…",
 	"teams.site_updated":      "Site updated",
+	"teams.filter_search_placeholder": "Search team, member, leader, Jira…",
+	"teams.filter_members":            "Members",
+	"teams.filter_members_all":        "All teams",
+	"teams.filter_members_with":       "With members",
+	"teams.filter_members_empty":      "Empty (no members)",
+	"teams.filter_site":               "Member site",
+	"teams.filter_site_all":           "All sites",
+	"teams.filter_site_unassigned":    "⚠️ No site assigned",
+	"teams.filter_domain":             "Domain",
+	"teams.filter_domain_all":         "All domains",
+	"teams.filter_domain_none":        "Without domain",
 
 	// Domains
 	"domains.title":             "🏢 Domains",
@@ -871,7 +882,7 @@ var en = map[string]string{
 
 	"help.topic.admin_teams.title": "👥 Teams Administration",
 	"help.topic.admin_teams.desc":  "Create and manage teams, assign memberships, attach members to physical sites for localized holidays, and configure timesheet policies.",
-	"help.topic.admin_teams.item1": "⚙️ Timesheet & Site Assignment: Toggle manual daily tasks mode, configure Jira Space Key, enforce mandatory comments, and attach each member to a physical site with a searchable dropdown grouped by country.",
+	"help.topic.admin_teams.item1": "⚙️ Timesheet & Site Assignment: Filter teams and members by site or unassigned status, toggle manual daily tasks mode, configure Jira Space Key, enforce mandatory comments, and attach each member to a physical site.",
 	"help.topic.admin_teams.item2": "👤 Managers & Departure Dates: Assign Team Managers and Team Leaders, and record departure dates when members leave.",
 
 	"help.topic.admin_statuses.title": "🏷️ Presence Statuses",
@@ -1229,6 +1240,17 @@ var fr = map[string]string{
 	"teams.no_site":           "— Aucun site —",
 	"teams.search_site":       "Rechercher un site…",
 	"teams.site_updated":      "Site mis à jour",
+	"teams.filter_search_placeholder": "Rechercher équipe, membre, leader, Jira…",
+	"teams.filter_members":            "Membres",
+	"teams.filter_members_all":        "Toutes les équipes",
+	"teams.filter_members_with":       "Avec membres",
+	"teams.filter_members_empty":      "Sans membre (vides)",
+	"teams.filter_site":               "Site des membres",
+	"teams.filter_site_all":           "Tous les sites",
+	"teams.filter_site_unassigned":    "⚠️ Sans affectation de site",
+	"teams.filter_domain":             "Domaine",
+	"teams.filter_domain_all":         "Tous les domaines",
+	"teams.filter_domain_none":        "Sans domaine",
 
 	// Domaines
 	"domains.title":             "🏢 Domaines",
@@ -1726,7 +1748,7 @@ var fr = map[string]string{
 
 	"help.topic.admin_teams.title": "👥 Administration des Équipes",
 	"help.topic.admin_teams.desc":  "Créez et gérez les équipes, affectez les membres, rattachez chaque membre à un site physique pour ses jours fériés et définissez les politiques de saisie.",
-	"help.topic.admin_teams.item1": "⚙️ Configuration & Sites de rattachement : Activez la saisie par tâches, configurez la clé Jira, imposez des commentaires et affectez chaque membre à son site physique via un menu déroulant searchable par pays.",
+	"help.topic.admin_teams.item1": "⚙️ Configuration & Sites de rattachement : Filtrez les équipes et membres par site ou sans affectation, activez la saisie par tâches, configurez la clé Jira, imposez des commentaires et affectez chaque membre à son site physique.",
 	"help.topic.admin_teams.item2": "👤 Managers & Dates de départ : Nommez les Team Managers / Team Leaders et renseignez la date de départ lorsqu'un membre quitte l'équipe.",
 
 	"help.topic.admin_statuses.title": "🏷️ Statuts de présence",
@@ -2084,6 +2106,17 @@ var de = map[string]string{
 	"teams.no_site":           "— Kein Standort —",
 	"teams.search_site":       "Standort suchen…",
 	"teams.site_updated":      "Standort aktualisiert",
+	"teams.filter_search_placeholder": "Team, Mitglied, Leiter, Jira suchen…",
+	"teams.filter_members":            "Mitglieder",
+	"teams.filter_members_all":        "Alle Teams",
+	"teams.filter_members_with":       "Mit Mitgliedern",
+	"teams.filter_members_empty":      "Leer (ohne Mitglieder)",
+	"teams.filter_site":               "Mitglieder-Standort",
+	"teams.filter_site_all":           "Alle Standorte",
+	"teams.filter_site_unassigned":    "⚠️ Kein Standort zugewiesen",
+	"teams.filter_domain":             "Bereich",
+	"teams.filter_domain_all":         "Alle Bereiche",
+	"teams.filter_domain_none":        "Ohne Bereich",
 
 	// Bereiche
 	"domains.title":             "🏢 Bereiche",
@@ -2582,7 +2615,7 @@ var de = map[string]string{
 
 	"help.topic.admin_teams.title": "👥 Teamverwaltung",
 	"help.topic.admin_teams.desc":  "Erstellen und verwalten Sie Teams, weisen Sie Mitglieder zu, verknüpfen Sie Mitglieder mit physischen Standorten für lokale Feiertage und definieren Sie Zeiterfassungsrichtlinien.",
-	"help.topic.admin_teams.item1": "⚙️ Konfiguration & Standortzuweisung: Aufgabenmodus umschalten, Jira-Schlüssel festlegen, Kommentare erzwingen und Mitglieder über ein nach Ländern gruppiertes Dropdown Standorten zuweisen.",
+	"help.topic.admin_teams.item1": "⚙️ Konfiguration & Standortzuweisung: Filtern Sie Teams und Mitglieder nach Standort oder ohne Zuweisung, Aufgabenmodus umschalten, Jira-Schlüssel festlegen, Kommentare erzwingen und Mitglieder Standorten zuweisen.",
 	"help.topic.admin_teams.item2": "👤 Leiter & Austrittsdaten: Weisen Sie Teamleiter zu und hinterlegen Sie Austrittsdaten.",
 
 	"help.topic.admin_statuses.title": "🏷️ Anwesenheitsstatus",
@@ -2934,6 +2967,17 @@ var es = map[string]string{
 	"teams.no_site":           "— Sin sede —",
 	"teams.search_site":       "Buscar sede…",
 	"teams.site_updated":      "Sede actualizada",
+	"teams.filter_search_placeholder": "Buscar equipo, miembro, responsable, Jira…",
+	"teams.filter_members":            "Miembros",
+	"teams.filter_members_all":        "Todos los equipos",
+	"teams.filter_members_with":       "Con miembros",
+	"teams.filter_members_empty":      "Vacíos (sin miembros)",
+	"teams.filter_site":               "Sede de los miembros",
+	"teams.filter_site_all":           "Todas las sedes",
+	"teams.filter_site_unassigned":    "⚠️ Sin sede asignada",
+	"teams.filter_domain":             "Dominio",
+	"teams.filter_domain_all":         "Todos los dominios",
+	"teams.filter_domain_none":        "Sin dominio",
 
 	// Dominios
 	"domains.title":             "🏢 Dominios",
@@ -3432,7 +3476,7 @@ var es = map[string]string{
 
 	"help.topic.admin_teams.title": "👥 Administración de equipos",
 	"help.topic.admin_teams.desc":  "Cree y gestione equipos, asigne miembros, vincule miembros a sedes físicas para festivos localizados y configure políticas de imputación.",
-	"help.topic.admin_teams.item1": "⚙️ Configuración y asignación de sede: Active el modo de tareas diarias, configure la clave Jira, exija comentarios y asigne cada miembro a su sede física mediante un menú desplegable por países.",
+	"help.topic.admin_teams.item1": "⚙️ Configuración y asignación de sede: Filtre equipos y miembros por sede o sin asignación, active el modo de tareas diarias, configure la clave Jira, exija comentarios y asigne cada miembro a su sede física.",
 	"help.topic.admin_teams.item2": "👤 Responsables y fechas de salida: Asigne Team Managers / Team Leaders e introduzca la fecha de salida de un miembro.",
 
 	"help.topic.admin_statuses.title": "🏷️ Estados de presencia",
@@ -3788,6 +3832,17 @@ var it = map[string]string{
 	"teams.no_site":           "— Nessuna sede —",
 	"teams.search_site":       "Cerca sede…",
 	"teams.site_updated":      "Sede aggiornata",
+	"teams.filter_search_placeholder": "Cerca team, membro, leader, Jira…",
+	"teams.filter_members":            "Membri",
+	"teams.filter_members_all":        "Tutti i team",
+	"teams.filter_members_with":       "Con membri",
+	"teams.filter_members_empty":      "Vuoti (senza membri)",
+	"teams.filter_site":               "Sede dei membri",
+	"teams.filter_site_all":           "Tutte le sedi",
+	"teams.filter_site_unassigned":    "⚠️ Nessuna sede assegnata",
+	"teams.filter_domain":             "Dominio",
+	"teams.filter_domain_all":         "Tutti i domini",
+	"teams.filter_domain_none":        "Senza dominio",
 
 	// Domini
 	"domains.title":             "🏢 Domini",
@@ -4293,7 +4348,7 @@ var it = map[string]string{
 
 	"help.topic.admin_teams.title": "👥 Amministrazione team",
 	"help.topic.admin_teams.desc":  "Crea e gestisci team, assegna membri, associa ciascun membro a una sede fisica per le festività localizzate e imposta le policy di imputazione.",
-	"help.topic.admin_teams.item1": "⚙️ Configurazione e assegnazione sede: Attiva la modalità attività, configura la chiave Jira, richiedi commenti obbligatori e associa i membri alla sede fisica con un menu a discesa raggruppato per paese.",
+	"help.topic.admin_teams.item1": "⚙️ Configurazione e assegnazione sede: Filtra team e membri per sede o senza assegnazione, attiva la modalità attività, configura la chiave Jira, richiedi commenti obbligatori e associa i membri alla sede fisica.",
 	"help.topic.admin_teams.item2": "👤 Manager e date di uscita: Assegna Team Manager / Team Leader e registra le date di uscita.",
 
 	"help.topic.admin_statuses.title": "🏷️ Stati di presenza",
