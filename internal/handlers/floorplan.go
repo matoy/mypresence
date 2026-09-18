@@ -158,9 +158,10 @@ func (h *FloorplanHandler) SeatsAPI(w http.ResponseWriter, r *http.Request) {
 func (h *FloorplanHandler) ReserveSeat(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	var req struct {
-		SeatID int64  `json:"seat_id"`
-		Date   string `json:"date"`
-		Half   string `json:"half"`
+		SeatID    int64  `json:"seat_id"`
+		Date      string `json:"date"`
+		Half      string `json:"half"`
+		GuestName string `json:"guest_name"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		metrics.FloorplanOpsTotal.WithLabelValues("reserve", "failure").Inc()
@@ -184,7 +185,7 @@ func (h *FloorplanHandler) ReserveSeat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.DB.ReserveSeat(req.SeatID, user.ID, req.Date, req.Half); err != nil {
+	if err := h.DB.ReserveSeat(req.SeatID, user.ID, req.Date, req.Half, req.GuestName); err != nil {
 		metrics.FloorplanOpsTotal.WithLabelValues("reserve", "failure").Inc()
 		jsonError(w, err.Error(), http.StatusConflict)
 		return
@@ -615,10 +616,11 @@ func (h *FloorplanHandler) ListSeatsForFloorplanAPI(w http.ResponseWriter, r *ht
 func (h *FloorplanHandler) BulkReserveSeats(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	var req struct {
-		SeatID int64    `json:"seat_id"`
-		Dates  []string `json:"dates"`
-		Half   string   `json:"half"`
-		UserID int64    `json:"user_id"`
+		SeatID    int64    `json:"seat_id"`
+		Dates     []string `json:"dates"`
+		Half      string   `json:"half"`
+		UserID    int64    `json:"user_id"`
+		GuestName string   `json:"guest_name"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		metrics.FloorplanOpsTotal.WithLabelValues("bulk_reserve", "failure").Inc()
@@ -647,7 +649,7 @@ func (h *FloorplanHandler) BulkReserveSeats(w http.ResponseWriter, r *http.Reque
 		}
 		targetUserID = req.UserID
 	}
-	count := h.DB.BulkReserveSeat(req.SeatID, targetUserID, req.Dates, req.Half)
+	count := h.DB.BulkReserveSeat(req.SeatID, targetUserID, req.Dates, req.Half, req.GuestName)
 	metrics.FloorplanOpsTotal.WithLabelValues("bulk_reserve", "success").Inc()
 	if count > 0 {
 		metrics.SeatReservationDaysTotal.WithLabelValues("booked").Add(float64(count))
@@ -662,6 +664,7 @@ func (h *FloorplanHandler) CancelReservationsByDates(w http.ResponseWriter, r *h
 	var req struct {
 		Dates  []string `json:"dates"`
 		UserID int64    `json:"user_id"`
+		Type   string   `json:"type"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		metrics.FloorplanOpsTotal.WithLabelValues("bulk_cancel", "failure").Inc()
@@ -690,7 +693,7 @@ func (h *FloorplanHandler) CancelReservationsByDates(w http.ResponseWriter, r *h
 		}
 		targetUserID = req.UserID
 	}
-	if err := h.DB.CancelUserReservationsForDates(targetUserID, req.Dates); err != nil {
+	if err := h.DB.CancelUserReservationsForDates(targetUserID, req.Dates, req.Type); err != nil {
 		metrics.FloorplanOpsTotal.WithLabelValues("bulk_cancel", "failure").Inc()
 		jsonError(w, "Erreur", http.StatusInternalServerError)
 		return

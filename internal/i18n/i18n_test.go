@@ -101,7 +101,9 @@ func TestHelpKeys_AllLanguages(t *testing.T) {
 		"help.topic.calendar.title",
 		"help.topic.calendar.desc",
 		"help.topic.calendar.item1",
+		"help.topic.calendar.item5",
 		"help.topic.floorplan.title",
+		"help.topic.floorplan.item5",
 		"help.topic.projects.title",
 		"help.topic.admin_activity.title",
 		"help.topic.admin_projects_report.title",
@@ -301,6 +303,7 @@ func TestTeamReminderKeys_AllLanguages(t *testing.T) {
 func TestCalendarLegendKeys_AllLanguages(t *testing.T) {
 	requiredKeys := []string{
 		"cal.desk_reserved",
+		"cal.legend.desk_guest",
 		"cal.legend.project_activity",
 		"cal.legend.override",
 		"cal.legend.holiday",

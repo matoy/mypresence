@@ -93,13 +93,18 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 
 	// Get seat reservations and floorplans (skipped when floor plans are disabled)
 	var reservationDates map[string]bool
+	var userDayReservations map[string]models.UserDayReservation
 	var floorplans []models.Floorplan
 	if !h.DisableFloorplans {
 		reservationDates, _ = h.DB.GetUserReservationDates(user.ID, startDate, endDate)
+		userDayReservations, _ = h.DB.GetUserReservationDetails(user.ID, startDate, endDate)
 		floorplans, _ = h.DB.ListFloorplans()
 	}
 	if reservationDates == nil {
 		reservationDates = make(map[string]bool)
+	}
+	if userDayReservations == nil {
+		userDayReservations = make(map[string]models.UserDayReservation)
 	}
 
 	// Get project activities for current user (dates with 100% activity declared)
@@ -200,8 +205,9 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 		"Overrides":         userOverrides,
 		"Statuses":          statuses,
 		"CurrentUserID":     user.ID,
-		"ReservationDates":  reservationDates,
-		"Floorplans":        floorplans,
+		"ReservationDates":    reservationDates,
+		"ReservationDetails":  userDayReservations,
+		"Floorplans":          floorplans,
 		"CalendarComplete":  calendarComplete,
 		"DeclarableDays":    declarableDays,
 		"DeclaredDays":      declaredDays,

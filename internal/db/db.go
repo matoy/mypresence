@@ -709,10 +709,11 @@ seat_id BIGINT NOT NULL,
 user_id BIGINT NOT NULL,
 date %s NOT NULL,
 half %s NOT NULL DEFAULT 'full',
+guest_name %s DEFAULT NULL,
 created_at %s DEFAULT CURRENT_TIMESTAMP,
 UNIQUE(seat_id, date, half),
 FOREIGN KEY (seat_id) REFERENCES seats(id) ON DELETE CASCADE
-`, ai, dl.varcharType(10), dl.varcharType(4), dt)),
+`, ai, dl.varcharType(10), dl.varcharType(4), dl.varcharType(128), dt)),
 
 		dl.createTableIfNotExists("floorplan_favorites", `
 floorplan_id BIGINT NOT NULL,
@@ -737,6 +738,7 @@ FOREIGN KEY (floorplan_id) REFERENCES floorplans(id) ON DELETE CASCADE
 	d.floorplan.Exec(dl.rebind(dl.addColumnIfNotExists("sites", "seats", "INTEGER NOT NULL DEFAULT 0")))                                                      //nolint:errcheck
 	d.floorplan.Exec(dl.rebind("UPDATE sites SET seats = workstations WHERE seats = 0 AND workstations > 0"))                                                 //nolint:errcheck
 	d.floorplan.Exec(dl.rebind(dl.addColumnIfNotExists("floorplans", "site_id", "BIGINT NOT NULL DEFAULT 0")))                                              //nolint:errcheck
+	d.floorplan.Exec(dl.rebind(dl.addColumnIfNotExists("seat_reservations", "guest_name", dl.varcharType(128)+" DEFAULT NULL")))                             //nolint:errcheck
 
 	return nil
 }
@@ -3056,7 +3058,7 @@ func (d *DB) GetSeatsWithStatus(floorplanID, userID int64, date, half string) ([
 	}
 
 	rows, err := d.floorplan.Query(`
-SELECT sr.seat_id, sr.user_id, sr.half, sr.id
+SELECT sr.seat_id, sr.user_id, sr.half, sr.id, COALESCE(sr.guest_name, '')
 FROM seat_reservations sr
 JOIN seats s ON sr.seat_id = s.id
 WHERE s.floorplan_id = ? AND sr.date = ?
@@ -3067,43 +3069,69 @@ WHERE s.floorplan_id = ? AND sr.date = ?
 	defer rows.Close() //nolint:errcheck
 
 	type resEntry struct {
-		uid   int64
-		h     string
-		resID int64
+		uid       int64
+		h         string
+		resID     int64
+		guestName string
 	}
 	reserved := make(map[int64][]resEntry)
 	for rows.Next() {
 		var seatID, uid, resID int64
-		var h string
-		if err := rows.Scan(&seatID, &uid, &h, &resID); err != nil {
+		var h, guestName string
+		if err := rows.Scan(&seatID, &uid, &h, &resID, &guestName); err != nil {
 			return nil, err
 		}
-		reserved[seatID] = append(reserved[seatID], resEntry{uid, h, resID})
+		reserved[seatID] = append(reserved[seatID], resEntry{uid, h, resID, guestName})
 	}
 
 	result := make([]models.SeatWithStatus, len(seats))
 	for i, s := range seats {
 		status := "free"
 		var myResID int64
+		var guestName, occupantName string
 		for _, r := range reserved[s.ID] {
 			conflicts := r.h == "full" || half == "full" || r.h == half
 			if !conflicts {
 				continue
 			}
 			if r.uid == userID {
-				status = "mine"
-				myResID = r.resID
-			} else if status != "mine" {
+				if r.guestName != "" {
+					status = "mine_guest"
+					myResID = r.resID
+					guestName = r.guestName
+					occupantName = r.guestName
+				} else {
+					status = "mine"
+					myResID = r.resID
+					guestName = ""
+					occupantName = ""
+				}
+			} else if status != "mine" && status != "mine_guest" {
 				status = "taken"
+				if r.guestName != "" {
+					guestName = r.guestName
+					occupantName = r.guestName
+				}
 			}
 		}
-		result[i] = models.SeatWithStatus{Seat: s, Status: status, ReservationID: myResID}
+		result[i] = models.SeatWithStatus{
+			Seat:          s,
+			Status:        status,
+			ReservationID: myResID,
+			GuestName:     guestName,
+			OccupantName:  occupantName,
+		}
 	}
 	return result, nil
 }
 
 // seatFlags tracks reservation ownership for one seat across the requested dates.
-type seatFlags struct{ isMine, isTaken bool }
+type seatFlags struct {
+	isMine      bool
+	isMineGuest bool
+	isTaken     bool
+	guestName   string
+}
 
 // buildSeatResults constructs the SeatWithStatus slice from seats and their status flags.
 // A nil statusMap treats every seat as free.
@@ -3111,14 +3139,24 @@ func buildSeatResults(seats []models.Seat, statusMap map[int64]*seatFlags) []mod
 	result := make([]models.SeatWithStatus, len(seats))
 	for i, s := range seats {
 		st := "free"
+		var guestName string
 		if sf := statusMap[s.ID]; sf != nil {
 			if sf.isMine {
 				st = "mine"
+			} else if sf.isMineGuest {
+				st = "mine_guest"
+				guestName = sf.guestName
 			} else if sf.isTaken {
 				st = "taken"
+				guestName = sf.guestName
 			}
 		}
-		result[i] = models.SeatWithStatus{Seat: s, Status: st}
+		result[i] = models.SeatWithStatus{
+			Seat:         s,
+			Status:       st,
+			GuestName:    guestName,
+			OccupantName: guestName,
+		}
 	}
 	return result
 }
@@ -3147,7 +3185,7 @@ func (d *DB) GetSeatsWithStatusForDates(floorplanID, userID int64, dates []strin
 		args = append(args, d)
 	}
 	rows, err := d.floorplan.Query(`
-SELECT sr.seat_id, sr.user_id, sr.half
+SELECT sr.seat_id, sr.user_id, sr.half, COALESCE(sr.guest_name, '')
 FROM seat_reservations sr
 JOIN seats s ON sr.seat_id = s.id
 WHERE s.floorplan_id = ? AND sr.date IN (`+strings.Join(placeholders, ",")+`)
@@ -3160,8 +3198,8 @@ WHERE s.floorplan_id = ? AND sr.date IN (`+strings.Join(placeholders, ",")+`)
 	statusMap := make(map[int64]*seatFlags)
 	for rows.Next() {
 		var seatID, uid int64
-		var h string
-		if err := rows.Scan(&seatID, &uid, &h); err != nil {
+		var h, guestName string
+		if err := rows.Scan(&seatID, &uid, &h, &guestName); err != nil {
 			return nil, err
 		}
 		if !halfOverlaps(h, half) {
@@ -3171,17 +3209,29 @@ WHERE s.floorplan_id = ? AND sr.date IN (`+strings.Join(placeholders, ",")+`)
 			statusMap[seatID] = &seatFlags{}
 		}
 		if uid == userID {
-			statusMap[seatID].isMine = true
+			if guestName != "" {
+				statusMap[seatID].isMineGuest = true
+				statusMap[seatID].guestName = guestName
+			} else {
+				statusMap[seatID].isMine = true
+			}
 		} else {
 			statusMap[seatID].isTaken = true
+			if guestName != "" {
+				statusMap[seatID].guestName = guestName
+			}
 		}
 	}
 	return buildSeatResults(seats, statusMap), nil
 }
 
-func (d *DB) ReserveSeat(seatID, userID int64, date, half string) error {
+func (d *DB) ReserveSeat(seatID, userID int64, date, half string, guestNameOpt ...string) error {
 	if half == "" {
 		half = "full"
+	}
+	var guestName string
+	if len(guestNameOpt) > 0 {
+		guestName = strings.TrimSpace(guestNameOpt[0])
 	}
 	var count int
 	d.floorplan.QueryRow(`
@@ -3191,17 +3241,34 @@ WHERE seat_id = ? AND date = ? AND (half = ? OR half = 'full' OR ? = 'full')
 	if count > 0 {
 		return fmt.Errorf("ce siège est déjà réservé pour cette période")
 	}
-	var userCount int
-	d.floorplan.QueryRow(`
+
+	if guestName == "" {
+		var userCount int
+		d.floorplan.QueryRow(`
 SELECT COUNT(*) FROM seat_reservations
-WHERE user_id = ? AND date = ? AND (half = ? OR half = 'full' OR ? = 'full')
+WHERE user_id = ? AND date = ? AND (half = ? OR half = 'full' OR ? = 'full') AND (guest_name IS NULL OR guest_name = '')
 `, userID, date, half, half).Scan(&userCount) //nolint:errcheck
-	if userCount > 0 {
-		return fmt.Errorf("vous avez déjà réservé un siège pour cette journée")
+		if userCount > 0 {
+			return fmt.Errorf("vous avez déjà réservé un siège pour cette journée")
+		}
+	} else {
+		var guestCount int
+		d.floorplan.QueryRow(`
+SELECT COUNT(*) FROM seat_reservations
+WHERE user_id = ? AND date = ? AND (half = ? OR half = 'full' OR ? = 'full') AND LOWER(guest_name) = LOWER(?)
+`, userID, date, half, half, guestName).Scan(&guestCount) //nolint:errcheck
+		if guestCount > 0 {
+			return fmt.Errorf("vous avez déjà réservé un siège pour cet invité à cette date")
+		}
+	}
+
+	var guestVal interface{}
+	if guestName != "" {
+		guestVal = guestName
 	}
 	_, err := d.floorplan.Exec(
-		"INSERT INTO seat_reservations (seat_id, user_id, date, half) VALUES (?, ?, ?, ?)",
-		seatID, userID, date, half,
+		"INSERT INTO seat_reservations (seat_id, user_id, date, half, guest_name) VALUES (?, ?, ?, ?, ?)",
+		seatID, userID, date, half, guestVal,
 	)
 	return err
 }
@@ -3223,7 +3290,7 @@ WHERE p.user_id = ? AND p.date = ? AND s.on_site = ?
 
 func (d *DB) GetUserReservationDates(userID int64, startDate, endDate string) (map[string]bool, error) {
 	rows, err := d.floorplan.Query(
-		`SELECT DISTINCT date FROM seat_reservations WHERE user_id = ? AND date >= ? AND date <= ?`,
+		`SELECT DISTINCT date FROM seat_reservations WHERE user_id = ? AND (guest_name IS NULL OR guest_name = '') AND date >= ? AND date <= ?`,
 		userID, startDate, endDate,
 	)
 	if err != nil {
@@ -3241,9 +3308,42 @@ func (d *DB) GetUserReservationDates(userID int64, startDate, endDate string) (m
 	return m, rows.Err()
 }
 
-func (d *DB) BulkReserveSeat(seatID, userID int64, dates []string, half string) int {
+// GetUserReservationDetails returns detailed reservations (self and guests) for a user in the date range.
+func (d *DB) GetUserReservationDetails(userID int64, startDate, endDate string) (map[string]models.UserDayReservation, error) {
+	rows, err := d.floorplan.Query(
+		`SELECT date, COALESCE(guest_name, '') FROM seat_reservations WHERE user_id = ? AND date >= ? AND date <= ?`,
+		userID, startDate, endDate,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() //nolint:errcheck
+
+	m := make(map[string]models.UserDayReservation)
+	for rows.Next() {
+		var date, guestName string
+		if err := rows.Scan(&date, &guestName); err != nil {
+			return nil, err
+		}
+		res := m[date]
+		guestName = strings.TrimSpace(guestName)
+		if guestName == "" {
+			res.HasSelf = true
+		} else {
+			res.GuestNames = append(res.GuestNames, guestName)
+		}
+		m[date] = res
+	}
+	return m, rows.Err()
+}
+
+func (d *DB) BulkReserveSeat(seatID, userID int64, dates []string, half string, guestNameOpt ...string) int {
 	if half == "" {
 		half = "full"
+	}
+	var guestName string
+	if len(guestNameOpt) > 0 {
+		guestName = guestNameOpt[0]
 	}
 	count := 0
 	for _, date := range dates {
@@ -3251,16 +3351,20 @@ func (d *DB) BulkReserveSeat(seatID, userID int64, dates []string, half string) 
 		if !isOnSite {
 			continue
 		}
-		if err := d.ReserveSeat(seatID, userID, date, half); err == nil {
+		if err := d.ReserveSeat(seatID, userID, date, half, guestName); err == nil {
 			count++
 		}
 	}
 	return count
 }
 
-func (d *DB) CancelUserReservationsForDates(userID int64, dates []string) error {
+func (d *DB) CancelUserReservationsForDates(userID int64, dates []string, targetTypeOpt ...string) error {
 	if len(dates) == 0 {
 		return nil
+	}
+	var targetType string
+	if len(targetTypeOpt) > 0 {
+		targetType = targetTypeOpt[0]
 	}
 	placeholders := make([]string, len(dates))
 	args := []interface{}{userID}
@@ -3268,8 +3372,14 @@ func (d *DB) CancelUserReservationsForDates(userID int64, dates []string) error 
 		placeholders[i] = "?"
 		args = append(args, date)
 	}
+	whereClause := "WHERE user_id = ? AND date IN (" + strings.Join(placeholders, ",") + ")"
+	if targetType == "self" {
+		whereClause += " AND (guest_name IS NULL OR guest_name = '')"
+	} else if targetType == "guest" {
+		whereClause += " AND guest_name IS NOT NULL AND guest_name != ''"
+	}
 	_, err := d.floorplan.Exec(
-		"DELETE FROM seat_reservations WHERE user_id = ? AND date IN ("+strings.Join(placeholders, ",")+")",
+		"DELETE FROM seat_reservations " + whereClause,
 		args...,
 	)
 	return err

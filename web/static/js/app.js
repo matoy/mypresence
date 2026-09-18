@@ -44,12 +44,13 @@ function darkModeToggle() {
 // ============================================================
 // Calendar Component (Alpine.js)
 // ============================================================
-function calendarApp(statuses, currentUserId, isAdmin, presences) {
+function calendarApp(statuses, currentUserId, isAdmin, presences, reservationDetails) {
     return {
         statuses: statuses || [],
         currentUserId: currentUserId,
         isAdmin: isAdmin,
         presences: presences || {},
+        reservationDetails: reservationDetails || {},
         selecting: false,
         selectedUserId: null,
         selectedDates: [],
@@ -77,6 +78,19 @@ function calendarApp(statuses, currentUserId, isAdmin, presences) {
         seatModalSeats: [],
         seatModalLoading: false,
         selectedSeatID: null,
+        seatBookingFor: 'self',
+        seatGuestName: '',
+
+        hasSelfReservation(date) {
+            if (!date || !this.reservationDetails) return false;
+            return !!this.reservationDetails[date]?.has_self;
+        },
+
+        hasGuestReservation(date) {
+            if (!date || !this.reservationDetails) return false;
+            const names = this.reservationDetails[date]?.guest_names;
+            return !!(names && names.length > 0);
+        },
 
         // Check if a cell is blocked (weekend or non-imputable holiday)
         isCellBlocked(userId, date) {
@@ -378,6 +392,8 @@ function calendarApp(statuses, currentUserId, isAdmin, presences) {
             this.seatModalSeats = [];
             this.seatFloorplanID = 0;
             this.seatFloorplanImage = '';
+            this.seatBookingFor = 'self';
+            this.seatGuestName = '';
             try {
                 const resp = await fetch('/api/floorplans');
                 if (resp.ok) {
@@ -421,23 +437,30 @@ function calendarApp(statuses, currentUserId, isAdmin, presences) {
             if (!this.selectedSeatID) return;
             const dates = this.getSeatBookingDates();
             if (!dates.length) return;
+            const guestName = this.seatBookingFor === 'guest' ? this.seatGuestName.trim() : '';
+            if (this.seatBookingFor === 'guest' && !guestName) return;
             this.showSeatModal = false;
             try {
-                await fetch('/api/reservations/bulk', {
+                const resp = await fetch('/api/reservations/bulk', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         seat_id: this.selectedSeatID,
                         dates: dates,
-                        half: this.pendingHalf
+                        half: this.pendingHalf,
+                        guest_name: guestName
                     })
                 });
+                if (!resp.ok) {
+                    const d = await resp.json().catch(() => ({}));
+                    alert(d.error || (typeof _t !== 'undefined' && _t['fp.error']) || 'Erreur lors de la réservation');
+                }
             } catch (e) { /* ignore */ }
             window.location.reload();
         },
 
-        // Cancel all seat reservations for the active selection.
-        async cancelSeatsForSelection() {
+        // Cancel seat reservations for the active selection (type: 'self', 'guest', or 'all').
+        async cancelSeatsForSelection(type = 'all') {
             this.showContextMenu = false;
             const dates = this.getSeatBookingDates();
             if (!dates.length) return;
@@ -445,7 +468,7 @@ function calendarApp(statuses, currentUserId, isAdmin, presences) {
                 await fetch('/api/reservations/bulk', {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ dates })
+                    body: JSON.stringify({ dates, type })
                 });
             } catch (e) { /* ignore */ }
             window.location.reload();

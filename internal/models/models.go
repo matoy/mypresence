@@ -476,8 +476,10 @@ type Seat struct {
 // SeatWithStatus is a Seat enriched with booking status for a given date/half.
 type SeatWithStatus struct {
 	Seat
-	Status        string `json:"status"`         // "free", "mine", "taken"
-	ReservationID int64  `json:"reservation_id"` // non-zero if status == "mine"
+	Status        string `json:"status"`         // "free", "mine", "mine_guest", "taken"
+	ReservationID int64  `json:"reservation_id"` // non-zero if status == "mine" or "mine_guest"
+	GuestName     string `json:"guest_name,omitempty"`
+	OccupantName  string `json:"occupant_name,omitempty"`
 }
 
 // SeatReservation records a seat booking.
@@ -486,9 +488,16 @@ type SeatReservation struct {
 	SeatID    int64     `json:"seat_id"`
 	UserID    int64     `json:"user_id"`
 	UserName  string    `json:"user_name"`
+	GuestName string    `json:"guest_name,omitempty"`
 	Date      string    `json:"date"`
 	Half      string    `json:"half"` // "full", "AM", "PM"
 	CreatedAt time.Time `json:"created_at"`
+}
+
+// UserDayReservation holds seat reservation summary for a user on a given date.
+type UserDayReservation struct {
+	HasSelf    bool     `json:"has_self"`
+	GuestNames []string `json:"guest_names,omitempty"`
 }
 
 // PersonalAccessToken represents a user-generated API token.

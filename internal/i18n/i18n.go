@@ -154,6 +154,7 @@ var en = map[string]string{
 	"cal.days_remaining":   "days remaining",
 	"cal.clear_day":        "✖ Clear this day",
 	"cal.desk_reserved":              "Desk reserved",
+	"cal.legend.desk_guest":          "Guest desk reserved",
 	"cal.project_activity_complete": "Project/task activity 100% declared",
 	"cal.legend.project_activity":    "Project activity declared",
 	"cal.legend.override":            "Modified by manager/admin",
@@ -170,6 +171,17 @@ var en = map[string]string{
 	"cal.half_pm":          "· Afternoon",
 	"cal.modified_by":      "Modified by %s",
 	"cal.cleared_by":       "Cleared by %s",
+	"cal.for_self":               "For myself",
+	"cal.for_guest":              "For a guest / third party",
+	"cal.beneficiary":            "Beneficiary",
+	"cal.guest_name":             "Guest name",
+	"cal.guest_name_placeholder": "Full name of guest (e.g. John Doe)",
+	"cal.guest_name_required":    "Please enter the guest's name",
+	"cal.desk_reserved_self":     "Desk reserved for you",
+	"cal.desk_reserved_guest":    "Desk reserved for guest: %s",
+	"cal.desk_reserved_both":     "Your desk + guest: %s",
+	"cal.cancel_self_seat":       "Cancel my desk",
+	"cal.cancel_guest_seat":      "Cancel guest desk",
 
 	// Monthly declaration certification
 	"cert.certify_button_title":     "Certify monthly declaration",
@@ -658,6 +670,12 @@ var en = map[string]string{
 	"fp.unfavorite":       "Remove from favorites",
 	"fp.favorite_added":   "Floor added to favorites",
 	"fp.favorite_removed": "Floor removed from favorites",
+	"fp.mine_guest":             "My guest",
+	"fp.for_self":               "For myself",
+	"fp.for_guest":              "For a guest / third party",
+	"fp.guest_name_placeholder": "Full name of guest (e.g. John Doe)",
+	"fp.guest_name_required":    "Please enter the guest's name",
+	"fp.cancel_confirm_guest":   "Cancel reservation for guest",
 
 	// Floorplan admin
 	"fp.admin_title":     "🗺️ Floor Plan Management",
@@ -818,6 +836,7 @@ var en = map[string]string{
 	"help.topic.calendar.item2": "🖱️ Right-Click (Context Menu): Right-click on a day to declare half-days (AM / PM) or export/add your declared presence to your external calendar (.ics / Outlook).",
 	"help.topic.calendar.item3": "🚀 Progress & Monthly Certification: The progress bar tracks declared days versus working days. Once 100% of working days are declared, click 'Certify' to confirm and lock your month.",
 	"help.topic.calendar.item4": "👥 Team Calendar: View real-time schedules and desk reservations of your team members directly below your calendar.",
+	"help.topic.calendar.item5": "🪑 Desk booking (Self & Guests): When on-site, reserve a desk from the selection bar or context menu. You can book for yourself (🖥️) or for an invited guest without an account (👤) by entering their name. The right-click menu also allows targeted cancellation of your desk or your guest's desk.",
 
 	"help.topic.floorplan.title": "🗺️ Floorplans & Desk Booking",
 	"help.topic.floorplan.desc":  "View office layouts and reserve physical desks when working on-site.",
@@ -825,6 +844,7 @@ var en = map[string]string{
 	"help.topic.floorplan.item2": "📅 Multi-Day Booking: Select multiple dates to reserve the same desk across multiple days in one action.",
 	"help.topic.floorplan.item3": "👥 Colleague Search: Easily see where your team members are seated on any given day.",
 	"help.topic.floorplan.item4": "⭐ Favorite Floors: Click the star next to the floor dropdown on the floorplan page to mark an office floor as your favorite. Favorite floors appear at the top of floor dropdowns across the app.",
+	"help.topic.floorplan.item5": "👤 Guest / Third-Party Booking: Click any available green desk on the map to reserve it either for yourself or for an invited guest by entering their name. Guest reservations appear in purple on the floorplan and show the guest's name to colleagues.",
 
 	"help.topic.projects.title": "📂 Projects & Tasks Timesheets",
 	"help.topic.projects.desc":  "Declare working time across projects or daily tasks, monitor declared days against worked capacity, and certify your month. Non-worked days (weekends, holidays, leaves) can be hidden.",
@@ -997,6 +1017,7 @@ var fr = map[string]string{
 	"cal.days_remaining":   "jours restants",
 	"cal.clear_day":        "✖ Effacer ce jour",
 	"cal.desk_reserved":              "Bureau réservé",
+	"cal.legend.desk_guest":          "Bureau invité réservé",
 	"cal.project_activity_complete": "Activité projet/tâche déclarée à 100%",
 	"cal.legend.project_activity":    "Activité projets saisie",
 	"cal.legend.override":            "Modifié par un tiers",
@@ -1013,6 +1034,17 @@ var fr = map[string]string{
 	"cal.half_pm":          "· Après-midi",
 	"cal.modified_by":      "Modifié par %s",
 	"cal.cleared_by":       "Supprimé par %s",
+	"cal.for_self":               "Pour moi",
+	"cal.for_guest":              "Pour un invité / tiers",
+	"cal.beneficiary":            "Bénéficiaire",
+	"cal.guest_name":             "Nom de l'invité",
+	"cal.guest_name_placeholder": "Nom et prénom de l'invité (ex: Jean Dupont)",
+	"cal.guest_name_required":    "Veuillez saisir le nom de l'invité",
+	"cal.desk_reserved_self":     "Bureau réservé pour vous",
+	"cal.desk_reserved_guest":    "Bureau réservé pour l'invité : %s",
+	"cal.desk_reserved_both":     "Votre bureau + invité : %s",
+	"cal.cancel_self_seat":       "Libérer mon bureau",
+	"cal.cancel_guest_seat":      "Libérer le bureau invité",
 
 	// Certification de la déclaration mensuelle
 	"cert.certify_button_title":     "Certifier la déclaration mensuelle",
@@ -1493,6 +1525,12 @@ var fr = map[string]string{
 	"fp.unfavorite":       "Retirer des favoris",
 	"fp.favorite_added":   "Étage ajouté aux favoris",
 	"fp.favorite_removed": "Étage retiré des favoris",
+	"fp.mine_guest":             "Mon invité",
+	"fp.for_self":               "Pour moi",
+	"fp.for_guest":              "Pour un invité / tiers",
+	"fp.guest_name_placeholder": "Nom et prénom de l'invité (ex: Jean Dupont)",
+	"fp.guest_name_required":    "Veuillez saisir le nom de l'invité",
+	"fp.cancel_confirm_guest":   "Annuler la réservation pour",
 
 	// Floorplan admin
 	"fp.admin_title":     "🗺️ Gestion des plans",
@@ -1653,6 +1691,7 @@ var fr = map[string]string{
 	"help.topic.calendar.item2": "🖱️ Clic droit (Menu contextuel) : Faites un clic droit sur une journée pour déclarer une demi-journée (Matin AM / Après-midi PM) ou pour exporter/ajouter vos présences à votre calendrier externe (.ics / Outlook).",
 	"help.topic.calendar.item3": "🚀 Progression & Certification mensuelle : La barre de progression compare les jours déclarés aux jours ouvrés. Une fois tous les jours ouvrés renseignés, cliquez sur 'Certifier' pour valider et verrouiller votre mois.",
 	"help.topic.calendar.item4": "👥 Calendrier d'équipe : Visualisez en temps réel les présences et les bureaux réservés des membres de votre équipe sous votre calendrier.",
+	"help.topic.calendar.item5": "🪑 Réservation de bureau (Pour soi & Invité) : Lorsque vous êtes sur site, réservez un bureau depuis la barre de sélection ou le menu contextuel. Vous pouvez réserver pour vous-même (🖥️) ou pour un invité / tiers sans compte (👤) en renseignant son nom. Le menu contextuel permet également de libérer de façon ciblée votre place ou celle de votre invité.",
 
 	"help.topic.floorplan.title": "🗺️ Plans d'étage & Réservation de bureaux",
 	"help.topic.floorplan.desc":  "Consultez les plans des locaux et réservez votre poste de travail physique lorsque vous venez sur site.",
@@ -1660,6 +1699,7 @@ var fr = map[string]string{
 	"help.topic.floorplan.item2": "📅 Réservation multi-jours : Sélectionnez plusieurs dates pour réserver le même poste sur plusieurs journées en une seule action.",
 	"help.topic.floorplan.item3": "👥 Emplacement des collègues : Repérez facilement sur le plan où sont installés les membres de votre équipe le jour souhaité.",
 	"help.topic.floorplan.item4": "⭐ Étages favoris : Cliquez sur l'étoile à côté du sélecteur d'étage sur la page des plans pour définir vos étages favoris. Vos favoris s'affichent automatiquement en tête des listes déroulantes.",
+	"help.topic.floorplan.item5": "👤 Réservation pour un tiers / invité : Cliquez sur un bureau disponible (vert) pour le réserver soit pour vous-même, soit pour un invité en précisant son nom. Les bureaux réservés pour vos invités s'affichent en violet sur le plan et indiquent le nom de l'invité aux collègues.",
 
 	"help.topic.projects.title": "📂 Déclaration des Projets & Tâches",
 	"help.topic.projects.desc":  "Déclarez votre temps de travail sur les projets ou tâches quotidiennes, suivez votre capacité travaillée et certifiez votre récapitulatif mensuel. Les jours non travaillés (week-ends, fériés, congés) peuvent être masqués.",
@@ -1832,6 +1872,7 @@ var de = map[string]string{
 	"cal.days_remaining":   "Tage verbleibend",
 	"cal.clear_day":        "✖ Diesen Tag löschen",
 	"cal.desk_reserved":              "Schreibtisch reserviert",
+	"cal.legend.desk_guest":          "Gast-Schreibtisch reserviert",
 	"cal.project_activity_complete": "Projekt-/Aufgabenaktivität zu 100 % gemeldet",
 	"cal.legend.project_activity":    "Projektaktivität erfasst",
 	"cal.legend.override":            "Von Dritten geändert",
@@ -1848,6 +1889,17 @@ var de = map[string]string{
 	"cal.half_pm":          "· Nachmittag",
 	"cal.modified_by":      "Geändert von %s",
 	"cal.cleared_by":       "Gelöscht von %s",
+	"cal.for_self":               "Für mich",
+	"cal.for_guest":              "Für einen Gast / Dritten",
+	"cal.beneficiary":            "Begünstigter",
+	"cal.guest_name":                 "Name des Gastes",
+	"cal.guest_name_placeholder":     "Vor- und Nachname des Gastes",
+	"cal.guest_name_required":        "Bitte geben Sie den Namen des Gastes ein",
+	"cal.desk_reserved_self":         "Schreibtisch für Sie reserviert",
+	"cal.desk_reserved_guest":        "Schreibtisch reserviert für Gast: %s",
+	"cal.desk_reserved_both":         "Ihr Schreibtisch + Gast: %s",
+	"cal.cancel_self_seat":           "Meinen Schreibtisch stornieren",
+	"cal.cancel_guest_seat":          "Gast-Schreibtisch stornieren",
 
 	// Zertifizierung der monatlichen Erklärung
 	"cert.certify_button_title":     "Monatliche Erklärung zertifizieren",
@@ -2328,6 +2380,12 @@ var de = map[string]string{
 	"fp.unfavorite":       "Aus Favoriten entfernen",
 	"fp.favorite_added":   "Stockwerk zu Favoriten hinzugefügt",
 	"fp.favorite_removed": "Stockwerk aus Favoriten entfernt",
+	"fp.mine_guest":             "Mein Gast",
+	"fp.for_self":               "Für mich",
+	"fp.for_guest":              "Für einen Gast / Dritten",
+	"fp.guest_name_placeholder": "Vor- und Nachname des Gastes",
+	"fp.guest_name_required":    "Bitte geben Sie den Namen des Gastes ein",
+	"fp.cancel_confirm_guest":   "Reservierung für Gast stornieren",
 
 	// Floorplan admin
 	"fp.admin_title":     "🗺️ Grundrissverwaltung",
@@ -2489,6 +2547,7 @@ var de = map[string]string{
 	"help.topic.calendar.item2": "🖱️ Rechtsklick (Kontextmenü): Rechtsklicken Sie auf einen Tag, um Halbtage (Vormittag AM / Nachmittag PM) zu erfassen oder den Eintrag in Ihren externen Kalender (.ics / Outlook) zu exportieren.",
 	"help.topic.calendar.item3": "🚀 Fortschritt & Monatszertifizierung: Der Fortschrittsbalken vergleicht erfasste mit regulären Arbeitstagen. Sobald alle Tage erfasst sind, klicken Sie auf 'Zertifizieren', um den Monat abzuschließen.",
 	"help.topic.calendar.item4": "👥 Team-Kalender: Sehen Sie die Anwesenheiten und reservierten Arbeitsplätze Ihrer Teamkollegen direkt unter Ihrem Kalender.",
+	"help.topic.calendar.item5": "🪑 Schreibtisch buchen (Für sich & Gäste): Wenn Sie vor Ort sind, buchen Sie einen Schreibtisch über die Auswahlleiste oder das Kontextmenü. Sie können für sich (🖥️) oder für einen externen Gast ohne Konto (👤) buchen, indem Sie dessen Namen eingeben. Das Kontextmenü ermöglicht auch das gezielte Freigeben Ihres Platzes oder des Gastplatzes.",
 
 	"help.topic.floorplan.title": "🗺️ Grundrisse & Schreibtischbuchung",
 	"help.topic.floorplan.desc":  "Sehen Sie Büropläne ein und buchen Sie physische Arbeitsplätze für Ihre Anwesenheit vor Ort.",
@@ -2496,6 +2555,7 @@ var de = map[string]string{
 	"help.topic.floorplan.item2": "📅 Mehrtägige Buchung: Wählen Sie mehrere Daten aus, um denselben Platz für mehrere Tage auf einmal zu buchen.",
 	"help.topic.floorplan.item3": "👥 Kollegen finden: Sehen Sie ganz einfach, wo Ihre Teammitglieder an einem bestimmten Tag sitzen.",
 	"help.topic.floorplan.item4": "⭐ Favorisierte Stockwerke: Klicken Sie auf den Stern neben der Stockwerkauswahl auf der Grundrissseite, um ein Stockwerk als Favorit zu markieren. Favoriten werden in Dropdown-Menüs oben angezeigt.",
+	"help.topic.floorplan.item5": "👤 Buchung für Dritte / Gäste: Klicken Sie auf einen freien (grünen) Platz, um ihn für sich selbst oder für einen Gast unter Angabe seines Namens zu buchen. Für Gäste gebuchte Plätze werden lila auf dem Plan angezeigt und zeigen Kollegen den Namen des Gastes.",
 
 	"help.topic.projects.title": "📂 Projekte & Aufgaben Zeiterfassung",
 	"help.topic.projects.desc":  "Erfassen Sie Ihre Arbeitszeiten auf Projekten oder täglichen Aufgaben, überwachen Sie Ihr Projektkontingent und zertifizieren Sie den Monat. Nicht gearbeitete Tage (Wochenenden, Feiertage, Urlaub) können ausgeblendet werden.",
@@ -2668,6 +2728,7 @@ var es = map[string]string{
 	"cal.days_remaining":   "días restantes",
 	"cal.clear_day":        "✖ Borrar este día",
 	"cal.desk_reserved":              "Escritorio reservado",
+	"cal.legend.desk_guest":          "Escritorio de invitado reservado",
 	"cal.project_activity_complete": "Actividad de proyecto/tarea declarada al 100%",
 	"cal.legend.project_activity":    "Actividad de proyectos",
 	"cal.legend.override":            "Modificado por un tercero",
@@ -2684,6 +2745,17 @@ var es = map[string]string{
 	"cal.half_pm":          "· Tarde",
 	"cal.modified_by":      "Modificado por %s",
 	"cal.cleared_by":       "Eliminado por %s",
+	"cal.for_self":               "Para mí",
+	"cal.for_guest":              "Para un invitado / tercero",
+	"cal.beneficiary":            "Beneficiario",
+	"cal.guest_name":                 "Nombre del invitado",
+	"cal.guest_name_placeholder":     "Nombre y apellido del invitado",
+	"cal.guest_name_required":        "Por favor ingrese el nombre del invitado",
+	"cal.desk_reserved_self":         "Escritorio reservado para ti",
+	"cal.desk_reserved_guest":        "Escritorio reservado para invitado: %s",
+	"cal.desk_reserved_both":         "Tu escritorio + invitado: %s",
+	"cal.cancel_self_seat":           "Cancelar mi escritorio",
+	"cal.cancel_guest_seat":          "Cancelar escritorio de invitado",
 
 	// Certificación de la declaración mensual
 	"cert.certify_button_title":     "Certificar la declaración mensual",
@@ -3158,6 +3230,12 @@ var es = map[string]string{
 	"fp.unfavorite":       "Quitar de favoritos",
 	"fp.favorite_added":   "Planta añadida a favoritos",
 	"fp.favorite_removed": "Planta eliminada de favoritos",
+	"fp.mine_guest":             "Mi invitado",
+	"fp.for_self":               "Para mí",
+	"fp.for_guest":              "Para un invitado / tercero",
+	"fp.guest_name_placeholder": "Nombre y apellido del invitado",
+	"fp.guest_name_required":    "Por favor ingrese el nombre del invitado",
+	"fp.cancel_confirm_guest":   "Cancelar reserva para invitado",
 
 	// Floorplan admin
 	"fp.admin_title":     "🗺️ Gestión de planos",
@@ -3319,6 +3397,7 @@ var es = map[string]string{
 	"help.topic.calendar.item2": "🖱️ Clic derecho (Menú contextual): Haga clic derecho en un día para registrar medios días (Mañana AM / Tarde PM) o exportar/añadir sus presencias a su calendario externo (.ics / Outlook).",
 	"help.topic.calendar.item3": "🚀 Progreso y certificación mensual: La barra de progreso compara los días declarados con los días laborables. Cuando todos los días estén completos, pulse 'Certificar' para validar el mes.",
 	"help.topic.calendar.item4": "👥 Calendario de equipo: Vea en tiempo real las presencias y los puestos reservados por sus compañeros debajo de su calendario.",
+	"help.topic.calendar.item5": "🪑 Reserva de escritorios (Para uno mismo e invitados): Cuando esté en la oficina, reserve un escritorio desde la barra de selección o el menú contextual. Puede reservar para usted (🖥️) o para un invitado externo sin cuenta (👤) indicando su nombre. El menú contextual también permite cancelar de forma selectiva su escritorio o el de su invitado.",
 
 	"help.topic.floorplan.title": "🗺️ Planos y reserva de escritorios",
 	"help.topic.floorplan.desc":  "Consulte la distribución de las oficinas y reserve escritorios físicos para sus jornadas presenciales.",
@@ -3326,6 +3405,7 @@ var es = map[string]string{
 	"help.topic.floorplan.item2": "📅 Reserva para varios días: Seleccione varias fechas para reservar el mismo escritorio para varios días de una sola vez.",
 	"help.topic.floorplan.item3": "👥 Localizar compañeros: Vea fácilmente dónde están sentados los miembros de su equipo en una fecha determinada.",
 	"help.topic.floorplan.item4": "⭐ Plantas favoritas: Haga clic en la estrella junto al selector de planta en la página de planos para marcar su planta favorita. Las plantas favoritas aparecen primero en los menús desplegables.",
+	"help.topic.floorplan.item5": "👤 Reserva para terceros / invitados: Haga clic en cualquier escritorio libre (verde) para reservarlo para usted o para un invitado ingresando su nombre. Los puestos reservados para invitados aparecen en morado en el plano y muestran el nombre del invitado a los compañeros.",
 
 	"help.topic.projects.title": "📂 Imputación de proyectos y tareas",
 	"help.topic.projects.desc":  "Declare su tiempo de trabajo en proyectos o tareas diarias, controle sus días trabajados y certifique el mes. Los días no trabajados (fines de semana, festivos, permisos) pueden ocultarse.",
@@ -3501,6 +3581,7 @@ var it = map[string]string{
 	"cal.days_remaining":   "giorni rimanenti",
 	"cal.clear_day":        "✖ Cancella questo giorno",
 	"cal.desk_reserved":              "Scrivania prenotata",
+	"cal.legend.desk_guest":          "Scrivania ospite prenotata",
 	"cal.project_activity_complete": "Attività di progetto/task dichiarata al 100%",
 	"cal.legend.project_activity":    "Attività progetti inserita",
 	"cal.legend.override":            "Modificato da terzi",
@@ -3517,6 +3598,17 @@ var it = map[string]string{
 	"cal.half_pm":          "· Pomeriggio",
 	"cal.modified_by":      "Modificato da %s",
 	"cal.cleared_by":       "Rimosso da %s",
+	"cal.for_self":               "Per me",
+	"cal.for_guest":              "Per un ospite / terzo",
+	"cal.beneficiary":            "Beneficiario",
+	"cal.guest_name":                 "Nome dell'ospite",
+	"cal.guest_name_placeholder":     "Nome e cognome dell'ospite",
+	"cal.guest_name_required":        "Inserisci il nome dell'ospite",
+	"cal.desk_reserved_self":         "Scrivania prenotata per te",
+	"cal.desk_reserved_guest":        "Scrivania prenotata per ospite: %s",
+	"cal.desk_reserved_both":         "La tua scrivania + ospite: %s",
+	"cal.cancel_self_seat":           "Annulla la mia scrivania",
+	"cal.cancel_guest_seat":          "Annulla scrivania ospite",
 
 	// Certificazione della dichiarazione mensile
 	"cert.certify_button_title":     "Certificare la dichiarazione mensile",
@@ -3999,6 +4091,12 @@ var it = map[string]string{
 	"fp.unfavorite":       "Rimuovi dai preferiti",
 	"fp.favorite_added":   "Piano aggiunto ai preferiti",
 	"fp.favorite_removed": "Piano rimosso dai preferiti",
+	"fp.mine_guest":             "Mio ospite",
+	"fp.for_self":               "Per me",
+	"fp.for_guest":              "Per un ospite / terzo",
+	"fp.guest_name_placeholder": "Nome e cognome dell'ospite",
+	"fp.guest_name_required":    "Inserisci il nome dell'ospite",
+	"fp.cancel_confirm_guest":   "Annulla prenotazione per ospite",
 
 	// Floorplan admin
 	"fp.admin_title":     "🗺️ Gestione planimetrie",
@@ -4160,6 +4258,7 @@ var it = map[string]string{
 	"help.topic.calendar.item2": "🖱️ Clic destro (Menu contestuale): Fai clic destro su un giorno per registrare mezze giornate (Mattina AM / Pomeriggio PM) o esportare/aggiungere la presenza al tuo calendario esterno (.ics / Outlook).",
 	"help.topic.calendar.item3": "🚀 Progresso e certificazione mensile: La barra di avanzamento confronta i giorni dichiarati con quelli lavorativi. Quando tutti i giorni sono compilati, clicca su 'Certifica' per convalidare il mese.",
 	"help.topic.calendar.item4": "👥 Calendario del team: Visualizza in tempo reale le presenze e le scrivanie prenotate dai tuoi colleghi sotto il tuo calendario.",
+	"help.topic.calendar.item5": "🪑 Prenotazione scrivanie (Per sé e ospiti): Quando sei in sede, prenota una postazione dalla barra di selezione o dal menu contestuale. Puoi prenotare per te (🖥️) o per un ospite senza account (👤) indicandone il nome. Il menu contestuale consente anche di liberare in modo selettivo la tua postazione o quella del tuo ospite.",
 
 	"help.topic.floorplan.title": "🗺️ Planimetrie e prenotazione postazioni",
 	"help.topic.floorplan.desc":  "Consulta le planimetrie degli uffici e prenota postazioni fisiche quando lavori in sede.",
@@ -4167,6 +4266,7 @@ var it = map[string]string{
 	"help.topic.floorplan.item2": "📅 Prenotazione multi-giorno: Seleziona più date per prenotare la stessa scrivania per più giorni in un'unica azione.",
 	"help.topic.floorplan.item3": "👥 Trova colleghi: Verifica dove sono seduti i membri del tuo team in qualsiasi data.",
 	"help.topic.floorplan.item4": "⭐ Piani preferiti: Clicca sulla stella accanto al selettore del piano nella pagina delle planimetrie per impostare i tuoi piani preferiti. I piani preferiti appaiono per primi nei menu a discesa.",
+	"help.topic.floorplan.item5": "👤 Prenotazione per terzi / ospiti: Clicca su una postazione libera (verde) per prenotarla per te o per un ospite specificandone il nome. Le scrivanie prenotate per gli ospiti appaiono in viola sulla planimetria e mostrano il nome dell'ospite ai colleghi.",
 
 	"help.topic.projects.title": "📂 Dichiarazione progetti e attività",
 	"help.topic.projects.desc":  "Dichiara il tempo di lavoro sui progetti o sulle attività giornaliere, monitora i giorni lavorati e certifica il riepilogo mensile. I giorni non lavorati possono essere nascosti.",
