@@ -1300,7 +1300,8 @@ func (d *DB) ListUsers() ([]models.User, error) {
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	return d.HydrateUsersSites(users), nil
+	users = d.HydrateUsersSites(users)
+	return d.HydrateUsersTeams(users), nil
 }
 
 // UpdateUserSite updates a user's assigned site.
@@ -1359,6 +1360,45 @@ func (d *DB) HydrateUsersSites(users []models.User) []models.User {
 		if s, ok := siteMap[users[i].SiteID]; ok && s != nil {
 			users[i].SiteName = s.Name
 			users[i].SiteCountryCode = s.CountryCode
+		}
+	}
+	return users
+}
+
+// HydrateUsersTeams populates Teams on the given users with active team names (left_at IS NULL).
+func (d *DB) HydrateUsersTeams(users []models.User) []models.User {
+	if len(users) == 0 {
+		return users
+	}
+	rows, err := d.core.Query(`
+SELECT ut.user_id, t.name
+FROM user_teams ut
+JOIN teams t ON ut.team_id = t.id
+WHERE ut.left_at IS NULL
+ORDER BY t.name
+`)
+	if err != nil {
+		return users
+	}
+	defer rows.Close() //nolint:errcheck
+
+	teamsMap := make(map[int64][]string)
+	for rows.Next() {
+		var uid int64
+		var tName string
+		if err := rows.Scan(&uid, &tName); err == nil {
+			teamsMap[uid] = append(teamsMap[uid], tName)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return users
+	}
+
+	for i := range users {
+		if t, ok := teamsMap[users[i].ID]; ok {
+			users[i].Teams = t
+		} else {
+			users[i].Teams = []string{}
 		}
 	}
 	return users

@@ -23,6 +23,7 @@ type UsersAdminHandler struct {
 // UsersPage renders the user management page.
 func (h *UsersAdminHandler) UsersPage(w http.ResponseWriter, r *http.Request) {
 	users, _ := h.DB.ListUsers()
+	sites, _ := h.DB.ListSites()
 	currentUser := middleware.GetUser(r)
 	var currentUserID int64
 	if currentUser != nil {
@@ -30,6 +31,7 @@ func (h *UsersAdminHandler) UsersPage(w http.ResponseWriter, r *http.Request) {
 	}
 	h.Render(w, r, "admin_users", map[string]interface{}{
 		"Users":         users,
+		"Sites":         sites,
 		"AllRoles":      models.AllRoles,
 		"CurrentUserID": currentUserID,
 		"Error":         r.URL.Query().Get("error"),

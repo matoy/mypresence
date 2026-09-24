@@ -802,6 +802,51 @@ func TestListUsers_ReturnsAll(t *testing.T) {
 	}
 }
 
+func TestHydrateUsersTeams_PopulatesActiveTeams(t *testing.T) {
+	d := newTestDB(t)
+	u1 := seedUser(t, d, "teamuser1@test.com")
+	u2 := seedUser(t, d, "teamuser2@test.com")
+
+	t1, err := d.CreateTeam("Alpha Team")
+	if err != nil {
+		t.Fatalf("CreateTeam: %v", err)
+	}
+	t2, err := d.CreateTeam("Beta Team")
+	if err != nil {
+		t.Fatalf("CreateTeam: %v", err)
+	}
+
+	_ = d.AddTeamMember(t1, u1)
+	_ = d.AddTeamMember(t2, u1)
+	_ = d.AddTeamMember(t1, u2)
+	yesterday := "2026-09-23"
+	_ = d.SetTeamMemberLeftAt(t1, u2, &yesterday)
+
+	users, err := d.ListUsers()
+	if err != nil {
+		t.Fatalf("ListUsers: %v", err)
+	}
+
+	var foundU1, foundU2 bool
+	for _, u := range users {
+		if u.ID == u1 {
+			foundU1 = true
+			if len(u.Teams) != 2 {
+				t.Errorf("expected u1 to have 2 teams, got %d (%v)", len(u.Teams), u.Teams)
+			}
+		}
+		if u.ID == u2 {
+			foundU2 = true
+			if len(u.Teams) != 0 {
+				t.Errorf("expected u2 to have 0 active teams after departure, got %d (%v)", len(u.Teams), u.Teams)
+			}
+		}
+	}
+	if !foundU1 || !foundU2 {
+		t.Errorf("did not find seeded users in ListUsers")
+	}
+}
+
 func TestUpdateUserRoles_ChangesRole(t *testing.T) {
 	d := newTestDB(t)
 	uid := seedUser(t, d, "roles@test.com")

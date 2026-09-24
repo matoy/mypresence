@@ -2,6 +2,12 @@
 {{with .Data}}
 <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8" x-data="usersRolesAdmin()">
 
+    <!-- Hidden anti-autofill trap to prevent browsers/extensions from autofilling search -->
+    <div style="display:none" aria-hidden="true">
+        <input type="text" name="fake_username_trap" tabindex="-1" autocomplete="off">
+        <input type="password" name="fake_password_trap" tabindex="-1" autocomplete="off">
+    </div>
+
     <div class="flex items-center justify-between mb-6">
         <h1 class="text-2xl font-bold text-gray-900">{{index $.T "users.title"}}</h1>
         <div class="flex items-center gap-3">
@@ -20,52 +26,68 @@
     {{end}}
 
     <!-- Filters -->
-    <div class="bg-white rounded-xl shadow-md p-4 mb-4">
-        <div class="flex flex-wrap items-center gap-x-8 gap-y-3">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
+        <div class="flex flex-wrap gap-3 items-end">
             <!-- Text filter -->
-            <div class="flex items-center gap-2">
-                <span class="text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{{index $.T "admin.search"}}</span>
+            <div class="flex-1 min-w-[200px]">
+                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "admin.search"}}</label>
                 <template x-if="searchReady">
-                    <input type="text"
+                    <input type="search"
                            x-ref="searchInput"
+                           name="filter_search_query"
                            :value="filterText"
                            @input="filterText = $event.target.value"
-                           placeholder="{{index $.T "users.name_email"}}"
-                           autocomplete="off"
-                           class="text-sm px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/50 w-48">
+                           placeholder="{{index $.T "admin.search"}}…"
+                           autocomplete="chrome-off"
+                           autocorrect="off"
+                           autocapitalize="off"
+                           spellcheck="false"
+                           role="searchbox"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+                </template>
+                <template x-if="!searchReady">
+                    <div class="w-full h-[38px] bg-gray-100 rounded-lg animate-pulse"></div>
                 </template>
             </div>
             <!-- Status filter -->
-            <div class="flex items-center gap-2">
-                <span class="text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{{index $.T "admin.status"}}</span>
-                <div class="flex gap-1">
-                    <button @click="filterActive = 'all'"
-                        :class="filterActive === 'all' ? 'bg-gray-200 text-gray-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
-                            class="text-xs px-3 py-1.5 rounded-lg transition font-medium" x-text="_t['admin.all']"></button>
-                    <button @click="filterActive = 'active'"
-                        :class="filterActive === 'active' ? 'bg-gray-200 text-gray-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
-                            class="text-xs px-3 py-1.5 rounded-lg transition font-medium" x-text="_t['admin.active']"></button>
-                    <button @click="filterActive = 'disabled'"
-                        :class="filterActive === 'disabled' ? 'bg-gray-200 text-gray-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
-                            class="text-xs px-3 py-1.5 rounded-lg transition font-medium" x-text="_t['admin.disabled']"></button>
-                </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "admin.status"}}</label>
+                <select x-model="filterActive"
+                        class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+                    <option value="all">{{index $.T "admin.all"}}</option>
+                    <option value="active">{{index $.T "admin.active"}}</option>
+                    <option value="disabled">{{index $.T "admin.disabled"}}</option>
+                </select>
             </div>
             <!-- Role filter -->
-            <div class="flex items-center gap-2 flex-wrap">
-                <span class="text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{{index $.T "users.role"}}</span>
-                <div class="flex flex-wrap gap-1">
-                    <button @click="filterRoles = []"
-                        :class="filterRoles.length === 0 ? 'bg-gray-200 text-gray-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
-                            class="text-xs px-3 py-1.5 rounded-lg transition font-medium" x-text="_t['admin.all']"></button>
-                    <template x-for="role in allRoles" :key="role.ID">
-                        <button @click="toggleRoleFilter(role.ID)"
-                        :class="filterRoles.includes(role.ID) ? 'bg-gray-200 text-gray-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
-                                class="text-xs px-3 py-1.5 rounded-lg transition font-medium"
-                                x-text="role.Label">
-                        </button>
-                    </template>
-                </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "users.role"}}</label>
+                <select x-model="filterRole"
+                        class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+                    <option value="all">{{index $.T "admin.all"}}</option>
+                    {{range .AllRoles}}
+                    <option value="{{.ID}}">{{.Label}}</option>
+                    {{end}}
+                </select>
             </div>
+            <!-- Assignment filter -->
+            <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "users.filter_assignment"}}</label>
+                <select x-model="filterAssignment"
+                        class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm"
+                        :class="filterAssignment !== 'all' ? 'border-amber-400 bg-amber-50/40 text-amber-900 font-medium' : ''">
+                    <option value="all">{{index $.T "users.filter_assignment_all"}}</option>
+                    <option value="no_team_or_site">{{index $.T "users.filter_no_team_or_site"}}</option>
+                    <option value="no_team">{{index $.T "users.filter_no_team"}}</option>
+                    <option value="no_site">{{index $.T "users.filter_no_site"}}</option>
+                    <option value="no_both">{{index $.T "users.filter_no_both"}}</option>
+                </select>
+            </div>
+            <button @click="resetFilters()"
+                    type="button"
+                    class="text-xs px-2.5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
+                {{index $.T "admin.reset"}}
+            </button>
         </div>
     </div>
 
@@ -82,6 +104,8 @@
                     <tr class="bg-gray-50 border-b border-gray-200">
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T "admin.name"}}</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T "admin.email"}}</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T "users.site"}}</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T "users.teams"}}</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T "admin.roles"}}</th>
                         <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">{{index $.T "admin.status"}}</th>
                         <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">{{index $.T "admin.actions"}}</th>
@@ -110,6 +134,78 @@
                                 <span x-show="!user._editing" x-text="user.email"></span>
                                 <input x-show="user._editing" x-model="user._editEmail" type="email"
                                        class="px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-primary/50 w-44">
+                            </td>
+                            <td class="px-4 py-3 text-sm">
+                                <div class="relative" x-data="{ openSite: false, siteSearch: '', isUpdating: false }">
+                                    <button type="button" @click="openSite = !openSite; siteSearch = ''"
+                                            :disabled="isUpdating"
+                                            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border transition cursor-pointer"
+                                            :class="user.site_id > 0 ? 'bg-indigo-50 border-indigo-200 text-indigo-800 hover:bg-indigo-100' : 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100'"
+                                            title="{{index $.T "teams.member_site"}}">
+                                        <span>🏢</span>
+                                        <span x-show="user.site_id > 0" class="font-semibold inline-flex items-center gap-1">
+                                            <span x-show="user.site_country_code" x-text="getCountryFlag(user.site_country_code)"></span>
+                                            <span x-text="user.site_name"></span>
+                                        </span>
+                                        <span x-show="!user.site_id || user.site_id === 0" class="italic">{{index $.T "users.no_site"}}</span>
+                                        <span x-show="isUpdating" class="animate-spin text-primary ml-0.5">⟳</span>
+                                        <svg x-show="!isUpdating" class="h-3 w-3 opacity-60 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                        </svg>
+                                    </button>
+                                    <div x-show="openSite" @click.outside="openSite = false" x-cloak
+                                         class="absolute left-0 z-30 mt-1 w-60 bg-white border border-gray-200 rounded-xl shadow-xl py-1 text-xs max-h-64 overflow-y-auto">
+                                        <div class="px-2 py-1.5 border-b border-gray-100 sticky top-0 bg-white z-10">
+                                            <input type="search" x-model="siteSearch"
+                                                   name="site_search_query"
+                                                   placeholder="{{index $.T "teams.search_site"}}"
+                                                   @keydown.escape="openSite = false"
+                                                   autocomplete="off"
+                                                   class="w-full px-2.5 py-1 border border-gray-200 rounded-lg text-xs focus:ring-1 focus:ring-primary focus:outline-none">
+                                        </div>
+                                        <!-- No site option -->
+                                        <div @click="isUpdating = true; openSite = false; updateUserSite(user, 0, () => isUpdating = false)"
+                                             class="px-3 py-1.5 hover:bg-gray-100 cursor-pointer text-gray-500 italic flex items-center justify-between border-b border-gray-100">
+                                            <span>{{index $.T "users.no_site"}}</span>
+                                            <span x-show="!user.site_id || user.site_id === 0" class="text-primary font-bold">✓</span>
+                                        </div>
+                                        <!-- Grouped sites -->
+                                        <template x-for="grp in getGroupedSites(siteSearch)" :key="'site_' + user.id + '_grp_' + grp.country">
+                                            <div class="py-1">
+                                                <div class="px-3 py-1 text-[11px] font-bold text-gray-400 uppercase tracking-wider bg-gray-50/80 sticky top-9"
+                                                     x-text="(grp.flag ? grp.flag + ' ' : '') + grp.countryName">
+                                                </div>
+                                                <template x-for="st in grp.sites" :key="'site_' + user.id + '_st_' + st.id">
+                                                    <div @click="isUpdating = true; openSite = false; updateUserSite(user, st.id, () => isUpdating = false)"
+                                                         class="pl-5 pr-3 py-1.5 hover:bg-indigo-50 cursor-pointer flex items-center justify-between transition"
+                                                         :class="st.id === user.site_id ? 'bg-indigo-50/70 text-primary font-semibold' : 'text-gray-600 font-medium'">
+                                                        <span class="truncate flex items-center gap-1.5">
+                                                            <span>🏢</span>
+                                                            <span x-text="st.name"></span>
+                                                        </span>
+                                                        <span x-show="st.id === user.site_id" class="text-primary font-bold">✓</span>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </template>
+                                        <div x-show="getGroupedSites(siteSearch).length === 0" class="px-3 py-2 text-xs text-gray-400 text-center">
+                                            {{index $.T "teams.filter_domain_none"}}
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3 text-sm">
+                                <div x-show="user.teams && user.teams.length > 0" class="flex flex-wrap gap-1">
+                                    <template x-for="team in (user.teams || [])" :key="team">
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200/60" x-text="team"></span>
+                                    </template>
+                                </div>
+                                <template x-if="!user.teams || user.teams.length === 0">
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200/60">
+                                        <span>⚠️</span>
+                                        <span x-text="_t['users.no_team']"></span>
+                                    </span>
+                                </template>
                             </td>
                             <td class="px-4 py-3">
                                 <div class="flex flex-wrap gap-1">
@@ -154,7 +250,7 @@
                         </tr>
                     </template>
                     <tr x-show="filteredFederated.length === 0">
-                        <td colspan="5" class="px-6 py-8 text-center text-gray-400" x-text="_t['users.no_federated']"></td>
+                        <td colspan="7" class="px-6 py-8 text-center text-gray-400" x-text="_t['users.no_federated']"></td>
                     </tr>
                 </tbody>
             </table>
@@ -174,6 +270,8 @@
                     <tr class="bg-gray-50 border-b border-gray-200">
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T "admin.name"}}</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T "admin.email"}}</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T "users.site"}}</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T "users.teams"}}</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T "admin.roles"}}</th>
                         <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">{{index $.T "admin.status"}}</th>
                         <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">{{index $.T "admin.actions"}}</th>
@@ -202,6 +300,78 @@
                                 <span x-show="!user._editing" x-text="user.email"></span>
                                 <input x-show="user._editing" x-model="user._editEmail" type="email"
                                        class="px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-primary/50 w-44">
+                            </td>
+                            <td class="px-4 py-3 text-sm">
+                                <div class="relative" x-data="{ openSite: false, siteSearch: '', isUpdating: false }">
+                                    <button type="button" @click="openSite = !openSite; siteSearch = ''"
+                                            :disabled="isUpdating"
+                                            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border transition cursor-pointer"
+                                            :class="user.site_id > 0 ? 'bg-indigo-50 border-indigo-200 text-indigo-800 hover:bg-indigo-100' : 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100'"
+                                            title="{{index $.T "teams.member_site"}}">
+                                        <span>🏢</span>
+                                        <span x-show="user.site_id > 0" class="font-semibold inline-flex items-center gap-1">
+                                            <span x-show="user.site_country_code" x-text="getCountryFlag(user.site_country_code)"></span>
+                                            <span x-text="user.site_name"></span>
+                                        </span>
+                                        <span x-show="!user.site_id || user.site_id === 0" class="italic">{{index $.T "users.no_site"}}</span>
+                                        <span x-show="isUpdating" class="animate-spin text-primary ml-0.5">⟳</span>
+                                        <svg x-show="!isUpdating" class="h-3 w-3 opacity-60 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                        </svg>
+                                    </button>
+                                    <div x-show="openSite" @click.outside="openSite = false" x-cloak
+                                         class="absolute left-0 z-30 mt-1 w-64 bg-white border border-gray-200 rounded-xl shadow-xl py-1 text-xs max-h-64 overflow-y-auto">
+                                        <div class="px-2 py-1.5 border-b border-gray-100 sticky top-0 bg-white z-10">
+                                            <input type="search" x-model="siteSearch"
+                                                   name="site_search_query"
+                                                   placeholder="{{index $.T "teams.search_site"}}"
+                                                   @keydown.escape="openSite = false"
+                                                   autocomplete="off"
+                                                   class="w-full px-2.5 py-1 border border-gray-200 rounded-lg text-xs focus:ring-1 focus:ring-primary focus:outline-none">
+                                        </div>
+                                        <!-- No site option -->
+                                        <div @click="isUpdating = true; openSite = false; updateUserSite(user, 0, () => isUpdating = false)"
+                                             class="px-3 py-1.5 hover:bg-gray-100 cursor-pointer text-gray-500 italic flex items-center justify-between border-b border-gray-100">
+                                            <span>{{index $.T "users.no_site"}}</span>
+                                            <span x-show="!user.site_id || user.site_id === 0" class="text-primary font-bold">✓</span>
+                                        </div>
+                                        <!-- Grouped sites -->
+                                        <template x-for="grp in getGroupedSites(siteSearch)" :key="'site_' + user.id + '_grp_' + grp.country">
+                                            <div class="py-1">
+                                                <div class="px-3 py-1 text-[11px] font-bold text-gray-400 uppercase tracking-wider bg-gray-50/80 sticky top-9"
+                                                     x-text="(grp.flag ? grp.flag + ' ' : '') + grp.countryName">
+                                                </div>
+                                                <template x-for="st in grp.sites" :key="'site_' + user.id + '_st_' + st.id">
+                                                    <div @click="isUpdating = true; openSite = false; updateUserSite(user, st.id, () => isUpdating = false)"
+                                                         class="pl-5 pr-3 py-1.5 hover:bg-indigo-50 cursor-pointer flex items-center justify-between transition"
+                                                         :class="st.id === user.site_id ? 'bg-indigo-50/70 text-primary font-semibold' : 'text-gray-600 font-medium'">
+                                                        <span class="truncate flex items-center gap-1.5">
+                                                            <span>🏢</span>
+                                                            <span x-text="st.name"></span>
+                                                        </span>
+                                                        <span x-show="st.id === user.site_id" class="text-primary font-bold">✓</span>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </template>
+                                        <div x-show="getGroupedSites(siteSearch).length === 0" class="px-3 py-2 text-xs text-gray-400 text-center">
+                                            {{index $.T "teams.filter_domain_none"}}
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3 text-sm">
+                                <div x-show="user.teams && user.teams.length > 0" class="flex flex-wrap gap-1">
+                                    <template x-for="team in (user.teams || [])" :key="team">
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200/60" x-text="team"></span>
+                                    </template>
+                                </div>
+                                <template x-if="!user.teams || user.teams.length === 0">
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200/60">
+                                        <span>⚠️</span>
+                                        <span x-text="_t['users.no_team']"></span>
+                                    </span>
+                                </template>
                             </td>
                             <td class="px-4 py-3">
                                 <div class="flex flex-wrap gap-1">
@@ -245,19 +415,20 @@
                                     <button @click="user._editing = false"
                                             class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium" x-text="_t['admin.cancel']"></button>
                                 </div>
-                                <div x-show="user._changingPw" class="flex items-center justify-end gap-1.5">
-                                    <input x-model="user._newPw" type="password" :placeholder="_t['login.password']"
+                                <form @submit.prevent="savePw(user)" autocomplete="off"
+                                      x-show="user._changingPw" class="flex items-center justify-end gap-1.5">
+                                    <input x-model="user._newPw" type="password" autocomplete="new-password" :placeholder="_t['login.password']"
                                            class="text-sm px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-primary/50 w-36">
-                                    <button @click="savePw(user)"
+                                    <button type="submit"
                                         class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium" x-text="_t['admin.save']"></button>
-                                    <button @click="user._changingPw = false; user._newPw = ''"
+                                    <button type="button" @click="user._changingPw = false; user._newPw = ''"
                                             class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium" x-text="_t['admin.cancel']"></button>
-                                </div>
+                                </form>
                             </td>
                         </tr>
                     </template>
                     <tr x-show="filteredLocal.length === 0">
-                        <td colspan="5" class="px-6 py-8 text-center text-gray-400" x-text="_t['users.no_local']"></td>
+                        <td colspan="7" class="px-6 py-8 text-center text-gray-400" x-text="_t['users.no_local']"></td>
                     </tr>
                 </tbody>
             </table>
@@ -269,22 +440,23 @@
          class="fixed inset-0 z-50 flex items-center justify-center"
          @keydown.escape.window="showCreateModal = false">
         <div class="absolute inset-0 bg-black/40" @click="showCreateModal = false"></div>
-        <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 p-6" @click.stop>
+        <form @submit.prevent="createUser()" autocomplete="off"
+              class="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 p-6" @click.stop>
             <h2 class="text-lg font-bold text-gray-900 mb-4">{{index $.T "users.create_local"}}</h2>
             <div class="space-y-4">
                 <div>
                     <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "admin.name"}}</label>
-                    <input type="text" x-model="createName"
+                    <input type="text" x-model="createName" autocomplete="off"
                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
                 </div>
                 <div>
                     <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "admin.email"}}</label>
-                    <input type="email" x-model="createEmail"
+                    <input type="email" x-model="createEmail" autocomplete="off"
                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
                 </div>
                 <div>
                     <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "login.password"}}</label>
-                    <input type="password" x-model="createPassword" @keydown.enter="createUser()"
+                    <input type="password" x-model="createPassword" autocomplete="new-password"
                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
                 </div>
             </div>
@@ -292,23 +464,24 @@
             <p x-show="createError" x-text="createError" class="mt-3 text-sm text-red-600"></p>
 
             <div class="flex justify-end gap-3 mt-6">
-                <button @click="showCreateModal = false"
+                <button type="button" @click="showCreateModal = false"
                         class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
                     {{index $.T "admin.cancel"}}
                 </button>
-                <button @click="createUser()"
+                <button type="submit"
                         :disabled="creating"
                         class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium"
                         :class="{'opacity-50 cursor-wait': creating}">
                     {{index $.T "admin.create"}}
                 </button>
             </div>
-        </div>
+        </form>
     </div>
 
 </div>
 
 <script id="admin-users-roles-data" type="application/json">{{json .AllRoles}}</script>
+<script id="admin-users-sites-data" type="application/json">{{json .Sites}}</script>
 <script id="admin-users-data" type="application/json">{{json .Users}}</script>
 <script id="admin-users-current-id" type="application/json">{{.CurrentUserID}}</script>
 
@@ -318,6 +491,11 @@ function usersRolesAdmin() {
     const rolesEl = document.getElementById('admin-users-roles-data');
     if (rolesEl && rolesEl.textContent) {
         try { allRoles = JSON.parse(rolesEl.textContent); } catch (e) {}
+    }
+    let allSites = [];
+    const sitesEl = document.getElementById('admin-users-sites-data');
+    if (sitesEl && sitesEl.textContent) {
+        try { allSites = JSON.parse(sitesEl.textContent); } catch (e) {}
     }
     let usersData = [];
     const usersEl = document.getElementById('admin-users-data');
@@ -331,9 +509,11 @@ function usersRolesAdmin() {
     }
     return {
         allRoles,
+        allSites,
         currentUserId,
         users: (usersData || []).map(u => ({
             ...u,
+            teams: u.teams || [],
             _editing: false,
             _changingPw: false,
             _newPw: '',
@@ -341,7 +521,8 @@ function usersRolesAdmin() {
             _editEmail: ''
         })),
         filterActive: 'all',
-        filterRoles: [],
+        filterRole: 'all',
+        filterAssignment: 'all',
         filterText: '',
         searchReady: false,
         showCreateModal: false,
@@ -355,20 +536,110 @@ function usersRolesAdmin() {
             // Inject the search field AFTER the browser's autofill pass.
             // Chrome autofills synchronously during parsing; delaying the
             // element insertion means there is nothing to fill.
-            setTimeout(() => { this.searchReady = true; }, 50);
+            this.filterText = '';
+            setTimeout(() => {
+                this.searchReady = true;
+                this.filterText = '';
+            }, 50);
+        },
+
+        resetFilters() {
+            this.filterText = '';
+            this.filterActive = 'all';
+            this.filterRole = 'all';
+            this.filterAssignment = 'all';
+        },
+
+        getGroupedSites(searchText) {
+            const q = (searchText || '').trim().toLowerCase();
+            const filtered = (this.allSites || []).filter(s => {
+                if (!q) return true;
+                const name = (s.name || '').toLowerCase();
+                const code = (s.country_code || '').toLowerCase();
+                return name.includes(q) || code.includes(q);
+            });
+
+            const groups = {};
+            for (const s of filtered) {
+                const code = (s.country_code || '').toUpperCase().trim();
+                if (!groups[code]) {
+                    groups[code] = {
+                        country: code,
+                        countryName: code || 'Autres',
+                        flag: this.getCountryFlag(code),
+                        sites: []
+                    };
+                }
+                groups[code].sites.push(s);
+            }
+
+            return Object.values(groups).sort((a, b) => {
+                if (!a.country) return 1;
+                if (!b.country) return -1;
+                return (a.countryName || a.country).localeCompare(b.countryName || b.country);
+            });
+        },
+
+        getFilteredSites(searchText) {
+            if (!searchText || !searchText.trim()) return this.allSites || [];
+            const q = searchText.trim().toLowerCase();
+            return (this.allSites || []).filter(s => (s.name || '').toLowerCase().includes(q) || (s.country_code || '').toLowerCase().includes(q));
+        },
+
+        async updateUserSite(user, siteId, onDone) {
+            try {
+                const resp = await fetch(`/api/users/${user.id}/site`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ site_id: parseInt(siteId) || 0 })
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    user.site_id = data.site_id || 0;
+                    user.site_name = data.site_name || '';
+                    user.site_country_code = data.site_country_code || '';
+                } else {
+                    alert(data.error || 'Error');
+                }
+            } catch (e) {
+                alert('Network error');
+            } finally {
+                if (onDone) onDone();
+            }
+        },
+
+        getCountryFlag(code) {
+            if (!code || code.length !== 2) return '';
+            try {
+                return String.fromCodePoint(...[...code.toUpperCase()].map(ch => 0x1F1E6 + ch.charCodeAt(0) - 65));
+            } catch (e) {
+                return '';
+            }
         },
 
         _applyFilters(list) {
             return list.filter(u => {
                 if (this.filterActive === 'active' && u.disabled) return false;
                 if (this.filterActive === 'disabled' && !u.disabled) return false;
-                if (this.filterRoles.length > 0) {
+                if (this.filterRole !== 'all') {
                     const userRoleList = u.roles ? u.roles.split(',').map(r => r.trim()).filter(Boolean) : [];
-                    if (!this.filterRoles.some(r => userRoleList.includes(r))) return false;
+                    if (!userRoleList.includes(this.filterRole)) return false;
                 }
+                const hasNoTeam = !u.teams || u.teams.length === 0;
+                const hasNoSite = !u.site_id || u.site_id === 0;
+
+                if (this.filterAssignment === 'no_team_or_site' && !(hasNoTeam || hasNoSite)) return false;
+                if (this.filterAssignment === 'no_team' && !hasNoTeam) return false;
+                if (this.filterAssignment === 'no_site' && !hasNoSite) return false;
+                if (this.filterAssignment === 'no_both' && !(hasNoTeam && hasNoSite)) return false;
+
                 if (this.filterText.trim()) {
                     const q = this.filterText.trim().toLowerCase();
-                    if (!u.name.toLowerCase().includes(q) && !u.email.toLowerCase().includes(q)) return false;
+                    const matchName = u.name && u.name.toLowerCase().includes(q);
+                    const matchEmail = u.email && u.email.toLowerCase().includes(q);
+                    const matchSite = u.site_name && u.site_name.toLowerCase().includes(q);
+                    const matchTeam = u.teams && u.teams.some(t => t.toLowerCase().includes(q));
+                    if (!matchName && !matchEmail && !matchSite && !matchTeam) return false;
                 }
                 return true;
             });
@@ -380,12 +651,6 @@ function usersRolesAdmin() {
 
         get filteredLocal() {
             return this._applyFilters(this.users.filter(u => u.is_local));
-        },
-
-        toggleRoleFilter(roleId) {
-            const idx = this.filterRoles.indexOf(roleId);
-            if (idx >= 0) this.filterRoles.splice(idx, 1);
-            else this.filterRoles.push(roleId);
         },
 
         hasRole(user, roleId) {
@@ -447,6 +712,10 @@ function usersRolesAdmin() {
                         name: this.createName.trim(),
                         email: this.createEmail.trim(),
                         roles: 'basic',
+                        site_id: 0,
+                        site_name: '',
+                        site_country_code: '',
+                        teams: [],
                         is_local: true,
                         disabled: false,
                         _editing: false,

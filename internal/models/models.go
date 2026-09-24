@@ -46,6 +46,7 @@ type User struct {
 	SiteName        string    `json:"site_name,omitempty"`
 	SiteCountryCode string    `json:"site_country_code,omitempty"`
 	Language        string    `json:"language,omitempty"`
+	Teams           []string  `json:"teams,omitempty"`
 	CreatedAt       time.Time `json:"created_at"`
 }
 

@@ -420,3 +420,30 @@ func TestTeamsFilterKeys_AllLanguages(t *testing.T) {
 		}
 	}
 }
+
+func TestUsersFilterKeys_AllLanguages(t *testing.T) {
+	requiredKeys := []string{
+		"users.site",
+		"users.teams",
+		"users.no_site",
+		"users.no_team",
+		"users.filter_assignment",
+		"users.filter_assignment_all",
+		"users.filter_no_team_or_site",
+		"users.filter_no_team",
+		"users.filter_no_site",
+		"users.filter_no_both",
+	}
+
+	langs := []string{"en", "fr", "de", "es", "it"}
+	for _, lang := range langs {
+		m := T(lang)
+		for _, key := range requiredKeys {
+			val, ok := m[key]
+			if !ok || val == "" {
+				t.Errorf("lang %q is missing required users filter key %q", lang, key)
+			}
+		}
+	}
+}
+
