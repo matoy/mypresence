@@ -82,6 +82,12 @@ func (d *DB) migrateProjects() error {
 	d.projects.Exec(dl.rebind(dl.addColumnIfNotExists("projects", "mini_project", fmt.Sprintf("%s NOT NULL DEFAULT %s", dl.boolType(), dl.boolDefault(false))))) //nolint:errcheck
 	d.projects.Exec(dl.rebind(dl.addColumnIfNotExists("projects", "initial_end_date", dl.varcharType(10)+" NOT NULL DEFAULT ''")))                               //nolint:errcheck
 	d.projects.Exec(`UPDATE projects SET initial_end_date = end_date WHERE initial_end_date = ''`)                                                               //nolint:errcheck
+
+	// Secondary indexes for performance
+	_ = d.ensureIndex(d.projects, "idx_project_activities_user_date", "project_activities", "user_id, date")
+	_ = d.ensureIndex(d.projects, "idx_project_time_entries_user", "project_time_entries", "user_id, year, month")
+	_ = d.ensureIndex(d.projects, "idx_project_members_user", "project_members", "user_id")
+
 	return nil
 }
 

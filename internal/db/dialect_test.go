@@ -513,3 +513,46 @@ func TestSites_NotCorporateSite_ColumnDef(t *testing.T) {
 	}
 }
 
+func TestCreateIndexIfNotExists_AllDrivers(t *testing.T) {
+	for _, driver := range []string{"sqlite", "postgres"} {
+		dl := newDialect(driver)
+		got := dl.createIndexIfNotExists("idx_test", "my_table", "col1, col2")
+		want := "CREATE INDEX IF NOT EXISTS idx_test ON my_table (col1, col2)"
+		if got != want {
+			t.Errorf("[%s] createIndexIfNotExists = %q, want %q", driver, got, want)
+		}
+	}
+
+	mysqlDl := newDialect("mysql")
+	gotMySQL := mysqlDl.createIndexIfNotExists("idx_test", "my_table", "col1, col2")
+	wantMySQL := "CREATE INDEX idx_test ON my_table (col1, col2)"
+	if gotMySQL != wantMySQL {
+		t.Errorf("[mysql] createIndexIfNotExists = %q, want %q", gotMySQL, wantMySQL)
+	}
+
+	ssDl := newDialect("sqlserver")
+	gotSS := ssDl.createIndexIfNotExists("idx_test", "my_table", "col1, col2")
+	if !strings.Contains(gotSS, "IF NOT EXISTS") || !strings.Contains(gotSS, "sys.indexes") {
+		t.Errorf("[sqlserver] createIndexIfNotExists expected sys.indexes check, got %q", gotSS)
+	}
+}
+
+func TestIndexExistsQuery_AllDrivers(t *testing.T) {
+	cases := []struct {
+		driver    string
+		substring string
+	}{
+		{"sqlite", "sqlite_master"},
+		{"postgres", "pg_indexes"},
+		{"mysql", "information_schema.STATISTICS"},
+		{"sqlserver", "sys.indexes"},
+	}
+	for _, tc := range cases {
+		dl := newDialect(tc.driver)
+		q := dl.indexExistsQuery("my_table", "idx_test")
+		if !strings.Contains(q, tc.substring) {
+			t.Errorf("[%s] indexExistsQuery should contain %q, got %q", tc.driver, tc.substring, q)
+		}
+	}
+}
+

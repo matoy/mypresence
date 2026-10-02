@@ -57,17 +57,23 @@ func (h *AdminHandler) TeamsPage(w http.ResponseWriter, r *http.Request) {
 		CanEdit   bool
 	}
 
+	allMembers, _ := h.DB.GetAllTeamsMembers()
+	allLeaders, allLeaderIDs, _ := h.DB.GetAllTeamsLeaders()
+
 	var teamsList []TeamWithMembers
 	for _, t := range teams {
 		if !canManageTeams && !ledTeamIDs[t.ID] {
 			continue
 		}
-		members, _ := h.DB.GetAllTeamMembers(t.ID)
-		leaderIDs, _ := h.DB.GetTeamLeaderIDs(t.ID)
-		leaders, _ := h.DB.ListTeamLeaders(t.ID)
+		members := allMembers[t.ID]
+		if members == nil {
+			members = []models.TeamMember{}
+		}
+		leaderIDs := allLeaderIDs[t.ID]
 		if leaderIDs == nil {
 			leaderIDs = []int64{}
 		}
+		leaders := allLeaders[t.ID]
 		if leaders == nil {
 			leaders = []models.User{}
 		}

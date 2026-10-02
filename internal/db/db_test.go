@@ -1514,6 +1514,51 @@ func TestGetUserHolidayMap_MultiCountryResolution(t *testing.T) {
 	if _, ok := teamMultiMap["2026-07-14"]; ok {
 		t.Error("Team Multi map should NOT have FR-only 2026-07-14")
 	}
+
+	// 5. Test batch GetUsersHolidayMaps matches single GetUserHolidayMap
+	batchMap, err := d.GetUsersHolidayMaps([]int64{uFR, uMA, uGlobal}, "2026-01-01", "2026-12-31")
+	if err != nil {
+		t.Fatalf("GetUsersHolidayMaps: %v", err)
+	}
+	if len(batchMap[uFR]) != len(frMap) {
+		t.Errorf("uFR map length mismatch: got %d, want %d", len(batchMap[uFR]), len(frMap))
+	}
+	if len(batchMap[uMA]) != len(maMap) {
+		t.Errorf("uMA map length mismatch: got %d, want %d", len(batchMap[uMA]), len(maMap))
+	}
+	if len(batchMap[uGlobal]) != len(globalMap) {
+		t.Errorf("uGlobal map length mismatch: got %d, want %d", len(batchMap[uGlobal]), len(globalMap))
+	}
+}
+
+func TestGetUsersReservationDates_Batch(t *testing.T) {
+	d := newTestDB(t)
+	_, seatID := seedFloorplanAndSeat(t, d, "Desk Batch")
+	u1 := seedUser(t, d, "batch1@test.com")
+	u2 := seedUser(t, d, "batch2@test.com")
+
+	err := d.ReserveSeat(seatID, u1, "2026-06-01", "full", "")
+	if err != nil {
+		t.Fatalf("ReserveSeat: %v", err)
+	}
+	err = d.ReserveSeat(seatID, u2, "2026-06-02", "full", "")
+	if err != nil {
+		t.Fatalf("ReserveSeat: %v", err)
+	}
+
+	resMap, err := d.GetUsersReservationDates([]int64{u1, u2}, "2026-06-01", "2026-06-05")
+	if err != nil {
+		t.Fatalf("GetUsersReservationDates: %v", err)
+	}
+	if !resMap[u1]["2026-06-01"] {
+		t.Errorf("expected u1 reservation on 2026-06-01")
+	}
+	if resMap[u1]["2026-06-02"] {
+		t.Errorf("u1 should not have reservation on 2026-06-02")
+	}
+	if !resMap[u2]["2026-06-02"] {
+		t.Errorf("expected u2 reservation on 2026-06-02")
+	}
 }
 
 // ── GetSeatsWithStatus ────────────────────────────────────────────────────────
@@ -1752,6 +1797,88 @@ func TestTeamLeaders_CRUD_And_Helpers(t *testing.T) {
 	ids, _ = d.GetTeamLeaderIDs(team1)
 	if len(ids) != 0 {
 		t.Errorf("expected 0 leaders, got %v", ids)
+	}
+}
+
+func TestGetAllTeamsMembersAndLeaders_Batch(t *testing.T) {
+	d := newTestDB(t)
+
+	// Create users
+	u1, err := d.CreateLocalUser("user1@example.com", "User 1", "pass")
+	if err != nil {
+		t.Fatalf("CreateLocalUser: %v", err)
+	}
+	u2, err := d.CreateLocalUser("user2@example.com", "User 2", "pass")
+	if err != nil {
+		t.Fatalf("CreateLocalUser: %v", err)
+	}
+	leader, err := d.CreateLocalUser("leader@example.com", "Leader", "pass")
+	if err != nil {
+		t.Fatalf("CreateLocalUser: %v", err)
+	}
+	_ = d.UpdateUserRoles(leader, "team_manager")
+
+	// Create teams
+	team1, err := d.CreateTeam("Team Alpha")
+	if err != nil {
+		t.Fatalf("CreateTeam: %v", err)
+	}
+	team2, err := d.CreateTeam("Team Beta")
+	if err != nil {
+		t.Fatalf("CreateTeam: %v", err)
+	}
+
+	// Assign members
+	if err := d.AddTeamMember(team1, u1); err != nil {
+		t.Fatalf("AddTeamMember: %v", err)
+	}
+	if err := d.AddTeamMember(team2, u2); err != nil {
+		t.Fatalf("AddTeamMember: %v", err)
+	}
+	if err := d.AddTeamMember(team2, u1); err != nil {
+		t.Fatalf("AddTeamMember: %v", err)
+	}
+
+	// Assign leader
+	if err := d.SetTeamLeaders(team1, []int64{leader}); err != nil {
+		t.Fatalf("SetTeamLeaders: %v", err)
+	}
+
+	// Test GetAllTeamsMembers
+	membersMap, err := d.GetAllTeamsMembers()
+	if err != nil {
+		t.Fatalf("GetAllTeamsMembers: %v", err)
+	}
+	if len(membersMap[team1]) != 1 || membersMap[team1][0].ID != u1 {
+		t.Errorf("expected team1 to have 1 member (u1), got %v", membersMap[team1])
+	}
+	if len(membersMap[team2]) != 2 {
+		t.Errorf("expected team2 to have 2 members, got %v", membersMap[team2])
+	}
+
+	// Test GetAllTeamsLeaders
+	leadersMap, leaderIDsMap, err := d.GetAllTeamsLeaders()
+	if err != nil {
+		t.Fatalf("GetAllTeamsLeaders: %v", err)
+	}
+	if len(leaderIDsMap[team1]) != 1 || leaderIDsMap[team1][0] != leader {
+		t.Errorf("expected team1 to have leader %d, got %v", leader, leaderIDsMap[team1])
+	}
+	if len(leadersMap[team1]) != 1 || leadersMap[team1][0].ID != leader {
+		t.Errorf("expected team1 leader object to match, got %v", leadersMap[team1])
+	}
+	if len(leaderIDsMap[team2]) != 0 {
+		t.Errorf("expected team2 to have 0 leaders, got %v", leaderIDsMap[team2])
+	}
+}
+
+func TestCountsCache(t *testing.T) {
+	d := newTestDB(t)
+
+	c1 := d.CachedCounts()
+	c2 := d.CachedCounts()
+	if c1 != c2 {
+		t.Errorf("expected cached counts to be identical within 15s window, got %v vs %v", c1, c2)
 	}
 }
 

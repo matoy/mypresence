@@ -31,6 +31,10 @@ func (d *DB) migrateNotifications() error {
 	if _, err := d.core.Exec(dl.rebind(stmt)); err != nil {
 		return err
 	}
+
+	// Secondary index for fast unacknowledged notifications lookup per user
+	_ = d.ensureIndex(d.core, "idx_notifications_user_ack", "notifications", "user_id, acknowledged, created_at")
+
 	return nil
 }
 

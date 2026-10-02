@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/subtle"
 	"encoding/json"
 	"html/template"
@@ -10,7 +11,10 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
@@ -161,6 +165,121 @@ func loadTemplates(funcMap template.FuncMap) map[string]*template.Template {
 	return templates
 }
 
+// templateBufferPool provides reusable byte buffers for HTML template execution.
+var templateBufferPool = sync.Pool{
+	New: func() interface{} {
+		return new(bytes.Buffer)
+	},
+}
+
+var (
+	logoCacheMu   sync.RWMutex
+	logoCacheTime time.Time
+	logoCacheKey  string
+	logoCacheVal  bool
+)
+
+func checkLogoExists(dataDir, logoFile string) bool {
+	cacheKey := filepath.Join(dataDir, logoFile)
+	logoCacheMu.RLock()
+	if logoCacheKey == cacheKey && time.Since(logoCacheTime) < 10*time.Second {
+		val := logoCacheVal
+		logoCacheMu.RUnlock()
+		return val
+	}
+	logoCacheMu.RUnlock()
+
+	logoCacheMu.Lock()
+	defer logoCacheMu.Unlock()
+	if logoCacheKey == cacheKey && time.Since(logoCacheTime) < 10*time.Second {
+		return logoCacheVal
+	}
+	_, err := os.Stat(cacheKey)
+	logoCacheVal = (err == nil)
+	logoCacheTime = time.Now()
+	logoCacheKey = cacheKey
+	return logoCacheVal
+}
+
+var (
+	activeNewsMu   sync.RWMutex
+	activeNewsTime time.Time
+	activeNewsVal  []models.NewsMessage
+)
+
+func getCachedActiveNews(database *db.DB) []models.NewsMessage {
+	if database == nil {
+		return nil
+	}
+	activeNewsMu.RLock()
+	if time.Since(activeNewsTime) < 30*time.Second {
+		res := activeNewsVal
+		activeNewsMu.RUnlock()
+		return res
+	}
+	activeNewsMu.RUnlock()
+
+	activeNewsMu.Lock()
+	defer activeNewsMu.Unlock()
+	if time.Since(activeNewsTime) < 30*time.Second {
+		return activeNewsVal
+	}
+	if activeNews, err := database.GetActiveNewsMessages(); err == nil {
+		activeNewsVal = activeNews
+		activeNewsTime = time.Now()
+	}
+	return activeNewsVal
+}
+
+type userRenderRoles struct {
+	userTasksMode   bool
+	isDomainManager bool
+	isTeamLeader    bool
+	cachedAt        time.Time
+}
+
+var (
+	userRolesMu    sync.RWMutex
+	userRolesCache = make(map[int64]userRenderRoles)
+)
+
+func getCachedUserRenderRoles(database *db.DB, userID int64) (userTasksMode, isDomainManager, isTeamLeader bool) {
+	if database == nil || userID <= 0 {
+		return false, false, false
+	}
+	userRolesMu.RLock()
+	if entry, ok := userRolesCache[userID]; ok && time.Since(entry.cachedAt) < 30*time.Second {
+		userRolesMu.RUnlock()
+		return entry.userTasksMode, entry.isDomainManager, entry.isTeamLeader
+	}
+	userRolesMu.RUnlock()
+
+	userRolesMu.Lock()
+	defer userRolesMu.Unlock()
+	if entry, ok := userRolesCache[userID]; ok && time.Since(entry.cachedAt) < 30*time.Second {
+		return entry.userTasksMode, entry.isDomainManager, entry.isTeamLeader
+	}
+
+	if teams, err := database.GetUserTeams(userID); err == nil {
+		for _, t := range teams {
+			if t.TimesheetsManagedManually {
+				userTasksMode = true
+				break
+			}
+		}
+	}
+	isDomainManager, _ = database.IsDomainManager(userID)
+	isTeamLeader, _ = database.IsTeamLeader(userID)
+
+	userRolesCache[userID] = userRenderRoles{
+		userTasksMode:   userTasksMode,
+		isDomainManager: isDomainManager,
+		isTeamLeader:    isTeamLeader,
+		cachedAt:        time.Now(),
+	}
+	return userTasksMode, isDomainManager, isTeamLeader
+}
+
 // newRenderPage returns a render function that resolves the current user,
 // language, CSRF token and impersonation state before executing the named template.
 func newRenderPage(cfg *config.Config, database *db.DB, templates map[string]*template.Template) func(http.ResponseWriter, *http.Request, string, interface{}) {
@@ -172,15 +291,12 @@ func newRenderPage(cfg *config.Config, database *db.DB, templates map[string]*te
 			user.Language = lang
 		}
 
-		// Check if a logo file exists in the data directory.
-		logoExists := false
+		// Check if a logo file exists in the data directory (cached with short TTL).
 		logoFile := "logo.png"
 		if cfg.LogoPath != "" {
 			logoFile = cfg.LogoPath
 		}
-		if _, err := os.Stat(filepath.Join(cfg.DataDir, logoFile)); err == nil {
-			logoExists = true
-		}
+		logoExists := checkLogoExists(cfg.DataDir, logoFile)
 
 		var csrfToken string
 		if cookie, err := r.Cookie("session"); err == nil {
@@ -195,27 +311,10 @@ func newRenderPage(cfg *config.Config, database *db.DB, templates map[string]*te
 			}
 		}
 
-		// Determine whether the user's /projects page shows the daily-tasks
-		// form (member of a team with "Timesheets managed manually" enabled).
-		var userTasksMode bool
+		// Determine whether the user's /projects page shows daily-tasks and domain/leader roles (cached 30s).
+		var userTasksMode, isDomainManager, isTeamLeader bool
 		if user != nil {
-			if teams, err := database.GetUserTeams(user.ID); err == nil {
-				for _, t := range teams {
-					if t.TimesheetsManagedManually {
-						userTasksMode = true
-						break
-					}
-				}
-			}
-		}
-
-		// Domain managers and team leaders get scoped access to Activity/Projects Report nav
-		// links even without any other role.
-		var isDomainManager bool
-		var isTeamLeader bool
-		if user != nil {
-			isDomainManager, _ = database.IsDomainManager(user.ID)
-			isTeamLeader, _ = database.IsTeamLeader(user.ID)
+			userTasksMode, isDomainManager, isTeamLeader = getCachedUserRenderRoles(database, user.ID)
 		}
 
 		pd := models.PageData{
@@ -249,9 +348,7 @@ func newRenderPage(cfg *config.Config, database *db.DB, templates map[string]*te
 		}
 		// Fetch active news banners and unread notifications for authenticated users.
 		if user != nil {
-			if activeNews, err := database.GetActiveNewsMessages(); err == nil {
-				pd.ActiveNewsMessages = activeNews
-			}
+			pd.ActiveNewsMessages = getCachedActiveNews(database)
 			if unreadNotifs, err := database.GetUnreadNotifications(user.ID); err == nil {
 				tr := i18n.T(lang)
 				for i := range unreadNotifs {
@@ -269,10 +366,21 @@ func newRenderPage(cfg *config.Config, database *db.DB, templates map[string]*te
 			http.Error(w, "Template not found", http.StatusInternalServerError)
 			return
 		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if err := tmpl.ExecuteTemplate(w, "layout", pd); err != nil {
-			log.Printf("Template render error: %v", err)
+
+		buf := templateBufferPool.Get().(*bytes.Buffer)
+		buf.Reset()
+		defer templateBufferPool.Put(buf)
+
+		if err := tmpl.ExecuteTemplate(buf, "layout", pd); err != nil {
+			log.Printf("Template render error (%s): %v", page, err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
 		}
+
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
+		w.WriteHeader(http.StatusOK)
+		_, _ = buf.WriteTo(w)
 	}
 }
 
@@ -318,6 +426,7 @@ func floorplanImgHandler(dataDir string) http.HandlerFunc {
 			http.NotFound(w, r)
 			return
 		}
+		w.Header().Set("Cache-Control", "public, max-age=3600")
 		http.ServeFile(w, r, filepath.Join(dataDir, name))
 	}
 }
@@ -332,6 +441,7 @@ func dataFileHandler(dataDir string) http.HandlerFunc {
 			http.NotFound(w, r)
 			return
 		}
+		w.Header().Set("Cache-Control", "public, max-age=3600")
 		http.ServeFile(w, r, filepath.Join(dataDir, name))
 	}
 }

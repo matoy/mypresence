@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -25,16 +26,19 @@ import (
 // DB holds separate connections for each domain (all point to the same *sql.DB
 // when using a network backend; separate SQLite files when using SQLite).
 type DB struct {
-	dataDir    string
-	driver     string    // "sqlite", "postgres", "mysql", "sqlserver"
-	dialect    dialect   // SQL dialect helpers
-	shared     *sql.DB   // non-nil when using a single shared connection (network DBs)
-	core       *rebindDB // users, teams, user_teams, sessions, personal_access_tokens
-	presence   *rebindDB // statuses, presences, presence_logs, holidays
-	floorplan  *rebindDB // floorplans, seats, seat_reservations
-	audit      *rebindDB // admin_logs
-	projects   *rebindDB // projects, project_time_entries
-	bcryptCost int       // OWASP recommends ≥12; lowered to bcrypt.MinCost in tests
+	dataDir         string
+	driver          string    // "sqlite", "postgres", "mysql", "sqlserver"
+	dialect         dialect   // SQL dialect helpers
+	shared          *sql.DB   // non-nil when using a single shared connection (network DBs)
+	core            *rebindDB // users, teams, user_teams, sessions, personal_access_tokens
+	presence        *rebindDB // statuses, presences, presence_logs, holidays
+	floorplan       *rebindDB // floorplans, seats, seat_reservations
+	audit           *rebindDB // admin_logs
+	projects        *rebindDB // projects, project_time_entries
+	bcryptCost      int       // OWASP recommends ≥12; lowered to bcrypt.MinCost in tests
+	countsCacheMu   sync.Mutex
+	countsCacheTime time.Time
+	countsCacheVal  DBCounts
 }
 
 // openSQLiteConn opens a single SQLite file with WAL mode and foreign keys.
@@ -61,6 +65,10 @@ func openSQLiteConn(path string) (*sql.DB, error) {
 		_ = db.Close()
 		return nil, err
 	}
+	// SQLite performance PRAGMAs (safe, purely in-memory/cache configuration)
+	_, _ = db.Exec("PRAGMA cache_size = -64000")   // 64MB RAM page cache
+	_, _ = db.Exec("PRAGMA temp_store = MEMORY")   // In-memory temp tables and sorting
+	_, _ = db.Exec("PRAGMA mmap_size = 268435456") // 256MB memory-mapped I/O
 	return db, nil
 }
 
@@ -165,6 +173,7 @@ func openNetwork(cfg *config.Config, driver string, dl dialect) (*DB, error) {
 	conn.SetMaxOpenConns(25)
 	conn.SetMaxIdleConns(5)
 	conn.SetConnMaxLifetime(5 * time.Minute)
+	conn.SetConnMaxIdleTime(2 * time.Minute)
 
 	if err := conn.Ping(); err != nil {
 		_ = conn.Close()
@@ -328,7 +337,7 @@ type DBCounts struct {
 	News                   int64
 }
 
-// Counts queries lightweight COUNT(*) rows from each database.
+// Counts queries lightweight COUNT(*) rows from each database immediately.
 // Errors are silently ignored; missing tables return 0.
 func (d *DB) Counts() DBCounts {
 	var c DBCounts
@@ -369,6 +378,28 @@ func (d *DB) Counts() DBCounts {
 	d.projects.QueryRow(`SELECT COUNT(*) FROM project_activities WHERE activity_type = 'jira'`).Scan(&c.ProjectActivitiesJira)       //nolint:errcheck
 	d.projects.QueryRow(`SELECT COUNT(*) FROM project_activities WHERE activity_type = 'servicenow'`).Scan(&c.ProjectActivitiesSN)  //nolint:errcheck
 	d.projects.QueryRow(`SELECT COUNT(*) FROM project_activities WHERE activity_type = 'other'`).Scan(&c.ProjectActivitiesOther)   //nolint:errcheck
+
+	return c
+}
+
+// CachedCounts returns cached counts if within the 15-second TTL, or queries fresh counts.
+// Used by Prometheus scrape collectors to prevent DB query spikes under high scrape frequencies.
+func (d *DB) CachedCounts() DBCounts {
+	d.countsCacheMu.Lock()
+	if !d.countsCacheTime.IsZero() && time.Since(d.countsCacheTime) < 15*time.Second {
+		res := d.countsCacheVal
+		d.countsCacheMu.Unlock()
+		return res
+	}
+	d.countsCacheMu.Unlock()
+
+	c := d.Counts()
+
+	d.countsCacheMu.Lock()
+	d.countsCacheVal = c
+	d.countsCacheTime = time.Now()
+	d.countsCacheMu.Unlock()
+
 	return c
 }
 
@@ -397,6 +428,24 @@ func (d *DB) Close() {
 }
 
 // --- Schema migrations ---
+
+// ensureIndex idempotently creates an index if it does not already exist,
+// supporting SQLite, PostgreSQL, MySQL and SQL Server.
+func (d *DB) ensureIndex(rdb *rebindDB, indexName, tableName, columns string) error {
+	dl := d.dialect
+	if dl.isMySQL() {
+		var count int
+		_ = rdb.QueryRow(dl.indexExistsQuery(tableName, indexName)).Scan(&count)
+		if count > 0 {
+			return nil
+		}
+		_, err := rdb.Exec(fmt.Sprintf("CREATE INDEX %s ON %s (%s)", indexName, tableName, columns))
+		return err
+	}
+	stmt := dl.createIndexIfNotExists(indexName, tableName, columns)
+	_, err := rdb.Exec(dl.rebind(stmt))
+	return err
+}
 
 func (d *DB) migrateCore() error {
 	dl := d.dialect
@@ -581,6 +630,13 @@ FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 		}
 	}
 
+	// Secondary indexes for high-frequency queries
+	_ = d.ensureIndex(d.core, "idx_user_teams_team", "user_teams", "team_id")
+	_ = d.ensureIndex(d.core, "idx_team_leaders_user", "team_leaders", "user_id")
+	_ = d.ensureIndex(d.core, "idx_domain_managers_user", "domain_managers", "user_id")
+	_ = d.ensureIndex(d.core, "idx_sessions_expires_at", "sessions", "expires_at")
+	_ = d.ensureIndex(d.core, "idx_pat_user_id", "personal_access_tokens", "user_id")
+
 	return nil
 }
 
@@ -666,6 +722,11 @@ FOREIGN KEY (status_id) REFERENCES statuses(id)
 			_, _ = d.presence.Exec(`ALTER TABLE presences_new RENAME TO presences`)
 		}
 	}
+
+	// Secondary indexes for presence lookups and logs
+	_ = d.ensureIndex(d.presence, "idx_presences_date", "presences", "date")
+	_ = d.ensureIndex(d.presence, "idx_presence_logs_user_date", "presence_logs", "user_id, date")
+
 	return nil
 }
 
@@ -739,6 +800,10 @@ FOREIGN KEY (floorplan_id) REFERENCES floorplans(id) ON DELETE CASCADE
 	d.floorplan.Exec(dl.rebind("UPDATE sites SET seats = workstations WHERE seats = 0 AND workstations > 0"))                                                 //nolint:errcheck
 	d.floorplan.Exec(dl.rebind(dl.addColumnIfNotExists("floorplans", "site_id", "BIGINT NOT NULL DEFAULT 0")))                                              //nolint:errcheck
 	d.floorplan.Exec(dl.rebind(dl.addColumnIfNotExists("seat_reservations", "guest_name", dl.varcharType(128)+" DEFAULT NULL")))                             //nolint:errcheck
+
+	// Secondary indexes for reservations
+	_ = d.ensureIndex(d.floorplan, "idx_seat_reservations_user_date", "seat_reservations", "user_id, date")
+	_ = d.ensureIndex(d.floorplan, "idx_seat_reservations_date", "seat_reservations", "date")
 
 	return nil
 }
@@ -1656,6 +1721,42 @@ ORDER BY CASE WHEN ut.left_at IS NULL THEN 0 ELSE 1 END, u.name
 	return d.HydrateTeamMembersSites(members), nil
 }
 
+// GetAllTeamsMembers returns all members of all teams, grouped by team ID (active first).
+func (d *DB) GetAllTeamsMembers() (map[int64][]models.TeamMember, error) {
+	rows, err := d.core.Query(`
+SELECT ut.team_id, u.id, u.email, u.name, u.role, COALESCE(u.password_hash,''), u.disabled, u.created_at, COALESCE(u.site_id, 0), COALESCE(u.language, ''), ut.left_at
+FROM users u
+JOIN user_teams ut ON u.id = ut.user_id
+ORDER BY ut.team_id, CASE WHEN ut.left_at IS NULL THEN 0 ELSE 1 END, u.name
+`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() //nolint:errcheck
+
+	sites, _ := d.ListSites()
+	siteMap := make(map[int64]*models.Site, len(sites))
+	for _, s := range sites {
+		siteMap[s.ID] = s
+	}
+
+	result := make(map[int64][]models.TeamMember)
+	for rows.Next() {
+		var teamID int64
+		var m models.TeamMember
+		if err := rows.Scan(&teamID, &m.ID, &m.Email, &m.Name, &m.Roles, &m.PasswordHash, &m.Disabled, &m.CreatedAt, &m.SiteID, &m.Language, &m.LeftAt); err != nil {
+			return nil, err
+		}
+		m.IsLocal = m.PasswordHash != ""
+		if s, ok := siteMap[m.SiteID]; ok && s != nil {
+			m.SiteName = s.Name
+			m.SiteCountryCode = s.CountryCode
+		}
+		result[teamID] = append(result[teamID], m)
+	}
+	return result, rows.Err()
+}
+
 // GetTeamMembersAt returns members who were active at any point from startDate onwards
 // (left_at IS NULL, meaning still active, or left_at >= startDate, meaning they left during or after the period).
 func (d *DB) GetTeamMembersAt(teamID int64, startDate string) ([]models.User, error) {
@@ -1780,6 +1881,45 @@ ORDER BY u.name
 		return nil, err
 	}
 	return d.HydrateUsersSites(users), nil
+}
+
+// GetAllTeamsLeaders returns all team leaders and leader IDs for all teams, grouped by team ID.
+func (d *DB) GetAllTeamsLeaders() (map[int64][]models.User, map[int64][]int64, error) {
+	rows, err := d.core.Query(`
+SELECT tl.team_id, u.id, u.email, u.name, u.role, COALESCE(u.password_hash,''), u.disabled, u.created_at, COALESCE(u.site_id, 0), COALESCE(u.language, '')
+FROM users u
+JOIN team_leaders tl ON u.id = tl.user_id
+ORDER BY tl.team_id, u.name
+`)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close() //nolint:errcheck
+
+	sites, _ := d.ListSites()
+	siteMap := make(map[int64]*models.Site, len(sites))
+	for _, s := range sites {
+		siteMap[s.ID] = s
+	}
+
+	leadersMap := make(map[int64][]models.User)
+	leaderIDsMap := make(map[int64][]int64)
+
+	for rows.Next() {
+		var teamID int64
+		var u models.User
+		if err := rows.Scan(&teamID, &u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt, &u.SiteID, &u.Language); err != nil {
+			return nil, nil, err
+		}
+		u.IsLocal = u.PasswordHash != ""
+		if s, ok := siteMap[u.SiteID]; ok && s != nil {
+			u.SiteName = s.Name
+			u.SiteCountryCode = s.CountryCode
+		}
+		leadersMap[teamID] = append(leadersMap[teamID], u)
+		leaderIDsMap[teamID] = append(leaderIDsMap[teamID], u.ID)
+	}
+	return leadersMap, leaderIDsMap, rows.Err()
 }
 
 // SetTeamLeaders atomically replaces the full leader list of a team.
@@ -2220,6 +2360,104 @@ func (d *DB) GetUserHolidayMap(userID int64, startDate, endDate string) (map[str
 		}
 	}
 	return result, rows.Err()
+}
+
+// GetUsersHolidayMaps returns holiday maps for multiple users in a batch, avoiding N+1 queries.
+func (d *DB) GetUsersHolidayMaps(userIDs []int64, startDate, endDate string) (map[int64]map[string]models.Holiday, error) {
+	result := make(map[int64]map[string]models.Holiday, len(userIDs))
+	if len(userIDs) == 0 {
+		return result, nil
+	}
+	for _, uid := range userIDs {
+		result[uid] = make(map[string]models.Holiday)
+	}
+
+	rows, err := d.presence.Query(
+		"SELECT id, date, name, allow_imputed, COALESCE(country_code, '') FROM holidays WHERE date >= ? AND date <= ? ORDER BY date",
+		startDate, endDate,
+	)
+	if err != nil {
+		return result, err
+	}
+	defer rows.Close() //nolint:errcheck
+	var allHolidays []models.Holiday
+	for rows.Next() {
+		var h models.Holiday
+		if err := rows.Scan(&h.ID, &h.Date, &h.Name, &h.AllowImputed, &h.CountryCode); err != nil {
+			return result, err
+		}
+		allHolidays = append(allHolidays, h)
+	}
+
+	userPlaceholders := make([]string, len(userIDs))
+	userArgs := make([]interface{}, len(userIDs))
+	for i, uid := range userIDs {
+		userPlaceholders[i] = "?"
+		userArgs[i] = uid
+	}
+	userRows, err := d.core.Query(
+		d.dialect.rebind(fmt.Sprintf("SELECT id, site_id FROM users WHERE id IN (%s)", strings.Join(userPlaceholders, ","))),
+		userArgs...,
+	)
+	if err != nil {
+		return result, err
+	}
+	defer userRows.Close() //nolint:errcheck
+	userSiteMap := make(map[int64]int64, len(userIDs))
+	siteIDSet := make(map[int64]bool)
+	for userRows.Next() {
+		var uid, siteID int64
+		if err := userRows.Scan(&uid, &siteID); err == nil {
+			userSiteMap[uid] = siteID
+			if siteID > 0 {
+				siteIDSet[siteID] = true
+			}
+		}
+	}
+
+	siteCountryMap := make(map[int64]string, len(siteIDSet))
+	if len(siteIDSet) > 0 {
+		sitePlaceholders := make([]string, 0, len(siteIDSet))
+		siteArgs := make([]interface{}, 0, len(siteIDSet))
+		for sid := range siteIDSet {
+			sitePlaceholders = append(sitePlaceholders, "?")
+			siteArgs = append(siteArgs, sid)
+		}
+		sRows, err := d.floorplan.Query(
+			d.dialect.rebind(fmt.Sprintf("SELECT id, country_code FROM sites WHERE id IN (%s)", strings.Join(sitePlaceholders, ","))),
+			siteArgs...,
+		)
+		if err == nil {
+			defer sRows.Close() //nolint:errcheck
+			for sRows.Next() {
+				var sid int64
+				var cc string
+				if err := sRows.Scan(&sid, &cc); err == nil {
+					siteCountryMap[sid] = strings.TrimSpace(cc)
+				}
+			}
+		}
+	}
+
+	for _, uid := range userIDs {
+		siteID := userSiteMap[uid]
+		country := siteCountryMap[siteID]
+		uMap := make(map[string]models.Holiday)
+		for _, h := range allHolidays {
+			if models.UserMatchesHoliday(country, h) {
+				if _, ok := uMap[h.Date]; ok {
+					if !h.AllowImputed {
+						uMap[h.Date] = h
+					}
+				} else {
+					uMap[h.Date] = h
+				}
+			}
+		}
+		result[uid] = uMap
+	}
+
+	return result, nil
 }
 
 // GetTeamHolidayMap returns the map of holidays applicable to a team based on the assigned site countries of its members.
@@ -3346,6 +3584,45 @@ func (d *DB) GetUserReservationDates(userID int64, startDate, endDate string) (m
 		m[date] = true
 	}
 	return m, rows.Err()
+}
+
+// GetUsersReservationDates returns a map of userID -> date -> bool for desk reservations in a single batch query.
+func (d *DB) GetUsersReservationDates(userIDs []int64, startDate, endDate string) (map[int64]map[string]bool, error) {
+	result := make(map[int64]map[string]bool, len(userIDs))
+	if len(userIDs) == 0 {
+		return result, nil
+	}
+	for _, uid := range userIDs {
+		result[uid] = make(map[string]bool)
+	}
+	placeholders := make([]string, len(userIDs))
+	args := make([]interface{}, 0, len(userIDs)+2)
+	for i, uid := range userIDs {
+		placeholders[i] = "?"
+		args = append(args, uid)
+	}
+	args = append(args, startDate, endDate)
+	query := fmt.Sprintf(
+		`SELECT DISTINCT user_id, date FROM seat_reservations WHERE user_id IN (%s) AND (guest_name IS NULL OR guest_name = '') AND date >= ? AND date <= ?`,
+		strings.Join(placeholders, ","),
+	)
+	rows, err := d.floorplan.Query(d.dialect.rebind(query), args...)
+	if err != nil {
+		return result, err
+	}
+	defer rows.Close() //nolint:errcheck
+	for rows.Next() {
+		var uid int64
+		var date string
+		if err := rows.Scan(&uid, &date); err != nil {
+			return result, err
+		}
+		if result[uid] == nil {
+			result[uid] = make(map[string]bool)
+		}
+		result[uid][date] = true
+	}
+	return result, rows.Err()
 }
 
 // GetUserReservationDetails returns detailed reservations (self and guests) for a user in the date range.

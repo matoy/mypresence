@@ -1,7 +1,9 @@
 package main
 
 import (
+	"compress/gzip"
 	"html/template"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -402,3 +404,46 @@ func TestNewRenderPage(t *testing.T) {
 		t.Errorf("expected 500 for missing template, got %d", rec.Code)
 	}
 }
+
+func TestStaticFilesAndExportScripts(t *testing.T) {
+	cfg := &config.Config{
+		DataDir:  t.TempDir(),
+		DBDriver: "sqlite",
+	}
+	database, err := db.Open(cfg)
+	if err != nil {
+		t.Fatalf("db.Open: %v", err)
+	}
+	defer database.Close()
+
+	handler := buildAppMux(cfg, database)
+
+	for _, path := range []string{"/static/js/app.js", "/static/js/xlsx.full.min.js"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("Accept-Encoding", "gzip")
+		rec := httptest.NewRecorder()
+
+		handler.ServeHTTP(rec, req)
+		res := rec.Result()
+		if res.StatusCode != http.StatusOK {
+			t.Errorf("Path %s returned status %d, want 200", path, res.StatusCode)
+		}
+
+		var reader io.Reader = res.Body
+		if res.Header.Get("Content-Encoding") == "gzip" {
+			gz, err := gzip.NewReader(res.Body)
+			if err != nil {
+				t.Fatalf("gzip.NewReader(%s): %v", path, err)
+			}
+			reader = gz
+		}
+		data, err := io.ReadAll(reader)
+		if err != nil {
+			t.Fatalf("io.ReadAll(%s): %v", path, err)
+		}
+		if len(data) == 0 {
+			t.Errorf("expected non-empty data from %s", path)
+		}
+	}
+}
+

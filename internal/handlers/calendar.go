@@ -149,13 +149,11 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 			to = make(map[int64]map[string]models.PresenceOverride)
 		}
 		teamReservations := make(map[int64]map[string]bool, len(members))
-		if !h.DisableFloorplans {
-			for _, m := range members {
-				r, _ := h.DB.GetUserReservationDates(m.ID, startDate, endDate)
-				if r == nil {
-					r = make(map[string]bool)
-				}
-				teamReservations[m.ID] = r
+		if !h.DisableFloorplans && len(userIDs) > 0 {
+			var err error
+			teamReservations, err = h.DB.GetUsersReservationDates(userIDs, startDate, endDate)
+			if err != nil || teamReservations == nil {
+				teamReservations = make(map[int64]map[string]bool, len(members))
 			}
 		}
 		teamCertifications, _ := h.DB.GetCertifiedUserIDs(userIDs, year, month)

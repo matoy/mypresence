@@ -217,8 +217,13 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 
 	// Compute total expected working days summed accurately across each user's country holidays
 	totalWorkingDays := 0.0
+	statsUserIDs := make([]int64, len(stats))
+	for i, s := range stats {
+		statsUserIDs[i] = s.User.ID
+	}
+	userHolsMap, _ := h.DB.GetUsersHolidayMaps(statsUserIDs, startDate, endDate)
 	for _, s := range stats {
-		uHolMap, _ := h.DB.GetUserHolidayMap(s.User.ID, startDate, endDate)
+		uHolMap := userHolsMap[s.User.ID]
 		uWorkingDays, uHolCount := computeWorkingDaysFromRange(startDate, endDate, uHolMap)
 		totalWorkingDays += float64(uWorkingDays - uHolCount)
 	}
@@ -710,8 +715,13 @@ func (h *ActivityHandler) computeExecSummary(
 		}
 	}
 	totalWorkingDays = 0.0
+	seenUserIDs := make([]int64, 0, len(seen))
 	for uid := range seen {
-		uHolMap, _ := h.DB.GetUserHolidayMap(uid, startDate, endDate)
+		seenUserIDs = append(seenUserIDs, uid)
+	}
+	seenHolsMap, _ := h.DB.GetUsersHolidayMaps(seenUserIDs, startDate, endDate)
+	for _, uid := range seenUserIDs {
+		uHolMap := seenHolsMap[uid]
 		uWorkingDays, uHolCount := computeWorkingDaysFromRange(startDate, endDate, uHolMap)
 		totalWorkingDays += float64(uWorkingDays - uHolCount)
 	}

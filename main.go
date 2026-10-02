@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"time"
 
@@ -134,9 +135,13 @@ func buildAppMux(cfg *config.Config, database *db.DB) http.Handler {
 	// Router
 	mux := http.NewServeMux()
 
-	// Static files (embedded)
+	// Static files (embedded with caching headers)
 	staticSub, _ := fs.Sub(staticFS, "web/static")
-	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServerFS(staticSub)))
+	staticServer := http.FileServerFS(staticSub)
+	mux.Handle("GET /static/", http.StripPrefix("/static/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
+		staticServer.ServeHTTP(w, r)
+	})))
 
 	registerOptionalPublicRoutes(mux, cfg, resetPasswordHandler, floorplanHandler)
 
@@ -330,9 +335,13 @@ func buildAppMux(cfg *config.Config, database *db.DB) http.Handler {
 
 	registerOptionalAdminRoutes(mux, authMux, cfg, database, floorplanHandler, projectsHandler)
 
+	if os.Getenv("ENABLE_PPROF") == "true" || os.Getenv("ENABLE_PPROF") == "1" {
+		registerPprofRoutes(mux, database)
+	}
+
 	mux.Handle("/", middleware.AuthWithOptions(database, !cfg.DisableAPI, authMux))
 
-	return middleware.SecurityHeaders(middleware.LimitRequestBody(metrics.Instrument(middleware.AccessLog(mux))))
+	return middleware.Gzip(middleware.SecurityHeaders(middleware.LimitRequestBody(metrics.Instrument(middleware.AccessLog(mux)))))
 }
 
 // initOptionalHandlers creates handlers for API tokens and Projects if those features are enabled.
@@ -351,7 +360,7 @@ func initOptionalHandlers(cfg *config.Config, database *db.DB, renderPage func(h
 // registerMetricsCollectors registers the Prometheus DB and health gauge collectors.
 func registerMetricsCollectors(database *db.DB, healthHandler *handlers.HealthHandler) {
 	metrics.RegisterDBCollector(func() metrics.DBStats {
-		c := database.Counts()
+		c := database.CachedCounts()
 		return metrics.DBStats{
 			Users:                  float64(c.Users),
 			ActiveSessions:         float64(c.ActiveSessions),
@@ -534,4 +543,19 @@ func logStartupInfo(cfg *config.Config, addr string) {
 	if cfg.MetricsToken != "" {
 		slog.Info("Prometheus metrics enabled", "path", "http://localhost"+addr+"/metrics")
 	}
+	if os.Getenv("ENABLE_PPROF") == "true" || os.Getenv("ENABLE_PPROF") == "1" {
+		slog.Info("pprof runtime profiling enabled", "path", "http://localhost"+addr+"/debug/pprof/ (requires Global Admin)")
+	}
 }
+
+// registerPprofRoutes mounts runtime profiling endpoints guarded by authentication and Global Admin role.
+func registerPprofRoutes(mux *http.ServeMux, database *db.DB) {
+	pprofMux := http.NewServeMux()
+	pprofMux.HandleFunc("/debug/pprof/", pprof.Index)
+	pprofMux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	pprofMux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	pprofMux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	pprofMux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+	mux.Handle("/debug/pprof/", middleware.Auth(database, middleware.RequireRole(models.RoleGlobal)(pprofMux)))
+}
+

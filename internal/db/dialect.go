@@ -325,6 +325,48 @@ func (d dialect) modifyColumnType(table, col, newType, _ string) string {
 	}
 }
 
+// createIndexIfNotExists returns the idempotent SQL statement to create an index.
+// SQLite and PostgreSQL support CREATE INDEX IF NOT EXISTS natively.
+// SQL Server uses a conditional IF NOT EXISTS check against sys.indexes.
+// MySQL does not support IF NOT EXISTS on CREATE INDEX; callers should use
+// DB.ensureIndex which verifies indexExistsQuery first on MySQL.
+func (d dialect) createIndexIfNotExists(indexName, tableName, columns string) string {
+	switch d.driver {
+	case "sqlserver":
+		return fmt.Sprintf(
+			"IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = '%s' AND object_id = OBJECT_ID('%s')) CREATE INDEX %s ON %s (%s)",
+			indexName, tableName, indexName, tableName, columns,
+		)
+	case "mysql":
+		return fmt.Sprintf("CREATE INDEX %s ON %s (%s)", indexName, tableName, columns)
+	default: // sqlite, postgres
+		return fmt.Sprintf("CREATE INDEX IF NOT EXISTS %s ON %s (%s)", indexName, tableName, columns)
+	}
+}
+
+// indexExistsQuery returns a query that counts indexes named indexName on tableName.
+func (d dialect) indexExistsQuery(tableName, indexName string) string {
+	switch d.driver {
+	case "postgres":
+		return fmt.Sprintf(
+			"SELECT COUNT(*) FROM pg_indexes WHERE tablename = '%s' AND indexname = '%s'",
+			tableName, indexName,
+		)
+	case "mysql":
+		return fmt.Sprintf(
+			"SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_NAME = '%s' AND INDEX_NAME = '%s' AND TABLE_SCHEMA = DATABASE()",
+			tableName, indexName,
+		)
+	case "sqlserver":
+		return fmt.Sprintf(
+			"SELECT COUNT(*) FROM sys.indexes WHERE name = '%s' AND object_id = OBJECT_ID('%s')",
+			indexName, tableName,
+		)
+	default: // sqlite
+		return fmt.Sprintf("SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = '%s'", indexName)
+	}
+}
+
 // rebind converts a query using ? placeholders to the correct placeholder style
 // for the target database driver.
 // SQLite and MySQL use ?, PostgreSQL uses $1/$2/…, SQL Server uses @p1/@p2/…
