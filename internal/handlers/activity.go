@@ -394,22 +394,17 @@ func domainsAccessForUser(database *db.DB, user *models.User, allTeams []models.
 // computeDomainStats aggregates per-user stats across all teams of a domain,
 // deduplicating users who might appear in more than one team.
 func (h *ActivityHandler) computeDomainStats(domainTeams []models.Team, startDate, endDate string) []models.UserStats {
-	seen := map[int64]bool{}
-	var out []models.UserStats
-	for _, t := range domainTeams {
-		stats, err := h.DB.GetTeamStats(t.ID, startDate, endDate)
-		if err != nil {
-			continue
-		}
-		for _, s := range stats {
-			if seen[s.User.ID] {
-				continue
-			}
-			seen[s.User.ID] = true
-			out = append(out, s)
-		}
+	if len(domainTeams) == 0 {
+		return nil
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].User.Name < out[j].User.Name })
+	teamIDs := make([]int64, len(domainTeams))
+	for i, t := range domainTeams {
+		teamIDs[i] = t.ID
+	}
+	out, err := h.DB.GetTeamsStats(teamIDs, startDate, endDate)
+	if err != nil {
+		return nil
+	}
 	return out
 }
 
@@ -683,33 +678,29 @@ func (h *ActivityHandler) computeExecSummary(
 	monthKeys []string,
 ) (statusTotals map[int64]float64, totalBillable, totalOnSite, totalNotSet, totalWorkingDays, projectActivityPct float64, userCount int) {
 	statusTotals = make(map[int64]float64)
-	seen := make(map[int64]bool)
 	totalSetDays := 0.0
 	totalProjectDeclared := 0.0
-	for _, team := range allTeams {
-		stats, err := h.DB.GetTeamStats(team.ID, startDate, endDate)
-		if err != nil {
-			continue
-		}
-		for _, s := range stats {
-			if seen[s.User.ID] {
-				continue
-			}
-			seen[s.User.ID] = true
-			userCount++
-			totalBillable += s.BillableDays
-			totalOnSite += s.OnSiteDays
-			for sid, count := range s.StatusCounts {
-				statusTotals[sid] += count
-				totalSetDays += count
-			}
+
+	teamIDs := make([]int64, len(allTeams))
+	for i, team := range allTeams {
+		teamIDs[i] = team.ID
+	}
+	stats, err := h.DB.GetTeamsStats(teamIDs, startDate, endDate)
+	if err != nil {
+		stats = nil
+	}
+	seenUserIDs := make([]int64, 0, len(stats))
+	for _, s := range stats {
+		userCount++
+		seenUserIDs = append(seenUserIDs, s.User.ID)
+		totalBillable += s.BillableDays
+		totalOnSite += s.OnSiteDays
+		for sid, count := range s.StatusCounts {
+			statusTotals[sid] += count
+			totalSetDays += count
 		}
 	}
 	totalWorkingDays = 0.0
-	seenUserIDs := make([]int64, 0, len(seen))
-	for uid := range seen {
-		seenUserIDs = append(seenUserIDs, uid)
-	}
 
 	if !h.DisableProjects && len(seenUserIDs) > 0 && len(monthKeys) > 0 {
 		if batchDeclared, err := h.DB.GetUsersTotalDeclaredForMonths(seenUserIDs, monthKeys); err == nil {

@@ -34,6 +34,16 @@ func buildTemplateFuncMap(cfg *config.Config) template.FuncMap {
 		// safehtml marks a string as safe HTML so html/template does not escape it.
 		// Only use with strings originating from our own controlled i18n data.
 		"safehtml": func(s string) template.HTML { return template.HTML(s) }, //nolint:gosec
+		// safeStyle outputs a type-safe style="..." HTML attribute, avoiding HTML/CSS parser issues in templates.
+		"safeStyle": func(args ...string) template.HTMLAttr {
+			if len(args) == 0 {
+				return ""
+			}
+			if len(args) == 1 {
+				return template.HTMLAttr("style=\"" + args[0] + "\"")
+			}
+			return template.HTMLAttr("style=\"" + args[0] + ": " + args[1] + ";\"")
+		},
 		// safeNewsContent escapes the content and converts [text](url) syntax to safe anchor tags.
 		// Only http/https URLs are allowed.
 		"safeNewsContent": safeNewsContent,

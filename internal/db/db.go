@@ -23,6 +23,11 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+type cachedSessionUser struct {
+	user     models.User
+	cachedAt time.Time
+}
+
 // DB holds separate connections for each domain (all point to the same *sql.DB
 // when using a network backend; separate SQLite files when using SQLite).
 type DB struct {
@@ -39,6 +44,7 @@ type DB struct {
 	countsCacheMu   sync.Mutex
 	countsCacheTime time.Time
 	countsCacheVal  DBCounts
+	sessionCache    sync.Map // map[tokenHash string]cachedSessionUser
 }
 
 // openSQLiteConn opens a single SQLite file with WAL mode and foreign keys.
@@ -1045,6 +1051,16 @@ func (d *DB) CreateSession(userID int64) (string, error) {
 func (d *DB) GetSessionUser(token string) (*models.User, error) {
 	sum := sha256.Sum256([]byte(token))
 	tokenHash := hex.EncodeToString(sum[:])
+
+	if v, ok := d.sessionCache.Load(tokenHash); ok {
+		entry := v.(cachedSessionUser)
+		if time.Since(entry.cachedAt) < 15*time.Second {
+			uCopy := entry.user
+			return &uCopy, nil
+		}
+		d.sessionCache.Delete(tokenHash)
+	}
+
 	var u models.User
 	err := d.core.QueryRow(d.dialect.rebind(`
 SELECT u.id, u.email, u.name, u.role, COALESCE(u.password_hash,''), u.disabled, u.created_at
@@ -1055,24 +1071,33 @@ WHERE s.id = ? AND s.expires_at > `+d.dialect.now()+` AND u.disabled = `+d.diale
 		return nil, err
 	}
 	u.IsLocal = u.PasswordHash != ""
+	d.sessionCache.Store(tokenHash, cachedSessionUser{user: u, cachedAt: time.Now()})
 	return &u, nil
 }
 
 func (d *DB) DeleteSession(token string) error {
 	sum := sha256.Sum256([]byte(token))
 	tokenHash := hex.EncodeToString(sum[:])
+	d.sessionCache.Delete(tokenHash)
 	_, err := d.core.Exec("DELETE FROM sessions WHERE id = ?", tokenHash)
 	return err
 }
 
 func (d *DB) CleanExpiredSessions() {
+	d.sessionCache.Clear()
 	d.core.Exec(d.dialect.rebind("DELETE FROM sessions WHERE expires_at < " + d.dialect.now())) //nolint:errcheck
+}
+
+// ClearSessionCache invalidates all in-memory cached user sessions.
+func (d *DB) ClearSessionCache() {
+	d.sessionCache.Clear()
 }
 
 // DeleteUserSessions deletes all active sessions for a user.
 // Pass exceptTokenRaw="" to delete all sessions (e.g. after a password reset via email).
 // Pass the current raw session token to keep the caller's own session alive.
 func (d *DB) DeleteUserSessions(userID int64, exceptTokenRaw string) {
+	d.sessionCache.Clear()
 	if exceptTokenRaw == "" {
 		d.core.Exec("DELETE FROM sessions WHERE user_id = ?", userID) //nolint:errcheck
 		return
@@ -1507,6 +1532,7 @@ func (d *DB) UpdateUserRoles(id int64, roles string) error {
 			return fmt.Errorf("invalid role: %s", r)
 		}
 	}
+	d.sessionCache.Clear()
 	_, err := d.core.Exec("UPDATE users SET role = ? WHERE id = ?", roles, id)
 	return err
 }
@@ -1544,6 +1570,7 @@ func (d *DB) CheckPassword(userID int64, storedHash, plainPassword string) bool 
 }
 
 func (d *DB) UpdateLocalUser(id int64, email, name string) error {
+	d.sessionCache.Clear()
 	_, err := d.core.Exec(`UPDATE users SET email = ?, name = ? WHERE id = ?`, email, name, id)
 	return err
 }
@@ -1553,16 +1580,19 @@ func (d *DB) SetUserPassword(id int64, password string) error {
 	if err != nil {
 		return fmt.Errorf("hash password: %w", err)
 	}
+	d.sessionCache.Clear()
 	_, err = d.core.Exec(`UPDATE users SET password_hash = ? WHERE id = ?`, string(hash), id)
 	return err
 }
 
 func (d *DB) SetUserDisabled(id int64, disabled bool) error {
+	d.sessionCache.Clear()
 	_, err := d.core.Exec(`UPDATE users SET disabled = ? WHERE id = ?`, disabled, id)
 	return err
 }
 
 func (d *DB) DeleteLocalUser(id int64) error {
+	d.sessionCache.Clear()
 	_, err := d.core.Exec(`DELETE FROM users WHERE id = ?`, id)
 	return err
 }
@@ -1772,6 +1802,48 @@ JOIN user_teams ut ON u.id = ut.user_id
 WHERE ut.team_id = ? AND (ut.left_at IS NULL OR ut.left_at >= ?)
 ORDER BY u.name
 `, teamID, startDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() //nolint:errcheck
+
+	var users []models.User
+	for rows.Next() {
+		var u models.User
+		if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt, &u.SiteID, &u.Language); err != nil {
+			return nil, err
+		}
+		u.IsLocal = u.PasswordHash != ""
+		users = append(users, u)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return d.HydrateUsersSites(users), nil
+}
+
+// GetTeamsMembersAt returns distinct members across multiple teams who were active at any point from startDate onwards.
+func (d *DB) GetTeamsMembersAt(teamIDs []int64, startDate string) ([]models.User, error) {
+	if len(teamIDs) == 0 {
+		return nil, nil
+	}
+	placeholders := make([]string, len(teamIDs))
+	args := make([]interface{}, 0, len(teamIDs)+1)
+	for i, id := range teamIDs {
+		placeholders[i] = "?"
+		args = append(args, id)
+	}
+	args = append(args, startDate)
+
+	query := fmt.Sprintf(`
+SELECT DISTINCT u.id, u.email, u.name, u.role, COALESCE(u.password_hash,''), u.disabled, u.created_at, COALESCE(u.site_id, 0), COALESCE(u.language, '')
+FROM users u
+JOIN user_teams ut ON u.id = ut.user_id
+WHERE ut.team_id IN (%s) AND (ut.left_at IS NULL OR ut.left_at >= ?)
+ORDER BY u.name
+`, strings.Join(placeholders, ","))
+
+	rows, err := d.core.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -2256,6 +2328,68 @@ func (d *DB) GetTeamStats(teamID int64, startDate, endDate string) ([]models.Use
 	}
 
 	var stats []models.UserStats
+	for _, member := range members {
+		us := models.UserStats{
+			User:         member,
+			StatusCounts: make(map[int64]float64),
+		}
+		if up, ok := presences[member.ID]; ok {
+			for _, halves := range up {
+				for half, statusID := range halves {
+					weight := 1.0
+					if half == "AM" || half == "PM" {
+						weight = 0.5
+					}
+					us.StatusCounts[statusID] += weight
+					if billableMap[statusID] {
+						us.BillableDays += weight
+					}
+					if onSiteMap[statusID] {
+						us.OnSiteDays += weight
+					}
+				}
+			}
+		}
+		stats = append(stats, us)
+	}
+	return stats, nil
+}
+
+// GetTeamsStats returns deduplicated user stats for all active members across multiple teams in a single batch.
+func (d *DB) GetTeamsStats(teamIDs []int64, startDate, endDate string) ([]models.UserStats, error) {
+	if len(teamIDs) == 0 {
+		return nil, nil
+	}
+	members, err := d.GetTeamsMembersAt(teamIDs, startDate)
+	if err != nil {
+		return nil, err
+	}
+	if len(members) == 0 {
+		return nil, nil
+	}
+
+	statuses, err := d.ListStatuses()
+	if err != nil {
+		return nil, err
+	}
+	billableMap := make(map[int64]bool, len(statuses))
+	onSiteMap := make(map[int64]bool, len(statuses))
+	for _, s := range statuses {
+		billableMap[s.ID] = s.Billable
+		onSiteMap[s.ID] = s.OnSite
+	}
+
+	userIDs := make([]int64, len(members))
+	for i, m := range members {
+		userIDs[i] = m.ID
+	}
+
+	presences, err := d.GetPresences(userIDs, startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+
+	stats := make([]models.UserStats, 0, len(members))
 	for _, member := range members {
 		us := models.UserStats{
 			User:         member,

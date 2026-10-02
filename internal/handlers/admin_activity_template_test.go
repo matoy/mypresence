@@ -242,6 +242,15 @@ func buildActivityTemplateFuncMap() template.FuncMap {
 			}
 			return false
 		},
+		"safeStyle": func(args ...string) template.HTMLAttr {
+			if len(args) == 0 {
+				return ""
+			}
+			if len(args) == 1 {
+				return template.HTMLAttr("style=\"" + args[0] + "\"")
+			}
+			return template.HTMLAttr("style=\"" + args[0] + ": " + args[1] + ";\"")
+		},
 		"activityRocket": testActivityRocket,
 	}
 }
