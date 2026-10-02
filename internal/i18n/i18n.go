@@ -722,6 +722,10 @@ var en = map[string]string{
 	"fp.guest_name_placeholder": "Full name of guest (e.g. John Doe)",
 	"fp.guest_name_required":    "Please enter the guest's name",
 	"fp.cancel_confirm_guest":   "Cancel reservation for guest",
+	"fp.must_be_on_site":        "You must be declared on site to reserve a seat",
+	"fp.seat_already_reserved":  "This seat is already reserved for this period",
+	"fp.already_reserved_day":   "You have already reserved a seat for this day",
+	"fp.already_reserved_guest": "You have already reserved a seat for this guest on this date",
 
 	// Floorplan admin
 	"fp.admin_title":     "🗺️ Floor Plan Management",
@@ -1600,6 +1604,10 @@ var fr = map[string]string{
 	"fp.guest_name_placeholder": "Nom et prénom de l'invité (ex: Jean Dupont)",
 	"fp.guest_name_required":    "Veuillez saisir le nom de l'invité",
 	"fp.cancel_confirm_guest":   "Annuler la réservation pour",
+	"fp.must_be_on_site":        "Vous devez être déclaré sur site pour réserver un siège",
+	"fp.seat_already_reserved":  "Ce siège est déjà réservé pour cette période",
+	"fp.already_reserved_day":   "Vous avez déjà réservé un siège pour cette journée",
+	"fp.already_reserved_guest": "Vous avez déjà réservé un siège pour cet invité à cette date",
 
 	// Floorplan admin
 	"fp.admin_title":     "🗺️ Gestion des plans",
@@ -2478,6 +2486,10 @@ var de = map[string]string{
 	"fp.guest_name_placeholder": "Vor- und Nachname des Gastes",
 	"fp.guest_name_required":    "Bitte geben Sie den Namen des Gastes ein",
 	"fp.cancel_confirm_guest":   "Reservierung für Gast stornieren",
+	"fp.must_be_on_site":        "Sie müssen vor Ort erfasst sein, um einen Platz zu reservieren",
+	"fp.seat_already_reserved":  "Dieser Platz ist für diesen Zeitraum bereits reserviert",
+	"fp.already_reserved_day":   "Sie haben für diesen Tag bereits einen Platz reserviert",
+	"fp.already_reserved_guest": "Sie haben für diesen Gast an diesem Datum bereits einen Platz reserviert",
 
 	// Floorplan admin
 	"fp.admin_title":     "🗺️ Grundrissverwaltung",
@@ -3351,6 +3363,10 @@ var es = map[string]string{
 	"fp.guest_name_placeholder": "Nombre y apellido del invitado",
 	"fp.guest_name_required":    "Por favor ingrese el nombre del invitado",
 	"fp.cancel_confirm_guest":   "Cancelar reserva para invitado",
+	"fp.must_be_on_site":        "Debe estar registrado en sitio para reservar un asiento",
+	"fp.seat_already_reserved":  "Este asiento ya está reservado para este período",
+	"fp.already_reserved_day":   "Ya ha reservado un asiento para este día",
+	"fp.already_reserved_guest": "Ya ha reservado un asiento para este invitado en esta fecha",
 
 	// Floorplan admin
 	"fp.admin_title":     "🗺️ Gestión de planos",
@@ -4235,6 +4251,10 @@ var it = map[string]string{
 	"fp.guest_name_placeholder": "Nome e cognome dell'ospite",
 	"fp.guest_name_required":    "Inserisci il nome dell'ospite",
 	"fp.cancel_confirm_guest":   "Annulla prenotazione per ospite",
+	"fp.must_be_on_site":        "Devi essere registrato in sede per prenotare un posto",
+	"fp.seat_already_reserved":  "Questo posto è già prenotato per questo periodo",
+	"fp.already_reserved_day":   "Hai già prenotato un posto per questo giorno",
+	"fp.already_reserved_guest": "Hai già prenotato un posto per questo ospite in questa data",
 
 	// Floorplan admin
 	"fp.admin_title":     "🗺️ Gestione planimetrie",

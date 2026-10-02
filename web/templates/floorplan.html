@@ -340,7 +340,17 @@ function floorplanApp(initialSeats, initialDate, initialHalf, initialFpID, initi
                     this.reload();
                 } else {
                     const d = await resp.json();
-                    this.showToast(d.error || _t['fp.error'], true);
+                    let msg = d.error || _t['fp.error'];
+                    if (msg === 'Vous devez être déclaré sur site pour réserver un siège' && _t['fp.must_be_on_site']) {
+                        msg = _t['fp.must_be_on_site'];
+                    } else if (msg === 'ce siège est déjà réservé pour cette période' && _t['fp.seat_already_reserved']) {
+                        msg = _t['fp.seat_already_reserved'];
+                    } else if (msg === 'vous avez déjà réservé un siège pour cette journée' && _t['fp.already_reserved_day']) {
+                        msg = _t['fp.already_reserved_day'];
+                    } else if (msg === 'vous avez déjà réservé un siège pour cet invité à cette date' && _t['fp.already_reserved_guest']) {
+                        msg = _t['fp.already_reserved_guest'];
+                    }
+                    this.showToast(msg, true);
                 }
             } catch { this.showToast(_t['fp.conn_error'], true); }
         }

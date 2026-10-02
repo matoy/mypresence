@@ -234,6 +234,26 @@ func TestFloorplanRenameSeatKeys_AllLanguages(t *testing.T) {
 	}
 }
 
+func TestFloorplanReservationErrorKeys_AllLanguages(t *testing.T) {
+	requiredKeys := []string{
+		"fp.must_be_on_site",
+		"fp.seat_already_reserved",
+		"fp.already_reserved_day",
+		"fp.already_reserved_guest",
+	}
+
+	langs := []string{"en", "fr", "de", "es", "it"}
+	for _, lang := range langs {
+		m := T(lang)
+		for _, key := range requiredKeys {
+			val, ok := m[key]
+			if !ok || val == "" {
+				t.Errorf("lang %q is missing required reservation error key %q", lang, key)
+			}
+		}
+	}
+}
+
 func TestCertLockedWarningKeys_AllLanguages(t *testing.T) {
 	requiredKeys := []string{
 		"cert.locked_warning",

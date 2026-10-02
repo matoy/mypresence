@@ -349,3 +349,106 @@ func TestToggleStatusDisabled_DBError(t *testing.T) {
 		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
 	}
 }
+
+// TestReserveSeat_NotOnSite_LocalizedError verifies that the error message
+// returned when not declared on-site is localized according to the request language.
+func TestReserveSeat_NotOnSite_LocalizedError(t *testing.T) {
+	d := newExtraTestDB(t)
+	d.SetBcryptCost(4)
+	h := &FloorplanHandler{DB: d, Render: noRender, DataDir: t.TempDir()}
+
+	fpID, _ := d.CreateFloorplan("FP Localized", 0)
+	seatID, _ := d.CreateSeat(fpID, "S-Loc", 0.5, 0.5)
+
+	uid, _ := d.CreateLocalUser("loc@test.com", "Loc User", "password1")
+	tok, _ := d.CreateSession(uid)
+
+	cases := []struct {
+		lang     string
+		expected string
+	}{
+		{"en", "You must be declared on site to reserve a seat"},
+		{"de", "Sie müssen vor Ort erfasst sein, um einen Platz zu reservieren"},
+		{"fr", "Vous devez être déclaré sur site pour réserver un siège"},
+		{"es", "Debe estar registrado en sitio para reservar un asiento"},
+		{"it", "Devi essere registrato in sede per prenotare un posto"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.lang, func(t *testing.T) {
+			body, _ := json.Marshal(map[string]interface{}{
+				"seat_id": seatID,
+				"date":    "2026-07-15",
+			})
+			req := httptest.NewRequest(http.MethodPost, "/api/reservations", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			req.AddCookie(&http.Cookie{Name: "session", Value: tok})
+			req.AddCookie(&http.Cookie{Name: "lang", Value: tc.lang})
+
+			w := httptest.NewRecorder()
+			w.Body = new(bytes.Buffer)
+			middleware.Auth(d, http.HandlerFunc(h.ReserveSeat)).ServeHTTP(w, req)
+
+			if w.Code != http.StatusForbidden {
+				t.Fatalf("expected 403, got %d: %s", w.Code, w.Body.String())
+			}
+
+			var resp map[string]string
+			if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+				t.Fatalf("decode response: %v", err)
+			}
+			if resp["error"] != tc.expected {
+				t.Errorf("for lang %q, expected error %q, got %q", tc.lang, tc.expected, resp["error"])
+			}
+		})
+	}
+}
+
+// TestReserveSeat_Conflict_LocalizedError verifies that conflict error messages
+// are translated according to the request language.
+func TestReserveSeat_Conflict_LocalizedError(t *testing.T) {
+	d := newExtraTestDB(t)
+	d.SetBcryptCost(4)
+	h := &FloorplanHandler{DB: d, Render: noRender, DataDir: t.TempDir()}
+
+	fpID, _ := d.CreateFloorplan("FP Localized 2", 0)
+	seatID, _ := d.CreateSeat(fpID, "S-Loc2", 0.5, 0.5)
+
+	u1, _ := d.CreateLocalUser("u1@test.com", "User 1", "password1")
+	u2, _ := d.CreateLocalUser("u2@test.com", "User 2", "password1")
+	tok2, _ := d.CreateSession(u2)
+
+	// User 1 & 2 are both on site on 2026-07-20
+	sID, _ := d.CreateStatus(models.Status{Name: "OnSiteLoc", Color: "#123", OnSite: true})
+	d.SetPresences(u1, []string{"2026-07-20"}, sID, "full") //nolint:errcheck
+	d.SetPresences(u2, []string{"2026-07-20"}, sID, "full") //nolint:errcheck
+
+	// User 1 reserves the seat
+	if err := d.ReserveSeat(seatID, u1, "2026-07-20", "full"); err != nil {
+		t.Fatalf("ReserveSeat u1: %v", err)
+	}
+
+	// User 2 tries to reserve same seat with English language
+	body, _ := json.Marshal(map[string]interface{}{
+		"seat_id": seatID,
+		"date":    "2026-07-20",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/reservations", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: "session", Value: tok2})
+	req.AddCookie(&http.Cookie{Name: "lang", Value: "en"})
+
+	w := httptest.NewRecorder()
+	w.Body = new(bytes.Buffer)
+	middleware.Auth(d, http.HandlerFunc(h.ReserveSeat)).ServeHTTP(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]string
+	_ = json.NewDecoder(w.Body).Decode(&resp)
+	expectedEn := "This seat is already reserved for this period"
+	if resp["error"] != expectedEn {
+		t.Errorf("expected conflict error %q, got %q", expectedEn, resp["error"])
+	}
+}

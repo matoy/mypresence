@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/matoy/mypresence/internal/db"
+	"github.com/matoy/mypresence/internal/i18n"
 	"github.com/matoy/mypresence/internal/metrics"
 	"github.com/matoy/mypresence/internal/middleware"
 	"github.com/matoy/mypresence/internal/models"
@@ -177,17 +178,43 @@ func (h *FloorplanHandler) ReserveSeat(w http.ResponseWriter, r *http.Request) {
 		req.Half = "full"
 	}
 
+	defaultLang := "en"
+	if user != nil && user.Language != "" {
+		defaultLang = user.Language
+	}
+	lang := i18n.LangFromRequest(r, defaultLang)
+	tr := i18n.T(lang)
+
 	// Verify on-site presence
 	isOnSite, _ := h.DB.GetUserOnSiteStatus(user.ID, req.Date)
 	if !isOnSite {
 		metrics.FloorplanOpsTotal.WithLabelValues("reserve", "failure").Inc()
-		jsonError(w, "Vous devez être déclaré sur site pour réserver un siège", http.StatusForbidden)
+		msg := tr["fp.must_be_on_site"]
+		if msg == "" {
+			msg = "Vous devez être déclaré sur site pour réserver un siège"
+		}
+		jsonError(w, msg, http.StatusForbidden)
 		return
 	}
 
 	if err := h.DB.ReserveSeat(req.SeatID, user.ID, req.Date, req.Half, req.GuestName); err != nil {
 		metrics.FloorplanOpsTotal.WithLabelValues("reserve", "failure").Inc()
-		jsonError(w, err.Error(), http.StatusConflict)
+		errMsg := err.Error()
+		switch errMsg {
+		case "ce siège est déjà réservé pour cette période":
+			if tMsg := tr["fp.seat_already_reserved"]; tMsg != "" {
+				errMsg = tMsg
+			}
+		case "vous avez déjà réservé un siège pour cette journée":
+			if tMsg := tr["fp.already_reserved_day"]; tMsg != "" {
+				errMsg = tMsg
+			}
+		case "vous avez déjà réservé un siège pour cet invité à cette date":
+			if tMsg := tr["fp.already_reserved_guest"]; tMsg != "" {
+				errMsg = tMsg
+			}
+		}
+		jsonError(w, errMsg, http.StatusConflict)
 		return
 	}
 	metrics.FloorplanOpsTotal.WithLabelValues("reserve", "success").Inc()
