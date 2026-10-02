@@ -2,6 +2,7 @@ package db
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/matoy/mypresence/internal/models"
@@ -85,6 +86,7 @@ func (d *DB) migrateProjects() error {
 
 	// Secondary indexes for performance
 	_ = d.ensureIndex(d.projects, "idx_project_activities_user_date", "project_activities", "user_id, date")
+	_ = d.ensureIndex(d.projects, "idx_project_activities_date", "project_activities", "date")
 	_ = d.ensureIndex(d.projects, "idx_project_time_entries_user", "project_time_entries", "user_id, year, month")
 	_ = d.ensureIndex(d.projects, "idx_project_members_user", "project_members", "user_id")
 
@@ -386,6 +388,79 @@ SELECT COALESCE(SUM(days), 0)
 FROM project_time_entries
 WHERE user_id = ? AND year = ? AND month = ?`, userID, year, month).Scan(&total)
 	return total, err
+}
+
+// GetUsersTotalDeclaredForMonths returns a nested map[userID]map[monthKey]float64
+// of total days declared across all projects for the specified users and monthKeys ("YYYY-MM").
+func (d *DB) GetUsersTotalDeclaredForMonths(userIDs []int64, monthKeys []string) (map[int64]map[string]float64, error) {
+	result := make(map[int64]map[string]float64)
+	if len(userIDs) == 0 || len(monthKeys) == 0 {
+		return result, nil
+	}
+	for _, uid := range userIDs {
+		result[uid] = make(map[string]float64)
+	}
+
+	type yearMonth struct {
+		year  int
+		month int
+		key   string
+	}
+	var yms []yearMonth
+	seenYM := make(map[string]bool)
+	for _, mk := range monthKeys {
+		var y, m int
+		if _, err := fmt.Sscanf(mk, "%04d-%02d", &y, &m); err == nil && y > 0 && m >= 1 && m <= 12 {
+			key := fmt.Sprintf("%04d-%02d", y, m)
+			if !seenYM[key] {
+				seenYM[key] = true
+				yms = append(yms, yearMonth{year: y, month: m, key: key})
+			}
+		}
+	}
+	if len(yms) == 0 {
+		return result, nil
+	}
+
+	userPlaceholders := make([]string, len(userIDs))
+	args := make([]interface{}, 0, len(userIDs)+len(yms)*2)
+	for i, id := range userIDs {
+		userPlaceholders[i] = "?"
+		args = append(args, id)
+	}
+
+	monthConditions := make([]string, len(yms))
+	for i, ym := range yms {
+		monthConditions[i] = "(year = ? AND month = ?)"
+		args = append(args, ym.year, ym.month)
+	}
+
+	query := fmt.Sprintf(`
+SELECT user_id, year, month, COALESCE(SUM(days), 0)
+FROM project_time_entries
+WHERE user_id IN (%s) AND (%s)
+GROUP BY user_id, year, month`, strings.Join(userPlaceholders, ","), strings.Join(monthConditions, " OR "))
+
+	rows, err := d.projects.Query(d.dialect.rebind(query), args...)
+	if err != nil {
+		return result, err
+	}
+	defer rows.Close() //nolint:errcheck
+
+	for rows.Next() {
+		var uid int64
+		var y, m int
+		var days float64
+		if err := rows.Scan(&uid, &y, &m, &days); err != nil {
+			return result, err
+		}
+		key := fmt.Sprintf("%04d-%02d", y, m)
+		if result[uid] == nil {
+			result[uid] = make(map[string]float64)
+		}
+		result[uid][key] = days
+	}
+	return result, rows.Err()
 }
 
 // SetProjectTimeEntry upserts a user's declared days for a project/month.

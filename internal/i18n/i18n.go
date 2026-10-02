@@ -1,7 +1,12 @@
 //nolint:misspell // file contains French and Italian translations; flagged words are not English misspellings
 package i18n
 
-import "net/http"
+import (
+	"encoding/json"
+	"html/template"
+	"net/http"
+	"sync"
+)
 
 // LangInfo holds metadata about a supported language.
 type LangInfo struct {
@@ -17,6 +22,26 @@ var Supported = []LangInfo{
 	{"de", "Deutsch", "🇩🇪"},
 	{"es", "Español", "🇪🇸"},
 	{"it", "Italiano", "🇮🇹"},
+}
+
+var jsonCache sync.Map
+
+// JSON returns pre-marshaled JSON for the given language code, cached in memory.
+func JSON(lang string) template.JS {
+	normalized := "en"
+	for _, s := range Supported {
+		if s.Code == lang {
+			normalized = s.Code
+			break
+		}
+	}
+	if v, ok := jsonCache.Load(normalized); ok {
+		return v.(template.JS)
+	}
+	b, _ := json.Marshal(T(normalized))
+	js := template.JS(b)
+	jsonCache.Store(normalized, js)
+	return js
 }
 
 // T returns the translation map for the given language code.

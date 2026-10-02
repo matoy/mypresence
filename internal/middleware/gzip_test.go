@@ -23,7 +23,7 @@ func TestGzipMiddleware_Compressed(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	res := rec.Result()
-	defer res.Body.Close()
+	defer res.Body.Close() //nolint:errcheck
 
 	if res.Header.Get("Content-Encoding") != "gzip" {
 		t.Fatalf("expected Content-Encoding: gzip, got %q", res.Header.Get("Content-Encoding"))
@@ -36,7 +36,7 @@ func TestGzipMiddleware_Compressed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create gzip reader: %v", err)
 	}
-	defer gzReader.Close()
+	defer gzReader.Close() //nolint:errcheck
 
 	decompressed, err := io.ReadAll(gzReader)
 	if err != nil {
@@ -60,7 +60,7 @@ func TestGzipMiddleware_NoAcceptEncoding(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	res := rec.Result()
-	defer res.Body.Close()
+	defer res.Body.Close() //nolint:errcheck
 
 	if res.Header.Get("Content-Encoding") != "" {
 		t.Errorf("expected no Content-Encoding, got %q", res.Header.Get("Content-Encoding"))
@@ -85,7 +85,7 @@ func TestGzipMiddleware_UpgradeSkipped(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	res := rec.Result()
-	defer res.Body.Close()
+	defer res.Body.Close() //nolint:errcheck
 
 	if res.Header.Get("Content-Encoding") != "" {
 		t.Errorf("expected no Content-Encoding for Upgrade request, got %q", res.Header.Get("Content-Encoding"))
@@ -104,7 +104,7 @@ func TestGzipMiddleware_StatusNotModified(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	res := rec.Result()
-	defer res.Body.Close()
+	defer res.Body.Close() //nolint:errcheck
 
 	if res.StatusCode != http.StatusNotModified {
 		t.Fatalf("expected status 304, got %d", res.StatusCode)

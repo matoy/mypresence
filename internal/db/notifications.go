@@ -53,6 +53,39 @@ func (d *DB) CreateNotification(userID, actorID int64, notifType, title, message
 	return id, nil
 }
 
+// CreateNotificationsBatch inserts notifications for multiple users within a single transaction
+// using a prepared statement, returning the count of successfully created notifications.
+func (d *DB) CreateNotificationsBatch(userIDs []int64, actorID int64, notifType, title, message, link string) (int, error) {
+	if len(userIDs) == 0 {
+		return 0, nil
+	}
+	dl := d.dialect
+	query := `INSERT INTO notifications (user_id, actor_id, type, title, message, link, acknowledged) VALUES (?, ?, ?, ?, ?, ?, ` + dl.boolDefault(false) + `)`
+
+	tx, err := d.core.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	stmt, err := tx.Prepare(query)
+	if err != nil {
+		return 0, err
+	}
+	defer stmt.Close() //nolint:errcheck
+
+	count := 0
+	for _, uid := range userIDs {
+		if _, err := stmt.Exec(uid, actorID, notifType, title, message, link); err == nil {
+			count++
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 // GetUnreadNotifications returns all unacknowledged notifications for a user, newest first.
 func (d *DB) GetUnreadNotifications(userID int64) ([]models.Notification, error) {
 	dl := d.dialect

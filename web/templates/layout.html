@@ -12,7 +12,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="{{(index .Config "FontURL")}}">
     {{end}}
-    <link rel="stylesheet" href="/static/css/app.css">
+    <link rel="stylesheet" href="/static/css/app.css?v={{.AppVersion}}">
     <script>
         tailwind.config = {
             theme: {
@@ -30,7 +30,7 @@
             }
         };
     </script>
-    <script id="i18n-data" type="application/json">{{json .T}}</script>
+    <script id="i18n-data" type="application/json">{{if .TJSON}}{{.TJSON}}{{else}}{{json .T}}{{end}}</script>
     <script>const _t = JSON.parse(document.getElementById('i18n-data').textContent || '{}');</script>
     <script>
         // Anti-flash: apply dark class before first paint
@@ -922,7 +922,7 @@
     </div>
     {{end}}
 
-    <script src="/static/js/app.js"></script>
+    <script src="/static/js/app.js?v={{.AppVersion}}"></script>
 </body>
 </html>
 {{end}}

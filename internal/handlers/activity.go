@@ -703,15 +703,6 @@ func (h *ActivityHandler) computeExecSummary(
 				statusTotals[sid] += count
 				totalSetDays += count
 			}
-			if !h.DisableProjects {
-				for _, mk := range monthKeys {
-					y, m := parseMonthKey(mk)
-					declared, err := h.DB.GetUserTotalDeclaredForMonth(s.User.ID, y, m)
-					if err == nil {
-						totalProjectDeclared += declared
-					}
-				}
-			}
 		}
 	}
 	totalWorkingDays = 0.0
@@ -719,6 +710,17 @@ func (h *ActivityHandler) computeExecSummary(
 	for uid := range seen {
 		seenUserIDs = append(seenUserIDs, uid)
 	}
+
+	if !h.DisableProjects && len(seenUserIDs) > 0 && len(monthKeys) > 0 {
+		if batchDeclared, err := h.DB.GetUsersTotalDeclaredForMonths(seenUserIDs, monthKeys); err == nil {
+			for _, userMonths := range batchDeclared {
+				for _, mk := range monthKeys {
+					totalProjectDeclared += userMonths[mk]
+				}
+			}
+		}
+	}
+
 	seenHolsMap, _ := h.DB.GetUsersHolidayMaps(seenUserIDs, startDate, endDate)
 	for _, uid := range seenUserIDs {
 		uHolMap := seenHolsMap[uid]
@@ -745,15 +747,25 @@ func (h *ActivityHandler) computeProjectActivity(stats []models.UserStats, year,
 // total declared days summed across all specified months.
 func (h *ActivityHandler) computeProjectActivityForMonths(stats []models.UserStats, monthKeys []string) (projectActivityByUser map[int64]float64, totalProjectDeclared float64) {
 	projectActivityByUser = make(map[int64]float64)
+	if len(stats) == 0 || len(monthKeys) == 0 {
+		return
+	}
+	userIDs := make([]int64, 0, len(stats))
+	for _, s := range stats {
+		userIDs = append(userIDs, s.User.ID)
+	}
+
+	batchDeclared, _ := h.DB.GetUsersTotalDeclaredForMonths(userIDs, monthKeys)
+
 	for _, s := range stats {
 		var userDeclared float64
 		hasData := false
-		for _, mk := range monthKeys {
-			y, m := parseMonthKey(mk)
-			declared, err := h.DB.GetUserTotalDeclaredForMonth(s.User.ID, y, m)
-			if err == nil {
-				userDeclared += declared
-				hasData = true
+		if userMonths := batchDeclared[s.User.ID]; userMonths != nil {
+			for _, mk := range monthKeys {
+				if d, ok := userMonths[mk]; ok && d > 0 {
+					userDeclared += d
+					hasData = true
+				}
 			}
 		}
 		if !hasData {
@@ -807,15 +819,22 @@ func (h *ActivityHandler) computeManualProjectActivityForMonths(stats []models.U
 // percentage and total declared days for the exact date range [startDate, endDate].
 func (h *ActivityHandler) computeManualProjectActivityForRange(stats []models.UserStats, startDate, endDate string) (projectActivityByUser map[int64]float64, totalProjectDeclared float64) {
 	projectActivityByUser = make(map[int64]float64)
+	if len(stats) == 0 {
+		return
+	}
+
+	userIDs := make([]int64, 0, len(stats))
 	for _, s := range stats {
-		weights, err := h.DB.GetUserBillableDatesForRange(s.User.ID, startDate, endDate)
-		if err != nil {
-			continue
-		}
-		activities, err := h.DB.ListUserActivitiesForRange(s.User.ID, startDate, endDate)
-		if err != nil {
-			continue
-		}
+		userIDs = append(userIDs, s.User.ID)
+	}
+
+	batchWeights, _ := h.DB.GetUsersBillableDatesForRange(userIDs, startDate, endDate)
+	batchActivities, _ := h.DB.GetActivitiesForUsersRange(userIDs, startDate, endDate)
+
+	for _, s := range stats {
+		weights := batchWeights[s.User.ID]
+		activities := batchActivities[s.User.ID]
+
 		sumByDate := make(map[string]float64)
 		for _, a := range activities {
 			sumByDate[a.Date] += a.Percentage

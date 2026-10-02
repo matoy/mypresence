@@ -1882,5 +1882,126 @@ func TestCountsCache(t *testing.T) {
 	}
 }
 
+func TestGetUsersTotalDeclaredForMonths(t *testing.T) {
+	d := newTestDB(t)
+	u1 := seedUser(t, d, "decl1@example.com")
+	u2 := seedUser(t, d, "decl2@example.com")
+
+	pID, err := d.CreateProjectWithDetails("P1", "PR1", 0, true, "2026-01-01", "2026-12-31", false, "2026-12-31")
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+
+	_ = d.SetProjectTimeEntry(u1, pID, 2026, 1, 5.0)
+	_ = d.SetProjectTimeEntry(u1, pID, 2026, 2, 3.5)
+	_ = d.SetProjectTimeEntry(u2, pID, 2026, 1, 10.0)
+
+	res, err := d.GetUsersTotalDeclaredForMonths([]int64{u1, u2}, []string{"2026-01", "2026-02", "2026-03"})
+	if err != nil {
+		t.Fatalf("GetUsersTotalDeclaredForMonths: %v", err)
+	}
+
+	if res[u1]["2026-01"] != 5.0 {
+		t.Errorf("expected u1 2026-01 to be 5.0, got %v", res[u1]["2026-01"])
+	}
+	if res[u1]["2026-02"] != 3.5 {
+		t.Errorf("expected u1 2026-02 to be 3.5, got %v", res[u1]["2026-02"])
+	}
+	if res[u1]["2026-03"] != 0.0 {
+		t.Errorf("expected u1 2026-03 to be 0.0, got %v", res[u1]["2026-03"])
+	}
+	if res[u2]["2026-01"] != 10.0 {
+		t.Errorf("expected u2 2026-01 to be 10.0, got %v", res[u2]["2026-01"])
+	}
+
+	// Empty input checks
+	emptyRes, err := d.GetUsersTotalDeclaredForMonths(nil, []string{"2026-01"})
+	if err != nil || len(emptyRes) != 0 {
+		t.Errorf("expected empty map on nil userIDs, got %v", emptyRes)
+	}
+}
+
+func TestGetUsersBillableDatesAndActivitiesForRange(t *testing.T) {
+	d := newTestDB(t)
+	u1 := seedUser(t, d, "bill1@example.com")
+	statusID := seedOnSiteStatus(t, d)
+
+	_ = d.SetPresences(u1, []string{"2026-03-01"}, statusID, "full")
+	_ = d.SetPresences(u1, []string{"2026-03-02"}, statusID, "AM")
+
+	weights, err := d.GetUsersBillableDatesForRange([]int64{u1}, "2026-03-01", "2026-03-05")
+	if err != nil {
+		t.Fatalf("GetUsersBillableDatesForRange: %v", err)
+	}
+	if weights[u1]["2026-03-01"] != 1.0 {
+		t.Errorf("expected full day weight 1.0, got %v", weights[u1]["2026-03-01"])
+	}
+	if weights[u1]["2026-03-02"] != 0.5 {
+		t.Errorf("expected half day weight 0.5, got %v", weights[u1]["2026-03-02"])
+	}
+
+	// Activities
+	_, err = d.CreateProjectActivity(u1, "2026-03-01", "jira", "KEY-1", "Title", "Comment", 100)
+	if err != nil {
+		t.Fatalf("CreateProjectActivity: %v", err)
+	}
+	acts, err := d.GetActivitiesForUsersRange([]int64{u1}, "2026-03-01", "2026-03-05")
+	if err != nil {
+		t.Fatalf("GetActivitiesForUsersRange: %v", err)
+	}
+	if len(acts[u1]) != 1 || acts[u1][0].JiraKey != "KEY-1" {
+		t.Errorf("expected 1 activity for u1, got %v", acts[u1])
+	}
+}
+
+func TestGetAllDomainsManagers(t *testing.T) {
+	d := newTestDB(t)
+	mgr1 := seedUser(t, d, "mgr1@example.com")
+	dID, err := d.CreateDomain("Finance")
+	if err != nil {
+		t.Fatalf("CreateDomain: %v", err)
+	}
+	if err := d.SetDomainManagers(dID, []int64{mgr1}); err != nil {
+		t.Fatalf("SetDomainManagers: %v", err)
+	}
+
+	allManagers, err := d.GetAllDomainsManagers()
+	if err != nil {
+		t.Fatalf("GetAllDomainsManagers: %v", err)
+	}
+	if len(allManagers[dID]) != 1 || allManagers[dID][0].ID != mgr1 {
+		t.Errorf("expected domain %d to have manager %d, got %v", dID, mgr1, allManagers[dID])
+	}
+}
+
+func TestCreateNotificationsBatch(t *testing.T) {
+	d := newTestDB(t)
+	u1 := seedUser(t, d, "notif1@example.com")
+	u2 := seedUser(t, d, "notif2@example.com")
+
+	count, err := d.CreateNotificationsBatch([]int64{u1, u2}, u1, "info", "Test Batch", "Message", "/link")
+	if err != nil {
+		t.Fatalf("CreateNotificationsBatch: %v", err)
+	}
+	if count != 2 {
+		t.Errorf("expected count 2, got %d", count)
+	}
+
+	notifs1, err := d.GetUnreadNotifications(u1)
+	if err != nil || len(notifs1) != 1 || notifs1[0].Title != "Test Batch" {
+		t.Errorf("expected unread notification for u1, got %v (err %v)", notifs1, err)
+	}
+	notifs2, err := d.GetUnreadNotifications(u2)
+	if err != nil || len(notifs2) != 1 || notifs2[0].Title != "Test Batch" {
+		t.Errorf("expected unread notification for u2, got %v (err %v)", notifs2, err)
+	}
+
+	// Empty batch test
+	emptyCount, err := d.CreateNotificationsBatch(nil, u1, "info", "Empty", "Message", "")
+	if err != nil || emptyCount != 0 {
+		t.Errorf("expected empty batch to succeed with 0 count, got %d, %v", emptyCount, err)
+	}
+}
+
 // Ensure the import of "time" is used (kept for existing TestListAllPATs_ReturnsAllUsers).
 var _ = time.Now

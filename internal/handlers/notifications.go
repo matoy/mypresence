@@ -349,16 +349,12 @@ func (h *NotificationsHandler) AdminSendNotification(w http.ResponseWriter, r *h
 		}
 	}
 
-	count := 0
-	var lastErr error
+	uids := make([]int64, 0, len(targetUserIDs))
 	for uid := range targetUserIDs {
-		_, err := h.DB.CreateNotification(uid, currentUser.ID, notifType, title, message, link)
-		if err != nil {
-			lastErr = err
-		} else {
-			count++
-		}
+		uids = append(uids, uid)
 	}
+
+	count, lastErr := h.DB.CreateNotificationsBatch(uids, currentUser.ID, notifType, title, message, link)
 
 	if len(targetUserIDs) > 0 && count == 0 && lastErr != nil {
 		metrics.AdminOpsTotal.WithLabelValues("notification", "send", "failure").Inc()

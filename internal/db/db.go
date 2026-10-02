@@ -171,7 +171,7 @@ func openNetwork(cfg *config.Config, driver string, dl dialect) (*DB, error) {
 		return nil, fmt.Errorf("open %s: %w", driver, err)
 	}
 	conn.SetMaxOpenConns(25)
-	conn.SetMaxIdleConns(5)
+	conn.SetMaxIdleConns(15)
 	conn.SetConnMaxLifetime(5 * time.Minute)
 	conn.SetConnMaxIdleTime(2 * time.Minute)
 
@@ -801,9 +801,11 @@ FOREIGN KEY (floorplan_id) REFERENCES floorplans(id) ON DELETE CASCADE
 	d.floorplan.Exec(dl.rebind(dl.addColumnIfNotExists("floorplans", "site_id", "BIGINT NOT NULL DEFAULT 0")))                                              //nolint:errcheck
 	d.floorplan.Exec(dl.rebind(dl.addColumnIfNotExists("seat_reservations", "guest_name", dl.varcharType(128)+" DEFAULT NULL")))                             //nolint:errcheck
 
-	// Secondary indexes for reservations
+	// Secondary indexes for reservations and floorplans
 	_ = d.ensureIndex(d.floorplan, "idx_seat_reservations_user_date", "seat_reservations", "user_id, date")
 	_ = d.ensureIndex(d.floorplan, "idx_seat_reservations_date", "seat_reservations", "date")
+	_ = d.ensureIndex(d.floorplan, "idx_seats_floorplan_id", "seats", "floorplan_id")
+	_ = d.ensureIndex(d.floorplan, "idx_floorplans_site_id", "floorplans", "site_id")
 
 	return nil
 }
@@ -823,8 +825,11 @@ details %s NOT NULL DEFAULT '',
 created_at %s DEFAULT CURRENT_TIMESTAMP
 `, ai, dl.varcharType(32), dl.varcharType(32), dl.textType(), dt))
 
-	_, err := d.audit.Exec(dl.rebind(stmt))
-	return err
+	if _, err := d.audit.Exec(dl.rebind(stmt)); err != nil {
+		return err
+	}
+	_ = d.ensureIndex(d.audit, "idx_admin_logs_actor_created", "admin_logs", "actor_id, created_at")
+	return nil
 }
 
 // migrateLegacy copies all data from a legacy single-file app.db to the 4 domain databases.

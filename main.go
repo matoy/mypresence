@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/matoy/mypresence/internal/config"
@@ -139,7 +140,14 @@ func buildAppMux(cfg *config.Config, database *db.DB) http.Handler {
 	staticSub, _ := fs.Sub(staticFS, "web/static")
 	staticServer := http.FileServerFS(staticSub)
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "no-cache")
+		if r.URL.Query().Get("v") != "" ||
+			strings.HasSuffix(r.URL.Path, "xlsx.full.min.js") ||
+			strings.HasSuffix(r.URL.Path, "alpine.min.js") ||
+			strings.HasSuffix(r.URL.Path, "tailwind.min.js") {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		} else {
+			w.Header().Set("Cache-Control", "no-cache")
+		}
 		staticServer.ServeHTTP(w, r)
 	})))
 

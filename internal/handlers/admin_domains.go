@@ -25,10 +25,14 @@ func (h *AdminHandler) DomainsPage(w http.ResponseWriter, r *http.Request) {
 	domains, _ := h.DB.ListDomains()
 	allTeams, _ := h.DB.ListTeams()
 	users, _ := h.DB.ListUsers()
+	allManagers, _ := h.DB.GetAllDomainsManagers()
 
 	var domainsList []DomainWithDetails
 	for _, dm := range domains {
-		managers, _ := h.DB.ListDomainManagers(dm.ID)
+		managers := allManagers[dm.ID]
+		if managers == nil {
+			managers = []models.User{}
+		}
 		var teams []models.Team
 		for _, t := range allTeams {
 			if t.DomainID == dm.ID {

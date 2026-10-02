@@ -2,6 +2,7 @@ package models
 
 import (
 	"fmt"
+	"html/template"
 	"strings"
 	"time"
 )
@@ -610,6 +611,7 @@ type PageData struct {
 	DisableAPI        bool
 	// i18n
 	T              map[string]string // translation map for the active language
+	TJSON          template.JS       // pre-marshaled JSON for the active language
 	Lang           string            // active language code ("en", "fr", "de", "es")
 	SupportedLangs interface{}       // []i18n.LangInfo — passed from main.go to avoid import cycle
 	// CSRF

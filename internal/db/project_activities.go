@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/matoy/mypresence/internal/models"
@@ -34,6 +35,56 @@ ORDER BY p.date`, userID, startDate, endDate, true)
 			weight = 0.5
 		}
 		result[date] += weight
+	}
+	return result, rows.Err()
+}
+
+// GetUsersBillableDatesForRange returns a nested map[userID]map[date]weight (1.0 for full day, 0.5 for half day)
+// for all specified users and dates in [startDate, endDate] that have a billable presence status.
+func (d *DB) GetUsersBillableDatesForRange(userIDs []int64, startDate, endDate string) (map[int64]map[string]float64, error) {
+	result := make(map[int64]map[string]float64)
+	if len(userIDs) == 0 {
+		return result, nil
+	}
+	for _, uid := range userIDs {
+		result[uid] = make(map[string]float64)
+	}
+
+	placeholders := make([]string, len(userIDs))
+	args := make([]interface{}, 0, len(userIDs)+3)
+	for i, id := range userIDs {
+		placeholders[i] = "?"
+		args = append(args, id)
+	}
+	args = append(args, startDate, endDate, true)
+
+	query := fmt.Sprintf(`
+SELECT p.user_id, p.date, p.half
+FROM presences p
+JOIN statuses s ON p.status_id = s.id
+WHERE p.user_id IN (%s) AND p.date >= ? AND p.date <= ? AND s.billable = ?
+ORDER BY p.user_id, p.date`, strings.Join(placeholders, ","))
+
+	rows, err := d.presence.Query(d.dialect.rebind(query), args...)
+	if err != nil {
+		return result, err
+	}
+	defer rows.Close() //nolint:errcheck
+
+	for rows.Next() {
+		var uid int64
+		var date, half string
+		if err := rows.Scan(&uid, &date, &half); err != nil {
+			return result, err
+		}
+		weight := 1.0
+		if half == "AM" || half == "PM" {
+			weight = 0.5
+		}
+		if result[uid] == nil {
+			result[uid] = make(map[string]float64)
+		}
+		result[uid][date] += weight
 	}
 	return result, rows.Err()
 }
@@ -120,6 +171,39 @@ func (d *DB) GetActivitiesForUsersMonth(userIDs []int64, year, month int) ([]mod
 		return nil, err
 	}
 	return scanProjectActivities(rows)
+}
+
+// GetActivitiesForUsersRange returns all project activities declared by any of
+// the given users for the range [startDate, endDate], grouped by user_id.
+func (d *DB) GetActivitiesForUsersRange(userIDs []int64, startDate, endDate string) (map[int64][]models.ProjectActivity, error) {
+	result := make(map[int64][]models.ProjectActivity)
+	if len(userIDs) == 0 {
+		return result, nil
+	}
+	placeholders := make([]string, len(userIDs))
+	args := make([]interface{}, 0, len(userIDs)+2)
+	for i, id := range userIDs {
+		placeholders[i] = "?"
+		args = append(args, id)
+	}
+	args = append(args, startDate, endDate)
+
+	rows, err := d.projects.Query(
+		`SELECT id, user_id, date, activity_type, jira_key, jira_title, comment, percentage, created_at, updated_at
+         FROM project_activities
+         WHERE user_id IN (`+joinStrings(placeholders, ",")+`) AND date >= ? AND date <= ?
+         ORDER BY user_id, date, id`, args...)
+	if err != nil {
+		return result, err
+	}
+	activities, err := scanProjectActivities(rows)
+	if err != nil {
+		return result, err
+	}
+	for _, a := range activities {
+		result[a.UserID] = append(result[a.UserID], a)
+	}
+	return result, nil
 }
 
 func scanProjectActivities(rows *sql.Rows) ([]models.ProjectActivity, error) {

@@ -95,6 +95,47 @@ ORDER BY u.name
 	return d.HydrateUsersSites(users), nil
 }
 
+// GetAllDomainsManagers returns a map[domainID][]models.User for all domains in one query.
+func (d *DB) GetAllDomainsManagers() (map[int64][]models.User, error) {
+	rows, err := d.core.Query(`
+SELECT dmg.domain_id, u.id, u.email, u.name, u.role, COALESCE(u.password_hash,''), u.disabled, u.created_at, COALESCE(u.site_id, 0)
+FROM users u
+JOIN domain_managers dmg ON u.id = dmg.user_id
+ORDER BY u.name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() //nolint:errcheck
+
+	result := make(map[int64][]models.User)
+	var allUsers []models.User
+	type managerEntry struct {
+		domainID  int64
+		userIndex int
+	}
+	var entries []managerEntry
+
+	for rows.Next() {
+		var domainID int64
+		var u models.User
+		if err := rows.Scan(&domainID, &u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt, &u.SiteID); err != nil {
+			return nil, err
+		}
+		u.IsLocal = u.PasswordHash != ""
+		entries = append(entries, managerEntry{domainID: domainID, userIndex: len(allUsers)})
+		allUsers = append(allUsers, u)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	hydrated := d.HydrateUsersSites(allUsers)
+	for _, entry := range entries {
+		result[entry.domainID] = append(result[entry.domainID], hydrated[entry.userIndex])
+	}
+	return result, nil
+}
+
 // SetDomainManagers replaces the full set of managers for a domain.
 func (d *DB) SetDomainManagers(domainID int64, userIDs []int64) error {
 	if _, err := d.core.Exec("DELETE FROM domain_managers WHERE domain_id = ?", domainID); err != nil {

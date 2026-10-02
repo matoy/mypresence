@@ -447,3 +447,18 @@ func TestUsersFilterKeys_AllLanguages(t *testing.T) {
 	}
 }
 
+func TestJSON_AllLanguages(t *testing.T) {
+	langs := []string{"en", "fr", "de", "es", "it", "unknown"}
+	for _, lang := range langs {
+		js := JSON(lang)
+		if len(js) == 0 {
+			t.Errorf("JSON(%q) returned empty string", lang)
+		}
+		// Second call should return cached value
+		js2 := JSON(lang)
+		if js != js2 {
+			t.Errorf("JSON(%q) did not return identical cached result", lang)
+		}
+	}
+}
+
