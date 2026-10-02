@@ -200,6 +200,33 @@ func TestSeatUpdate_Success(t *testing.T) {
 	}
 }
 
+func TestSeatRename_Success(t *testing.T) {
+	d := newExtraTestDB(t)
+	fpID, _ := d.CreateFloorplan("SeatRename FP", 0)
+	seatID, _ := d.CreateSeat(fpID, "R1", 15.5, 25.5)
+	h := &FloorplanHandler{DB: d, DataDir: t.TempDir(), Render: noRender}
+
+	body, _ := json.Marshal(map[string]interface{}{"label": "R-NEW"})
+	req := createAdminReq(t, d, http.MethodPut, "/api/admin/seats/"+strconvI64(seatID), body)
+	req.SetPathValue("id", strconvI64(seatID))
+	w := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.UpdateSeat)).ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	seat, err := d.GetSeat(seatID)
+	if err != nil {
+		t.Fatalf("GetSeat: %v", err)
+	}
+	if seat.Label != "R-NEW" {
+		t.Errorf("expected label R-NEW, got %q", seat.Label)
+	}
+	if seat.XPct != 15.5 || seat.YPct != 25.5 {
+		t.Errorf("expected coordinates to remain (15.5, 25.5), got (%f, %f)", seat.XPct, seat.YPct)
+	}
+}
+
 func TestSeatDelete_Success(t *testing.T) {
 	d := newExtraTestDB(t)
 	fpID, _ := d.CreateFloorplan("SeatDel FP", 0)

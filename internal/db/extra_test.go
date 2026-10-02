@@ -237,6 +237,25 @@ func TestUpdateSeat(t *testing.T) {
 	}
 }
 
+func TestRenameSeat(t *testing.T) {
+	d := newTestDB(t)
+	fpID, seatID := seedFloorplanAndSeat(t, d, "B1")
+	if err := d.RenameSeat(seatID, "B-Renamed"); err != nil {
+		t.Fatalf("RenameSeat: %v", err)
+	}
+	seat, err := d.GetSeat(seatID)
+	if err != nil {
+		t.Fatalf("GetSeat: %v", err)
+	}
+	if seat.Label != "B-Renamed" {
+		t.Errorf("expected label B-Renamed, got %q", seat.Label)
+	}
+	seats, _ := d.ListSeats(fpID)
+	if len(seats) == 0 || seats[0].Label != "B-Renamed" {
+		t.Errorf("expected label B-Renamed in ListSeats, got %v", seats)
+	}
+}
+
 func TestDeleteSeat(t *testing.T) {
 	d := newTestDB(t)
 	fpID, seatID := seedFloorplanAndSeat(t, d, "C1")

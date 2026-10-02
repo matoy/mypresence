@@ -736,6 +736,8 @@ var en = map[string]string{
 	"fp.new_seat":        "New seat",
 	"fp.seat_label_hint": "Enter a short label (e.g. A1, B12)",
 	"fp.seat_label_ph":   "Label (e.g. A1)",
+	"fp.rename_seat":     "Rename seat",
+	"fp.seat_renamed":    "Seat renamed",
 
 	// Forgot / reset password
 	"forgot.title":                   "Forgot your password?",
@@ -1612,6 +1614,8 @@ var fr = map[string]string{
 	"fp.new_seat":        "Nouveau siège",
 	"fp.seat_label_hint": "Saisissez un libellé court (ex: A1, B12)",
 	"fp.seat_label_ph":   "Libellé (ex: A1)",
+	"fp.rename_seat":     "Renommer le siège",
+	"fp.seat_renamed":    "Siège renommé",
 
 	// Mot de passe oublié / réinitialisation
 	"forgot.title":                   "Mot de passe oublié ?",
@@ -2488,6 +2492,8 @@ var de = map[string]string{
 	"fp.new_seat":        "Neuer Platz",
 	"fp.seat_label_hint": "Geben Sie eine kurze Bezeichnung ein (z.B. A1, B12)",
 	"fp.seat_label_ph":   "Bezeichnung (z.B. A1)",
+	"fp.rename_seat":     "Sitzplatz umbenennen",
+	"fp.seat_renamed":    "Sitzplatz umbenannt",
 
 	// Passwort vergessen / zurücksetzen
 	"forgot.title":                   "Passwort vergessen?",
@@ -3359,6 +3365,8 @@ var es = map[string]string{
 	"fp.new_seat":        "Nuevo asiento",
 	"fp.seat_label_hint": "Introduzca una etiqueta corta (ej: A1, B12)",
 	"fp.seat_label_ph":   "Etiqueta (ej: A1)",
+	"fp.rename_seat":     "Renombrar asiento",
+	"fp.seat_renamed":    "Asiento renombrado",
 
 	// Contraseña olvidada / restablecer
 	"forgot.title":                   "¿Olvidó su contraseña?",
@@ -4241,6 +4249,8 @@ var it = map[string]string{
 	"fp.new_seat":        "Nuovo posto",
 	"fp.seat_label_hint": "Inserisci un'etichetta breve (es. A1, B12)",
 	"fp.seat_label_ph":   "Etichetta (es. A1)",
+	"fp.rename_seat":     "Rinomina posto",
+	"fp.seat_renamed":    "Posto rinominato",
 
 	// Password dimenticata / reimpostazione
 	"forgot.title":                   "Password dimenticata?",

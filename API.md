@@ -1175,11 +1175,15 @@ Add a seat to a floor plan. Coordinates are expressed as percentages (0–100) o
 ```
 
 #### `PUT /admin/seats/{id}`
-Update a seat's label or position.
+Update a seat's label and/or position (coordinates are optional when renaming only).
 
-**Request**
+**Request (full or rename only)**
 ```json
 { "label": "A1", "x_pct": 22.0, "y_pct": 35.0 }
+```
+or
+```json
+{ "label": "A2" }
 ```
 
 **Response 200**

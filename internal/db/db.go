@@ -3329,6 +3329,22 @@ func (d *DB) UpdateSeat(id int64, label string, xPct, yPct float64) error {
 	return err
 }
 
+// RenameSeat updates only the label of a seat.
+func (d *DB) RenameSeat(id int64, label string) error {
+	_, err := d.floorplan.Exec("UPDATE seats SET label = ? WHERE id = ?", label, id)
+	return err
+}
+
+// GetSeat retrieves a single seat by its ID.
+func (d *DB) GetSeat(id int64) (*models.Seat, error) {
+	row := d.floorplan.QueryRow("SELECT id, floorplan_id, label, x_pct, y_pct FROM seats WHERE id = ?", id)
+	var s models.Seat
+	if err := row.Scan(&s.ID, &s.FloorplanID, &s.Label, &s.XPct, &s.YPct); err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
 func (d *DB) DeleteSeat(id int64) error {
 	_, err := d.floorplan.Exec("DELETE FROM seats WHERE id = ?", id)
 	return err

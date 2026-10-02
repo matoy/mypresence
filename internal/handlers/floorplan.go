@@ -469,23 +469,37 @@ func (h *FloorplanHandler) CreateSeat(w http.ResponseWriter, r *http.Request) {
 func (h *FloorplanHandler) UpdateSeat(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	var req struct {
-		Label string  `json:"label"`
-		XPct  float64 `json:"x_pct"`
-		YPct  float64 `json:"y_pct"`
+		Label *string  `json:"label"`
+		XPct  *float64 `json:"x_pct"`
+		YPct  *float64 `json:"y_pct"`
 	}
 	json.NewDecoder(r.Body).Decode(&req) //nolint:errcheck
-	req.Label = strings.TrimSpace(req.Label)
-	if req.Label == "" {
-		req.Label = "?"
+
+	label := "?"
+	if req.Label != nil {
+		label = strings.TrimSpace(*req.Label)
+		if label == "" {
+			label = "?"
+		}
 	}
-	if err := h.DB.UpdateSeat(id, req.Label, req.XPct, req.YPct); err != nil {
+
+	var err error
+	if req.XPct != nil && req.YPct != nil {
+		err = h.DB.UpdateSeat(id, label, *req.XPct, *req.YPct)
+	} else if req.Label != nil {
+		err = h.DB.RenameSeat(id, label)
+	} else {
+		err = h.DB.UpdateSeat(id, label, 0, 0)
+	}
+
+	if err != nil {
 		metrics.FloorplanOpsTotal.WithLabelValues("admin_seat", "failure").Inc()
 		jsonError(w, "Erreur", http.StatusInternalServerError)
 		return
 	}
 	actor := middleware.GetUser(r)
 	if actor != nil {
-		slog.Info("admin.seat.update", "actor", actor.Email, "seat_id", id, "label", req.Label)
+		slog.Info("admin.seat.update", "actor", actor.Email, "seat_id", id, "label", label)
 	}
 	metrics.FloorplanOpsTotal.WithLabelValues("admin_seat", "success").Inc()
 	jsonOK(w, map[string]string{"status": "ok"})
