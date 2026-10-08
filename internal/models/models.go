@@ -264,6 +264,27 @@ type Status struct {
 	OnSite    bool   `json:"on_site"`
 	SortOrder int    `json:"sort_order"`
 	Disabled  bool   `json:"disabled"`
+	ShowAs    string `json:"show_as"`
+}
+
+// O365ShowAs returns the Microsoft Exchange / Outlook calendar status ("showAs")
+// for this presence status. Returns configured value ("workingElsewhere", "oof",
+// "busy", "free", "tentative"), or "" for "none" (not synced to calendar).
+// If unset, falls back to legacy convention based on OnSite and Billable.
+func (s Status) O365ShowAs() string {
+	switch s.ShowAs {
+	case "workingElsewhere", "oof", "busy", "free", "tentative":
+		return s.ShowAs
+	case "none":
+		return ""
+	}
+	if !s.OnSite && s.Billable {
+		return "workingElsewhere"
+	}
+	if !s.Billable {
+		return "oof"
+	}
+	return ""
 }
 
 // Presence represents a user's status for a given date.
@@ -745,5 +766,30 @@ type SiteDailyReport struct {
 	DailyResRate      map[string]float64 // date -> reservation percentage
 	TotalOnSite       float64
 	TotalReservations float64
+}
+
+// UserO365Token stores Microsoft Office 365 OAuth2 credentials for a user.
+type UserO365Token struct {
+	ID             int64     `json:"id"`
+	UserID         int64     `json:"user_id"`
+	MicrosoftEmail string    `json:"microsoft_email"`
+	AccessToken    string    `json:"-"`
+	RefreshToken   string    `json:"-"`
+	TokenExpiry    time.Time `json:"token_expiry"`
+	AutoSync       bool      `json:"auto_sync"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+// CalendarSyncEvent records a presence event synchronized with an external calendar (e.g. Office 365).
+type CalendarSyncEvent struct {
+	ID          int64     `json:"id"`
+	UserID      int64     `json:"user_id"`
+	Date        string    `json:"date"`
+	Half        string    `json:"half"` // "full", "AM", "PM"
+	StatusID    int64     `json:"status_id"`
+	O365EventID string    `json:"o365_event_id"`
+	O365ShowAs  string    `json:"o365_show_as"`
+	SyncedAt    time.Time `json:"synced_at"`
 }
 

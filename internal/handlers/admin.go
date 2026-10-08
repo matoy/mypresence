@@ -506,6 +506,7 @@ func (h *AdminHandler) CreateStatus(w http.ResponseWriter, r *http.Request) {
 		Billable  bool   `json:"billable"`
 		OnSite    bool   `json:"on_site"`
 		SortOrder int    `json:"sort_order"`
+		ShowAs    string `json:"show_as"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		metrics.AdminOpsTotal.WithLabelValues("status", "create", "failure").Inc()
@@ -517,7 +518,7 @@ func (h *AdminHandler) CreateStatus(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "Name and color are required", http.StatusBadRequest)
 		return
 	}
-	id, err := h.DB.CreateStatus(models.Status{Name: req.Name, Color: req.Color, Billable: req.Billable, OnSite: req.OnSite, SortOrder: req.SortOrder})
+	id, err := h.DB.CreateStatus(models.Status{Name: req.Name, Color: req.Color, Billable: req.Billable, OnSite: req.OnSite, SortOrder: req.SortOrder, ShowAs: req.ShowAs})
 	if err != nil {
 		metrics.AdminOpsTotal.WithLabelValues("status", "create", "failure").Inc()
 		jsonError(w, "Error creating status", http.StatusInternalServerError)
@@ -541,13 +542,22 @@ func (h *AdminHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		Billable  bool   `json:"billable"`
 		OnSite    bool   `json:"on_site"`
 		SortOrder int    `json:"sort_order"`
+		ShowAs    string `json:"show_as"`
 	}
-	json.NewDecoder(r.Body).Decode(&req)                                                                                                             //nolint:errcheck
-	h.DB.UpdateStatus(models.Status{ID: id, Name: req.Name, Color: req.Color, Billable: req.Billable, OnSite: req.OnSite, SortOrder: req.SortOrder}) //nolint:errcheck
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		metrics.AdminOpsTotal.WithLabelValues("status", "update", "failure").Inc()
+		jsonError(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+	if err := h.DB.UpdateStatus(models.Status{ID: id, Name: req.Name, Color: req.Color, Billable: req.Billable, OnSite: req.OnSite, SortOrder: req.SortOrder, ShowAs: req.ShowAs}); err != nil {
+		metrics.AdminOpsTotal.WithLabelValues("status", "update", "failure").Inc()
+		jsonError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	currentUser := middleware.GetUser(r)
 	if currentUser != nil {
 		h.DB.LogAdminAction(currentUser.ID, "status", id, "update", req.Name)
-		slog.Info("admin.status.update", "actor", currentUser.Email, "status", req.Name, "status_id", id)
+		slog.Info("admin.status.update", "actor", currentUser.Email, "status", req.Name, "status_id", id, "show_as", req.ShowAs)
 	}
 	metrics.AdminOpsTotal.WithLabelValues("status", "update", "success").Inc()
 	jsonOK(w, map[string]string{"status": "ok"})

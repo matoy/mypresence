@@ -1634,19 +1634,21 @@ function statusAdmin(initialStatuses) {
         newOrder: 0,
         newBillable: false,
         newOnSite: false,
+        newShowAs: 'none',
         createError: '',
         showCreateModal: false,
         filterText: '',
         filterBillable: 'all',
         filterOnSite: 'all',
         filterDisabled: 'all',
+        filterShowAs: 'all',
 
         get totalCount() {
             return this.statuses.length;
         },
 
         get filteredCount() {
-            return this.statuses.filter(s => this.matchesStatus(s.name, s.billable, s.on_site, s.disabled)).length;
+            return this.statuses.filter(s => this.matchesStatus(s.name, s.billable, s.on_site, s.disabled, s.show_as)).length;
         },
 
         resetFilters() {
@@ -1654,6 +1656,7 @@ function statusAdmin(initialStatuses) {
             this.filterBillable = 'all';
             this.filterOnSite = 'all';
             this.filterDisabled = 'all';
+            this.filterShowAs = 'all';
         },
 
         openCreateModal() {
@@ -1662,11 +1665,12 @@ function statusAdmin(initialStatuses) {
             this.newOrder = 0;
             this.newBillable = false;
             this.newOnSite = false;
+            this.newShowAs = 'none';
             this.createError = '';
             this.showCreateModal = true;
         },
 
-        matchesStatus(name, billable, onSite, disabled) {
+        matchesStatus(name, billable, onSite, disabled, showAs) {
             const q = this.filterText.trim().toLowerCase();
             if (q && !(name || '').toLowerCase().includes(q)) return false;
             if (this.filterBillable === '1' && !billable) return false;
@@ -1675,6 +1679,7 @@ function statusAdmin(initialStatuses) {
             if (this.filterOnSite === '0' && onSite) return false;
             if (this.filterDisabled === '0' && disabled) return false;
             if (this.filterDisabled === '1' && !disabled) return false;
+            if (this.filterShowAs !== 'all' && (showAs || 'none') !== this.filterShowAs) return false;
             return true;
         },
 
@@ -1684,18 +1689,23 @@ function statusAdmin(initialStatuses) {
             const resp = await fetch('/admin/statuses', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: this.newName, color: this.newColor, sort_order: this.newOrder, billable: this.newBillable, on_site: this.newOnSite })
+                body: JSON.stringify({ name: this.newName, color: this.newColor, sort_order: this.newOrder, billable: this.newBillable, on_site: this.newOnSite, show_as: this.newShowAs })
             });
             if (resp.ok) { this.showCreateModal = false; window.location.reload(); }
             else { const d = await resp.json(); this.createError = d.error || 'Error'; }
         },
 
-        async updateStatus(id, name, color, billable, onSite, sortOrder) {
-            await fetch(`/admin/statuses/${id}`, {
+        async updateStatus(id, name, color, billable, onSite, sortOrder, showAs) {
+            const resp = await fetch(`/admin/statuses/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, color, billable, on_site: onSite, sort_order: sortOrder })
+                body: JSON.stringify({ name, color, billable, on_site: onSite, sort_order: sortOrder, show_as: showAs })
             });
+            if (!resp.ok) {
+                const d = await resp.json().catch(() => ({}));
+                alert(d.error || 'Update failed');
+                return;
+            }
             window.location.reload();
         },
 

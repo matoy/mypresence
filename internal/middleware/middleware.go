@@ -140,6 +140,11 @@ func RequireRoleOrTeamLeader(database *db.DB, roles ...string) func(http.Handler
 	}
 }
 
+// WithUser returns a new context containing the user.
+func WithUser(ctx context.Context, u *models.User) context.Context {
+	return context.WithValue(ctx, userContextKey, u)
+}
+
 // GetUser extracts the user from the request context.
 func GetUser(r *http.Request) *models.User {
 	u, _ := r.Context().Value(userContextKey).(*models.User)

@@ -7,7 +7,7 @@ import (
 )
 
 // Version is the application version, updated manually for each release (format: YYYYMMDD-X).
-const Version = "20261002-3"
+const Version = "20261008-1"
 
 // Config holds all application configuration loaded from environment variables.
 //
@@ -103,6 +103,16 @@ type Config struct {
 	JiraBaseURL string `env:"JIRA_BASE_URL" live:"true"` // e.g. "https://your-domain.atlassian.net" (Legacy mode)
 	JiraEmail   string `env:"JIRA_EMAIL" live:"true"`    // Atlassian account email used for API auth (Legacy mode)
 	JiraToken   string `env:"JIRA_TOKEN" live:"true"`    // Atlassian API token or Scoped Bearer token
+
+	// Microsoft Office 365 Calendar integration
+	O365SyncEnabled     bool   `env:"O365_SYNC_ENABLED" live:"true"`
+	O365TenantID        string `env:"O365_TENANT_ID" live:"true"`
+	O365ClientID        string `env:"O365_CLIENT_ID" live:"true"`
+	O365ClientSecret    string `env:"O365_CLIENT_SECRET" live:"true"`
+	O365RedirectURL     string `env:"O365_REDIRECT_URL" live:"true"`
+	O365DefaultTimezone string `env:"O365_DEFAULT_TIMEZONE" live:"true"`
+	O365AMHours         string `env:"O365_AM_HOURS" live:"true"`
+	O365PMHours         string `env:"O365_PM_HOURS" live:"true"`
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -174,6 +184,15 @@ func Load() *Config {
 		JiraBaseURL: getEnv("JIRA_BASE_URL", ""),
 		JiraEmail:   getEnv("JIRA_EMAIL", ""),
 		JiraToken:   getEnv("JIRA_TOKEN", ""),
+
+		O365SyncEnabled:     getEnvBool("O365_SYNC_ENABLED", false),
+		O365TenantID:        getEnv("O365_TENANT_ID", "common"),
+		O365ClientID:        getEnv("O365_CLIENT_ID", ""),
+		O365ClientSecret:    getEnv("O365_CLIENT_SECRET", ""),
+		O365RedirectURL:     getEnv("O365_REDIRECT_URL", ""),
+		O365DefaultTimezone: getEnv("O365_DEFAULT_TIMEZONE", "Europe/Paris"),
+		O365AMHours:         getEnv("O365_AM_HOURS", "08:30-12:30"),
+		O365PMHours:         getEnv("O365_PM_HOURS", "13:30-17:30"),
 	}
 	c.SAMLEnabled = c.SAMLIDPMetadataURL != "" && c.SAMLEntityID != ""
 	c.JiraEnabled = (c.JiraCloudID != "" && c.JiraToken != "") || (c.JiraBaseURL != "" && c.JiraEmail != "" && c.JiraToken != "")

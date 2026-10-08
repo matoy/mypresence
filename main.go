@@ -17,6 +17,7 @@ import (
 	"github.com/matoy/mypresence/internal/metrics"
 	"github.com/matoy/mypresence/internal/middleware"
 	"github.com/matoy/mypresence/internal/models"
+	"github.com/matoy/mypresence/internal/o365"
 	"github.com/matoy/mypresence/internal/reminders"
 )
 
@@ -102,7 +103,38 @@ func buildAppMux(cfg *config.Config, database *db.DB) http.Handler {
 	remindersService := reminders.NewService(database, cfg)
 	go remindersService.StartWorker(context.Background())
 
-	calHandler := &handlers.CalendarHandler{DB: database, Render: renderPage, DisableFloorplans: cfg.DisableFloorplans, DisableProjects: cfg.DisableProjects}
+	var o365Client *o365.Client
+	var o365Debouncer *o365.Debouncer
+	var o365Handler *handlers.O365Handler
+	if cfg.O365SyncEnabled {
+		o365Cfg := &o365.Config{
+			TenantID:        cfg.O365TenantID,
+			ClientID:        cfg.O365ClientID,
+			ClientSecret:    cfg.O365ClientSecret,
+			RedirectURL:     cfg.O365RedirectURL,
+			SecretKey:       cfg.SecretKey,
+			AppName:         cfg.AppName,
+			DefaultTimezone: cfg.O365DefaultTimezone,
+			AMHours:         cfg.O365AMHours,
+			PMHours:         cfg.O365PMHours,
+		}
+		if o365Cfg.RedirectURL == "" && cfg.AppURL != "" {
+			o365Cfg.RedirectURL = strings.TrimRight(cfg.AppURL, "/") + "/auth/o365/callback"
+		}
+		o365Client = o365.NewClient(o365Cfg, database)
+		o365Debouncer = o365.NewDebouncer(o365Client, 3*time.Second)
+		o365Handler = handlers.NewO365Handler(database, cfg, o365Client, o365Debouncer)
+	}
+
+	calHandler := &handlers.CalendarHandler{
+		DB:                database,
+		Render:            renderPage,
+		DisableFloorplans: cfg.DisableFloorplans,
+		DisableProjects:   cfg.DisableProjects,
+		O365Client:        o365Client,
+		O365Debouncer:     o365Debouncer,
+		O365SyncEnabled:   cfg.O365SyncEnabled,
+	}
 	adminHandler := &handlers.AdminHandler{DB: database, Config: cfg, Render: renderPage, RemindersService: remindersService}
 	activityHandler := &handlers.ActivityHandler{DB: database, Render: renderPage, DisableProjects: cfg.DisableProjects}
 	holidaysHandler := &handlers.HolidaysHandler{DB: database, Render: renderPage}
@@ -181,6 +213,11 @@ func buildAppMux(cfg *config.Config, database *db.DB) http.Handler {
 		mux.HandleFunc("POST /webauthn/login/finish", authHandler.PasskeyLoginFinish)
 	}
 
+	// Office 365 OAuth callback route
+	if cfg.O365SyncEnabled && o365Handler != nil {
+		mux.HandleFunc("GET /auth/o365/callback", o365Handler.Callback)
+	}
+
 	// Protected routes
 	authMux := http.NewServeMux()
 
@@ -220,6 +257,15 @@ func buildAppMux(cfg *config.Config, database *db.DB) http.Handler {
 	// In-app notifications (all authenticated users)
 	authMux.HandleFunc("POST /api/notifications/{id}/ack", notifHandler.AcknowledgeNotification)
 	authMux.HandleFunc("GET /api/notifications/unread", notifHandler.GetUnreadNotificationsAPI)
+
+	// Office 365 Calendar integration (all authenticated users)
+	if cfg.O365SyncEnabled && o365Handler != nil {
+		authMux.HandleFunc("GET /auth/o365/connect", o365Handler.Connect)
+		authMux.HandleFunc("GET /api/o365/status", o365Handler.Status)
+		authMux.HandleFunc("POST /api/o365/sync", o365Handler.Sync)
+		authMux.HandleFunc("POST /api/o365/disconnect", o365Handler.Disconnect)
+		authMux.HandleFunc("POST /api/o365/toggle-auto-sync", o365Handler.ToggleAutoSync)
+	}
 
 	registerOptionalAuthRoutes(authMux, cfg, patHandler, floorplanHandler)
 

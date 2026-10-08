@@ -562,6 +562,19 @@ created_at %s DEFAULT CURRENT_TIMESTAMP,
 last_used_at %s,
 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 `, credIDType, dl.varcharType(128), text, dt, dt)),
+
+		dl.createTableIfNotExists("user_o365_tokens", fmt.Sprintf(`
+id %s,
+user_id BIGINT UNIQUE NOT NULL,
+microsoft_email %s NOT NULL DEFAULT '',
+access_token %s NOT NULL,
+refresh_token %s NOT NULL,
+token_expiry %s NOT NULL,
+auto_sync %s NOT NULL DEFAULT %s,
+created_at %s DEFAULT CURRENT_TIMESTAMP,
+updated_at %s DEFAULT CURRENT_TIMESTAMP,
+FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+`, ai, dl.varcharType(255), text, text, dt, bool_, dl.boolDefault(false), dt, dt)),
 	}
 
 	for _, stmt := range stmts {
@@ -642,6 +655,7 @@ FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	_ = d.ensureIndex(d.core, "idx_domain_managers_user", "domain_managers", "user_id")
 	_ = d.ensureIndex(d.core, "idx_sessions_expires_at", "sessions", "expires_at")
 	_ = d.ensureIndex(d.core, "idx_pat_user_id", "personal_access_tokens", "user_id")
+	_ = d.ensureIndex(d.core, "idx_user_o365_user", "user_o365_tokens", "user_id")
 
 	return nil
 }
@@ -661,8 +675,9 @@ billable %s NOT NULL DEFAULT %s,
 on_site %s NOT NULL DEFAULT %s,
 sort_order INTEGER NOT NULL DEFAULT 0,
 disabled %s NOT NULL DEFAULT %s,
+show_as %s NOT NULL DEFAULT '',
 created_at %s DEFAULT CURRENT_TIMESTAMP
-`, ai, dl.varcharType(128), dl.varcharType(16), bool_, dl.boolDefault(false), bool_, dl.boolDefault(false), bool_, dl.boolDefault(false), dt)),
+`, ai, dl.varcharType(128), dl.varcharType(16), bool_, dl.boolDefault(false), bool_, dl.boolDefault(false), bool_, dl.boolDefault(false), dl.varcharType(32), dt)),
 
 		dl.createTableIfNotExists("presences", fmt.Sprintf(`
 id %s,
@@ -691,6 +706,18 @@ half %s NOT NULL DEFAULT 'full',
 status_id BIGINT,
 created_at %s DEFAULT CURRENT_TIMESTAMP
 `, ai, dl.varcharType(16), dl.varcharType(10), dl.varcharType(4), dt)),
+
+		dl.createTableIfNotExists("calendar_sync_events", fmt.Sprintf(`
+id %s,
+user_id BIGINT NOT NULL,
+date %s NOT NULL,
+half %s NOT NULL DEFAULT 'full',
+status_id BIGINT NOT NULL,
+o365_event_id %s NOT NULL,
+o365_show_as %s NOT NULL,
+synced_at %s DEFAULT CURRENT_TIMESTAMP,
+UNIQUE(user_id, date, half)
+`, ai, dl.varcharType(10), dl.varcharType(4), dl.varcharType(255), dl.varcharType(32), dt)),
 	}
 
 	for _, stmt := range stmts {
@@ -702,11 +729,17 @@ created_at %s DEFAULT CURRENT_TIMESTAMP
 	// Additive migrations
 	d.presence.Exec(dl.rebind(dl.addColumnIfNotExists("statuses", "on_site", fmt.Sprintf("%s NOT NULL DEFAULT %s", bool_, dl.boolDefault(false))))) //nolint:errcheck
 	d.presence.Exec(dl.rebind(dl.addColumnIfNotExists("statuses", "disabled", fmt.Sprintf("%s DEFAULT %s", bool_, dl.boolDefault(false)))))         //nolint:errcheck
+	d.presence.Exec(dl.rebind(dl.addColumnIfNotExists("statuses", "show_as", dl.varcharType(32)+" NOT NULL DEFAULT ''")))                           //nolint:errcheck
 	d.presence.Exec(dl.rebind(dl.addColumnIfNotExists("presence_logs", "half", fmt.Sprintf("%s NOT NULL DEFAULT 'full'", dl.varcharType(4)))))      //nolint:errcheck
 	d.presence.Exec(dl.rebind(dl.addColumnIfNotExists("holidays", "country_code", dl.varcharType(10)+" NOT NULL DEFAULT ''")))                      //nolint:errcheck
 
 	// Backfill on_site = true for common on-site presence status names if on_site was defaulted to false
 	d.presence.Exec(dl.rebind(`UPDATE statuses SET on_site = ? WHERE (LOWER(name) LIKE '%on site%' OR LOWER(name) LIKE '%sur site%' OR LOWER(name) LIKE '%bureau%' OR LOWER(name) LIKE '%présent%' OR LOWER(name) LIKE '%present%' OR LOWER(name) LIKE '%office%') AND (on_site = ? OR on_site IS NULL)`), true, false) //nolint:errcheck
+
+	// Backfill show_as for existing rows if empty
+	d.presence.Exec(dl.rebind(`UPDATE statuses SET show_as = 'workingElsewhere' WHERE (show_as = '' OR show_as IS NULL) AND on_site = ? AND billable = ?`), false, true) //nolint:errcheck
+	d.presence.Exec(dl.rebind(`UPDATE statuses SET show_as = 'oof' WHERE (show_as = '' OR show_as IS NULL) AND billable = ?`), false)                                     //nolint:errcheck
+	d.presence.Exec(dl.rebind(`UPDATE statuses SET show_as = 'none' WHERE (show_as = '' OR show_as IS NULL) AND on_site = ?`), true)                                      //nolint:errcheck
 
 	// SQLite-only migration: recreate presences table if 'half' column is missing
 	// (Not needed for network databases which always get the full schema above)
@@ -732,6 +765,7 @@ FOREIGN KEY (status_id) REFERENCES statuses(id)
 	// Secondary indexes for presence lookups and logs
 	_ = d.ensureIndex(d.presence, "idx_presences_date", "presences", "date")
 	_ = d.ensureIndex(d.presence, "idx_presence_logs_user_date", "presence_logs", "user_id, date")
+	_ = d.ensureIndex(d.presence, "idx_calendar_sync_user_date", "calendar_sync_events", "user_id, date")
 
 	return nil
 }
@@ -998,19 +1032,20 @@ func (d *DB) SeedDefaults(adminUser, adminPass string) error {
 			billable bool
 			onSite   bool
 			order    int
+			showAs   string
 		}{
-			{"On site", "#22c55e", true, true, 1},
-			{"Remote work", "#a855f7", true, false, 2},
-			{"Business trip", "#3b82f6", true, true, 3},
-			{"Leave", "#f97316", false, false, 4},
-			{"Sick leave", "#ef4444", false, false, 5},
-			{"Training", "#eab308", false, false, 6},
-			{"Absent", "#85888e", false, false, 7},
+			{"On site", "#22c55e", true, true, 1, "none"},
+			{"Remote work", "#a855f7", true, false, 2, "workingElsewhere"},
+			{"Business trip", "#3b82f6", true, true, 3, "workingElsewhere"},
+			{"Leave", "#f97316", false, false, 4, "oof"},
+			{"Sick leave", "#ef4444", false, false, 5, "oof"},
+			{"Training", "#eab308", false, false, 6, "oof"},
+			{"Absent", "#85888e", false, false, 7, "oof"},
 		}
 		for _, s := range defaults {
 			_, err := d.presence.Exec(
-				d.dialect.rebind("INSERT INTO statuses (name, color, billable, on_site, sort_order) VALUES (?, ?, ?, ?, ?)"),
-				s.name, s.color, s.billable, s.onSite, s.order,
+				d.dialect.rebind("INSERT INTO statuses (name, color, billable, on_site, sort_order, show_as) VALUES (?, ?, ?, ?, ?, ?)"),
+				s.name, s.color, s.billable, s.onSite, s.order, s.showAs,
 			)
 			if err != nil {
 				return err
@@ -2105,7 +2140,7 @@ WHERE tl.user_id = ? AND ut.user_id = ? AND ut.left_at IS NULL
 func (d *DB) ListStatuses() ([]models.Status, error) {
 	falseVal := d.dialect.boolDefault(false)
 	rows, err := d.presence.Query(fmt.Sprintf(
-		"SELECT id, name, color, billable, on_site, sort_order, COALESCE(disabled, %s) FROM statuses ORDER BY sort_order, id",
+		"SELECT id, name, color, billable, on_site, sort_order, COALESCE(disabled, %s), COALESCE(show_as, '') FROM statuses ORDER BY sort_order, id",
 		falseVal,
 	))
 	if err != nil {
@@ -2117,7 +2152,7 @@ func (d *DB) ListStatuses() ([]models.Status, error) {
 	for rows.Next() {
 		var s models.Status
 		var disabled sql.NullBool
-		if err := rows.Scan(&s.ID, &s.Name, &s.Color, &s.Billable, &s.OnSite, &s.SortOrder, &disabled); err != nil {
+		if err := rows.Scan(&s.ID, &s.Name, &s.Color, &s.Billable, &s.OnSite, &s.SortOrder, &disabled, &s.ShowAs); err != nil {
 			return nil, err
 		}
 		s.Disabled = disabled.Valid && disabled.Bool
@@ -2130,7 +2165,7 @@ func (d *DB) ListStatuses() ([]models.Status, error) {
 func (d *DB) ListActiveStatuses() ([]models.Status, error) {
 	falseVal := d.dialect.boolDefault(false)
 	rows, err := d.presence.Query(fmt.Sprintf(
-		"SELECT id, name, color, billable, on_site, sort_order, COALESCE(disabled, %s) FROM statuses WHERE COALESCE(disabled, %s) = %s ORDER BY sort_order, id",
+		"SELECT id, name, color, billable, on_site, sort_order, COALESCE(disabled, %s), COALESCE(show_as, '') FROM statuses WHERE COALESCE(disabled, %s) = %s ORDER BY sort_order, id",
 		falseVal, falseVal, falseVal,
 	))
 	if err != nil {
@@ -2142,7 +2177,7 @@ func (d *DB) ListActiveStatuses() ([]models.Status, error) {
 	for rows.Next() {
 		var s models.Status
 		var disabled sql.NullBool
-		if err := rows.Scan(&s.ID, &s.Name, &s.Color, &s.Billable, &s.OnSite, &s.SortOrder, &disabled); err != nil {
+		if err := rows.Scan(&s.ID, &s.Name, &s.Color, &s.Billable, &s.OnSite, &s.SortOrder, &disabled, &s.ShowAs); err != nil {
 			return nil, err
 		}
 		s.Disabled = disabled.Valid && disabled.Bool
@@ -2158,16 +2193,34 @@ func (d *DB) SetStatusDisabled(id int64, disabled bool) error {
 }
 
 func (d *DB) CreateStatus(s models.Status) (int64, error) {
+	if s.ShowAs == "" {
+		if s.OnSite {
+			s.ShowAs = "none"
+		} else if s.Billable {
+			s.ShowAs = "workingElsewhere"
+		} else {
+			s.ShowAs = "oof"
+		}
+	}
 	return d.presence.InsertGetID(
-		"INSERT INTO statuses (name, color, billable, on_site, sort_order) VALUES (?, ?, ?, ?, ?)",
-		s.Name, s.Color, s.Billable, s.OnSite, s.SortOrder,
+		"INSERT INTO statuses (name, color, billable, on_site, sort_order, show_as) VALUES (?, ?, ?, ?, ?, ?)",
+		s.Name, s.Color, s.Billable, s.OnSite, s.SortOrder, s.ShowAs,
 	)
 }
 
 func (d *DB) UpdateStatus(s models.Status) error {
+	if s.ShowAs == "" {
+		if s.OnSite {
+			s.ShowAs = "none"
+		} else if s.Billable {
+			s.ShowAs = "workingElsewhere"
+		} else {
+			s.ShowAs = "oof"
+		}
+	}
 	_, err := d.presence.Exec(
-		"UPDATE statuses SET name = ?, color = ?, billable = ?, on_site = ?, sort_order = ? WHERE id = ?",
-		s.Name, s.Color, s.Billable, s.OnSite, s.SortOrder, s.ID,
+		"UPDATE statuses SET name = ?, color = ?, billable = ?, on_site = ?, sort_order = ?, show_as = ? WHERE id = ?",
+		s.Name, s.Color, s.Billable, s.OnSite, s.SortOrder, s.ShowAs, s.ID,
 	)
 	return err
 }

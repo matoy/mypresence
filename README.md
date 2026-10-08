@@ -28,6 +28,7 @@ A web application for managing employee presence and absences, built with Go and
 - **Jira integration**: link a team to a Jira Cloud project; users pick from that project's recently updated tickets when declaring a Jira-type activity, and can open the ticket directly from the team activities report
 - **Public holidays & localized physical sites**: organize office and remote locations into physical sites with assigned countries; attach users to their site to automatically derive their country, adapt personal calendars, enforce holiday presence validation, and aggregate team statistics.
 - **Role management**: granular per-user permissions
+- **Microsoft Office 365 / Outlook calendar integration**: connect personal calendars via Microsoft Entra ID (delegated least-privilege permissions) to synchronize off-site presences (remote work, business trips) and absences (leave, sick leave) directly to your primary Exchange calendar, updating your Teams/Outlook status to "Working Elsewhere" or "Out of Office"
 - **REST API with Personal Access Tokens**: every feature is accessible via authenticated HTTP requests; users generate tokens with a chosen description and expiry; tokens carry no more permissions than the issuing user
 - **Multilingual UI**: full interface available in English 🇺🇸, French 🇫🇷, German 🇩🇪, Spanish 🇪🇸, and Italian 🇮🇹; language preference stored in a cookie
 
@@ -274,6 +275,23 @@ Roles can be automatically assigned at login based on IDP group membership (e.g.
 
 Jira integration is enabled once all three variables are set. It powers the ticket picker used when declaring a **Jira** activity in teams with **Timesheets managed manually** enabled — each such team is linked to a Jira project key (set in **👥 Teams**), and its members can search that project's recently updated tickets instead of typing a key by hand.
 
+### Microsoft 365 Calendar Integration
+
+Synchronize remote work, business trips, and absences directly with personal Microsoft Office 365 / Outlook calendars.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `O365_SYNC_ENABLED` | `false` | Enable or disable the Microsoft 365 calendar sync integration |
+| `O365_TENANT_ID` | `common` | Entra ID tenant ID (Directory ID) or `common` / `organizations` |
+| `O365_CLIENT_ID` | *(empty)* | Entra ID App Registration Client ID (Application ID) |
+| `O365_CLIENT_SECRET` | *(empty)* | Entra ID App Registration Client Secret value |
+| `O365_REDIRECT_URL` | *(empty)* | OAuth2 Redirect URL (must match Entra ID, e.g. `http://localhost:8080/auth/o365/callback`) |
+| `O365_DEFAULT_TIMEZONE` | `UTC` | Timezone used for half-day events (e.g. `Europe/Paris`, `UTC`) |
+| `O365_AM_HOURS` | `08:30-12:30` | Start and end time for morning (AM) half-day events |
+| `O365_PM_HOURS` | `13:30-17:30` | Start and end time for afternoon (PM) half-day events |
+
+When enabled, users see a **Sync with Office 365** button on their personal calendar page with an optional **Auto-sync** toggle. See [Microsoft 365 Calendar Synchronization](#microsoft-365-calendar-synchronization) below for setup instructions and permissions.
+
 ---
 
 ## Calendar
@@ -287,6 +305,7 @@ Jira integration is enabled once all three variables are set. It powers the tick
   - **Reserve a desk** on the selected period (see [Floor Plans](#floor-plans--desk-reservations))
   - **Cancel desk reservation(s)** on the selected period
   - Clear all presences for the day
+- **Microsoft 365 Sync**: connect your Outlook calendar in one click; manually synchronize the current month or toggle background auto-sync ("au fil de l'eau")
 - Days with a desk reservation display a 🪑 icon
 - Hovering over a cell shows a tooltip with the status name or holiday name
 - **Weekends** are greyed out and cannot be selected
@@ -310,6 +329,48 @@ Automatically seeded on first startup:
 | Absent | ⚫ grey | No | No |
 
 All statuses are fully editable from `/admin/statuses`. The **On-site** flag determines whether a desk reservation is allowed for that day.
+
+---
+
+## Microsoft 365 Calendar Synchronization
+
+myPresence can automatically synchronize your declared off-site presences (remote work, business trips) and absences (leaves, sick days) with your primary Microsoft Office 365 / Outlook calendar.
+
+### How it works
+- **Target calendar**: Events are created directly in each user's **primary calendar** (`/me/calendar/events`), ensuring Microsoft Teams and Outlook automatically display your correct availability status.
+- **Availability statuses (Exchange `showAs`)**:
+  - **Remote work & Business trip**: mapped to `workingElsewhere` ("Working Elsewhere").
+  - **Absences (Leave, Sick leave, Training, Absent)**: mapped to `oof` ("Out of Office").
+  - **On-site presence**: does not create an event (or removes any previously synchronized event if the day was changed to on-site), keeping the calendar clear for on-site meetings.
+- **Event titles**: prefixed with `[{{APP_NAME}}]`, e.g. `[Presence] Remote work` or `[Presence] Leave (AM)`.
+- **Half-day support**:
+  - Full-day presences create an **all-day event** (`isAllDay: true`).
+  - Morning (AM) declarations create an event during the configured morning window (default: `08:30 - 12:30`).
+  - Afternoon (PM) declarations create an event during the configured afternoon window (default: `13:30 - 17:30`).
+  - Days with split statuses (e.g. Remote AM + Sick PM) create two distinct events.
+- **Idempotent reconciliation**:
+  - Modifying or clearing a presence updates or deletes the corresponding Office 365 event automatically.
+  - If an event is deleted manually in Outlook, myPresence detects the 404 and safely recreates it during the next sync.
+
+### Entra ID App Registration (Least Privilege - Option A)
+To configure the integration, create an App Registration in the [Microsoft Entra Admin Center](https://entra.microsoft.com/):
+1. **App Registrations** → **New registration**:
+   - Supported account types: *Accounts in this organizational directory only* (single-tenant) or *multitenant*.
+   - Redirect URI: **Web** → `https://<your-domain>/auth/o365/callback` (or `http://localhost:8080/auth/o365/callback` for local development).
+2. **Certificates & secrets**:
+   - Create a **New client secret** and copy its value.
+3. **API permissions** (Least Privilege):
+   - Add **Microsoft Graph** → **Delegated permissions**:
+     - `Calendars.ReadWrite` (create and update user's own calendar events).
+     - `offline_access` (maintain access tokens without requiring frequent re-authentication).
+   - *No tenant-wide application permissions or administrative consents are required.*
+4. **Environment Variables**:
+   - Fill `O365_SYNC_ENABLED=true`, `O365_TENANT_ID`, `O365_CLIENT_ID`, `O365_CLIENT_SECRET`, and `O365_REDIRECT_URL` in your environment or `docker-compose.yml`.
+
+### User Experience
+- **One-click Connect & Sync**: Click **Sync with Office 365** on the calendar page. If not yet connected, you will be securely redirected to Microsoft Entra ID to grant consent, and automatically returned with the current month synchronized.
+- **Auto-sync ("au fil de l'eau")**: Enable the **Auto-sync** toggle to have subsequent presence declarations automatically queued and synchronized in the background with debouncing.
+- **Security & Privacy**: OAuth2 tokens are encrypted at rest using AES-256-GCM. You can disconnect your account at any time with one click.
 
 ---
 

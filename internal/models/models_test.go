@@ -334,3 +334,66 @@ func TestNotification_Localize(t *testing.T) {
 	})
 }
 
+func TestStatus_O365ShowAs(t *testing.T) {
+	tests := []struct {
+		name     string
+		status   Status
+		expected string
+	}{
+		{
+			name:     "Explicit workingElsewhere",
+			status:   Status{ShowAs: "workingElsewhere"},
+			expected: "workingElsewhere",
+		},
+		{
+			name:     "Explicit oof",
+			status:   Status{ShowAs: "oof"},
+			expected: "oof",
+		},
+		{
+			name:     "Explicit busy",
+			status:   Status{ShowAs: "busy"},
+			expected: "busy",
+		},
+		{
+			name:     "Explicit free",
+			status:   Status{ShowAs: "free"},
+			expected: "free",
+		},
+		{
+			name:     "Explicit tentative",
+			status:   Status{ShowAs: "tentative"},
+			expected: "tentative",
+		},
+		{
+			name:     "Explicit none",
+			status:   Status{ShowAs: "none"},
+			expected: "",
+		},
+		{
+			name:     "Fallback remote work (billable, not on-site)",
+			status:   Status{ShowAs: "", Billable: true, OnSite: false},
+			expected: "workingElsewhere",
+		},
+		{
+			name:     "Fallback leave (not billable)",
+			status:   Status{ShowAs: "", Billable: false, OnSite: false},
+			expected: "oof",
+		},
+		{
+			name:     "Fallback on-site (billable, on-site)",
+			status:   Status{ShowAs: "", Billable: true, OnSite: true},
+			expected: "",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tc.status.O365ShowAs()
+			if got != tc.expected {
+				t.Errorf("O365ShowAs() = %q; want %q", got, tc.expected)
+			}
+		})
+	}
+}
+

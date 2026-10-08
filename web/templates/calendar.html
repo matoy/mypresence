@@ -77,6 +77,114 @@
                     </button>
                 </div>
             </div>
+
+            {{if .O365SyncEnabled}}
+            <!-- Office 365 Sync action block -->
+            <div class="border-t border-gray-100 sm:border-t-0 sm:border-l sm:pl-6 pt-3 sm:pt-0 flex flex-col justify-center"
+                 x-data="{
+                     connected: {{if .O365Connected}}true{{else}}false{{end}},
+                     email: '{{.O365Email}}',
+                     autoSync: {{if .O365AutoSync}}true{{else}}false{{end}},
+                     syncing: false,
+                     syncMsg: '',
+                     syncErr: '',
+                     init() {
+                         const params = new URLSearchParams(window.location.search);
+                         if (params.get('o365_connected') === '1') {
+                             params.delete('o365_connected');
+                             const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+                             window.history.replaceState({}, '', newUrl);
+                             this.syncNow();
+                         } else if (params.get('o365_error')) {
+                             this.syncErr = decodeURIComponent(params.get('o365_error'));
+                             params.delete('o365_error');
+                             const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+                             window.history.replaceState({}, '', newUrl);
+                         }
+                     },
+                     async syncNow() {
+                         if (!this.connected) {
+                             const ret = window.location.pathname + window.location.search;
+                             window.location.href = '/auth/o365/connect?return_to=' + encodeURIComponent(ret);
+                             return;
+                         }
+                         this.syncing = true;
+                         this.syncMsg = '';
+                         this.syncErr = '';
+                         try {
+                             const resp = await fetch('/api/o365/sync', {
+                                 method: 'POST',
+                                 headers: { 'Content-Type': 'application/json' },
+                                 body: JSON.stringify({ year: {{.Year}}, month: {{.Month}} })
+                             });
+                             const data = await resp.json().catch(() => ({}));
+                             if (resp.ok) {
+                                 let parts = [];
+                                 if (data.created > 0) parts.push(data.created + ' ' + ((typeof _t !== 'undefined' && _t['o365.created']) || 'créé(s)'));
+                                 if (data.updated > 0) parts.push(data.updated + ' ' + ((typeof _t !== 'undefined' && _t['o365.updated']) || 'mis à jour'));
+                                 if (data.deleted > 0) parts.push(data.deleted + ' ' + ((typeof _t !== 'undefined' && _t['o365.deleted']) || 'supprimé(s)'));
+                                 if (parts.length === 0) {
+                                     this.syncMsg = (typeof _t !== 'undefined' && _t['o365.sync_up_to_date']) || 'Calendrier Outlook à jour (aucun changement)';
+                                 } else {
+                                     this.syncMsg = ((typeof _t !== 'undefined' && _t['o365.sync_success']) || 'Synchronisé : ') + parts.join(', ');
+                                 }
+                             } else {
+                                 this.syncErr = data.error || ((typeof _t !== 'undefined' && _t['o365.sync_error']) || 'Erreur de synchronisation');
+                             }
+                         } catch (e) {
+                             this.syncErr = (typeof _t !== 'undefined' && _t['fp.conn_error']) || 'Erreur de connexion';
+                         } finally {
+                             this.syncing = false;
+                         }
+                     },
+                     async toggleAuto() {
+                         try {
+                             const resp = await fetch('/api/o365/toggle-auto-sync', {
+                                 method: 'POST',
+                                 headers: { 'Content-Type': 'application/json' },
+                                 body: JSON.stringify({ auto_sync: this.autoSync })
+                             });
+                             if (!resp.ok) {
+                                 this.autoSync = !this.autoSync;
+                             }
+                         } catch (e) {
+                             this.autoSync = !this.autoSync;
+                         }
+                     }
+                 }">
+                <div class="flex flex-wrap items-center gap-2">
+                    <button type="button" @click="syncNow()" :disabled="syncing"
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold shadow-xs transition"
+                            :class="connected ? 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200' : 'bg-primary text-white hover:opacity-90'">
+                        <svg class="h-4 w-4" :class="syncing ? 'animate-spin' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        <span x-text="syncing ? ((typeof _t !== 'undefined' && _t['o365.syncing']) || 'Synchronisation...') : (connected ? ((typeof _t !== 'undefined' && _t['o365.sync_button']) || 'Synchroniser Outlook') : ((typeof _t !== 'undefined' && _t['o365.connect_button']) || 'Connecter & Synchroniser Outlook'))"></span>
+                    </button>
+
+                    <template x-if="connected">
+                        <label class="inline-flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer ml-1 select-none"
+                               :title="(typeof _t !== 'undefined' && _t['o365.auto_sync_desc']) || 'Synchronise automatiquement les déclarations au fil de l\'eau'">
+                            <input type="checkbox" x-model="autoSync" @change="toggleAuto()"
+                                   class="rounded border-gray-300 text-primary focus:ring-primary h-3.5 w-3.5">
+                            <span x-text="(typeof _t !== 'undefined' && _t['o365.auto_sync']) || 'Auto-sync'"></span>
+                        </label>
+                    </template>
+                </div>
+
+                <div class="mt-1">
+                    <p x-show="syncMsg" x-text="syncMsg" class="text-xs text-emerald-600 font-medium" x-cloak></p>
+                    <p x-show="syncErr" x-text="syncErr" class="text-xs text-red-600 font-medium" x-cloak></p>
+                    <template x-if="connected && !syncMsg && !syncErr">
+                        <p class="text-[11px] text-gray-400 truncate max-w-[220px]" :title="email">
+                            <span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1"></span>
+                            <span x-text="email"></span>
+                        </p>
+                    </template>
+                </div>
+            </div>
+            {{end}}
         </div>
 
         <!-- Certify confirmation modal -->

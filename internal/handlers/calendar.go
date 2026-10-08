@@ -13,6 +13,7 @@ import (
 	"github.com/matoy/mypresence/internal/metrics"
 	"github.com/matoy/mypresence/internal/middleware"
 	"github.com/matoy/mypresence/internal/models"
+	"github.com/matoy/mypresence/internal/o365"
 )
 
 // Month and day names are resolved at template render time via the i18n T map
@@ -24,6 +25,9 @@ type CalendarHandler struct {
 	Render            func(w http.ResponseWriter, r *http.Request, page string, data interface{})
 	DisableFloorplans bool
 	DisableProjects   bool
+	O365Client        *o365.Client
+	O365Debouncer     *o365.Debouncer
+	O365SyncEnabled   bool
 }
 
 // teamCalendarView holds display data for one team's presence sub-table.
@@ -191,6 +195,16 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	var o365Connected, o365AutoSync bool
+	var o365Email string
+	if h.O365SyncEnabled {
+		if tok, err := h.DB.GetUserO365Token(user.ID); err == nil && tok != nil {
+			o365Connected = true
+			o365Email = tok.MicrosoftEmail
+			o365AutoSync = tok.AutoSync
+		}
+	}
+
 	h.Render(w, r, "calendar", map[string]interface{}{
 		"Year":              year,
 		"Month":             month,
@@ -212,6 +226,10 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 		"TeamViews":         teamViews,
 		"Certified":         certified,
 		"ProjectActivities": userProjectActivities,
+		"O365SyncEnabled":   h.O365SyncEnabled,
+		"O365Connected":     o365Connected,
+		"O365Email":         o365Email,
+		"O365AutoSync":      o365AutoSync,
 	})
 }
 
@@ -315,6 +333,14 @@ func (h *CalendarHandler) SetPresences(w http.ResponseWriter, r *http.Request) {
 	metrics.PresenceOpsTotal.WithLabelValues("set", half).Inc()
 	metrics.PresenceDaysTotal.WithLabelValues("set").Add(float64(len(req.Dates)))
 
+	if h.O365Debouncer != nil && len(req.Dates) > 0 {
+		if tok, _ := h.DB.GetUserO365Token(req.UserID); tok != nil && tok.AutoSync {
+			if t, err := time.Parse("2006-01-02", req.Dates[0]); err == nil {
+				h.O365Debouncer.Trigger(req.UserID, t.Year(), int(t.Month()))
+			}
+		}
+	}
+
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
@@ -387,6 +413,14 @@ func (h *CalendarHandler) ClearPresences(w http.ResponseWriter, r *http.Request)
 	}
 	metrics.PresenceOpsTotal.WithLabelValues("clear", clearHalf).Inc()
 	metrics.PresenceDaysTotal.WithLabelValues("clear").Add(float64(len(req.Dates)))
+
+	if h.O365Debouncer != nil && len(req.Dates) > 0 {
+		if tok, _ := h.DB.GetUserO365Token(req.UserID); tok != nil && tok.AutoSync {
+			if t, err := time.Parse("2006-01-02", req.Dates[0]); err == nil {
+				h.O365Debouncer.Trigger(req.UserID, t.Year(), int(t.Month()))
+			}
+		}
+	}
 
 	jsonOK(w, map[string]string{"status": "ok"})
 }

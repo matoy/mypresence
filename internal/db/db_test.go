@@ -511,6 +511,64 @@ func TestSetStatusDisabled_TogglesCorrectly(t *testing.T) {
 	}
 }
 
+func TestStatus_ShowAsCRUD(t *testing.T) {
+	d := newTestDB(t)
+
+	// Create with explicit show_as
+	sid, err := d.CreateStatus(models.Status{
+		Name:      "Conference",
+		Color:     "#123456",
+		Billable:  true,
+		OnSite:    false,
+		SortOrder: 10,
+		ShowAs:    "busy",
+	})
+	if err != nil {
+		t.Fatalf("CreateStatus: %v", err)
+	}
+
+	statuses, err := d.ListStatuses()
+	if err != nil {
+		t.Fatalf("ListStatuses: %v", err)
+	}
+	var found bool
+	for _, s := range statuses {
+		if s.ID == sid {
+			found = true
+			if s.ShowAs != "busy" {
+				t.Errorf("expected ShowAs to be %q, got %q", "busy", s.ShowAs)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("status id=%d not found", sid)
+	}
+
+	// Update ShowAs
+	err = d.UpdateStatus(models.Status{
+		ID:        sid,
+		Name:      "Conference Updated",
+		Color:     "#123456",
+		Billable:  true,
+		OnSite:    false,
+		SortOrder: 10,
+		ShowAs:    "oof",
+	})
+	if err != nil {
+		t.Fatalf("UpdateStatus: %v", err)
+	}
+
+	statuses, _ = d.ListStatuses()
+	for _, s := range statuses {
+		if s.ID == sid {
+			if s.ShowAs != "oof" {
+				t.Errorf("expected updated ShowAs to be %q, got %q", "oof", s.ShowAs)
+			}
+		}
+	}
+}
+
 func TestListActiveStatuses_ExcludesDisabled(t *testing.T) {
 	d := newTestDB(t)
 	sid := seedOnSiteStatus(t, d)
@@ -576,6 +634,7 @@ billable BOOLEAN NOT NULL DEFAULT 0,
 on_site  BOOLEAN NOT NULL DEFAULT 0,
 sort_order INTEGER NOT NULL DEFAULT 0,
 disabled BOOLEAN,
+show_as TEXT DEFAULT '',
 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )`)
 
@@ -2005,3 +2064,4 @@ func TestCreateNotificationsBatch(t *testing.T) {
 
 // Ensure the import of "time" is used (kept for existing TestListAllPATs_ReturnsAllUsers).
 var _ = time.Now
+
