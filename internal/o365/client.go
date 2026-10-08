@@ -413,13 +413,14 @@ func (c *Client) buildGraphPayload(evt Event) map[string]interface{} {
 		// Half day event (AM or PM)
 		payload["isAllDay"] = false
 		startH, endH := "08:30:00", "12:30:00"
-		if evt.Half == "AM" {
+		switch evt.Half {
+		case "AM":
 			parts := strings.Split(c.cfg.AMHours, "-")
 			if len(parts) == 2 {
 				startH = strings.TrimSpace(parts[0]) + ":00"
 				endH = strings.TrimSpace(parts[1]) + ":00"
 			}
-		} else if evt.Half == "PM" {
+		case "PM":
 			parts := strings.Split(c.cfg.PMHours, "-")
 			if len(parts) == 2 {
 				startH = strings.TrimSpace(parts[0]) + ":00"
