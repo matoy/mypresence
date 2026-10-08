@@ -373,104 +373,153 @@ services:
       # Atlassian API token for the account above.
       # Generate one at: https://id.atlassian.com/manage-profile/security/api-tokens
       # - JIRA_TOKEN=your-atlassian-api-token
-
-  # ===========================================================================
-  # OPTIONAL DATABASE SERVICES
-  # ===========================================================================
-  # Uncomment ONE section below matching the DB_DRIVER you set above.
-  # Also uncomment the corresponding depends_on block in the mypresence service
-  # and the matching volume at the bottom of this file.
-  # ===========================================================================
-
-  # ---------------------------------------------------------------------------
-  # PostgreSQL 17
-  # ---------------------------------------------------------------------------
-  # The official image creates the database and user automatically on first boot
-  # using POSTGRES_DB, POSTGRES_USER and POSTGRES_PASSWORD.
-  #
-  # postgres:
-  #   image: postgres:17-alpine
-  #   container_name: mypresence-postgres
-  #   restart: unless-stopped
-  #   healthcheck:
-  #     test: ["CMD-SHELL", "pg_isready -U mypresence -d mypresence"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 5
-  #     start_period: 15s
-  #   environment:
-  #     POSTGRES_DB: mypresence
-  #     POSTGRES_USER: mypresence
-  #     POSTGRES_PASSWORD: strongpassword   # ⚠️  change in production
-  #   volumes:
-  #     - mypresence-postgres:/var/lib/postgresql/data
-  #
-  # ---------------------------------------------------------------------------
-  # MariaDB 11 LTS  (compatible MySQL 8)
-  # ---------------------------------------------------------------------------
-  # The official image creates the database and user automatically on first boot
-  # using MARIADB_DATABASE, MARIADB_USER and MARIADB_PASSWORD.
-  #
-  # mariadb:
-  #   image: mariadb:lts
-  #   container_name: mypresence-mariadb
-  #   restart: unless-stopped
-  #   healthcheck:
-  #     test: ["CMD-SHELL", "healthcheck.sh --connect --innodb_initialized"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 5
-  #     start_period: 15s
-  #   environment:
-  #     MARIADB_DATABASE: mypresence
-  #     MARIADB_USER: mypresence
-  #     MARIADB_PASSWORD: strongpassword      # ⚠️  change in production
-  #     MARIADB_ROOT_PASSWORD: rootpassword   # ⚠️  change in production
-  #   volumes:
-  #     - mypresence-mariadb:/var/lib/mysql
-
-  # ---------------------------------------------------------------------------
-  # Microsoft SQL Server 2022
-  # ---------------------------------------------------------------------------
-  # SQL Server does not auto-create databases from env vars.
-  # A companion one-shot container (sqlserver-init) runs once after SQL Server
-  # is healthy and creates the database, login and user when they are missing.
-  #
-  # sqlserver:
-  #   image: mcr.microsoft.com/mssql/server:2022-latest
-  #   container_name: mypresence-sqlserver
-  #   restart: unless-stopped
-  #   healthcheck:
-  #     test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'StrongP@ssword1' -C -Q 'SELECT 1' 2>/dev/null || exit 1"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 10
-  #     start_period: 30s
-  #   environment:
-  #     ACCEPT_EULA: "Y"
-  #     SA_PASSWORD: "StrongP@ssword1"   # ⚠️  change in production (≥8 chars, mixed case + digit + symbol)
-  #     MSSQL_PID: "Express"             # Express (free) | Standard | Enterprise
-  #   volumes:
-  #     - mypresence-sqlserver:/var/opt/mssql
-  
-  # sqlserver-init:
-  #   image: mcr.microsoft.com/mssql/server:2022-latest
-  #   container_name: mypresence-sqlserver-init
-  #   restart: on-failure                # retries until sqlcmd succeeds
-  #   depends_on:
-  #     sqlserver:
-  #       condition: service_healthy
-  #   entrypoint: /bin/bash
-  #   command:
-  #     - -c
-  #     - |
-  #       until /opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -P 'StrongP@ssword1' -C -Q 'SELECT 1' >/dev/null 2>&1; do
-  #         echo 'Waiting for SQL Server to accept connections...' && sleep 3
-  #       done
-  #       /opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -P 'StrongP@ssword1' -C \
-  #         -Q "IF NOT EXISTS(SELECT 1 FROM sys.databases WHERE name=N'mypresence') CREATE DATABASE mypresence" &&
-  #       /opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -P 'StrongP@ssword1' -C -d mypresence \
-  #         -Q "IF NOT EXISTS(SELECT 1 FROM sys.server_principals WHERE name=N'mypresence') CREATE LOGIN mypresence WITH PASSWORD=N'StrongP@ssword1'; IF NOT EXISTS(SELECT 1 FROM sys.database_principals WHERE name=N'mypresence') BEGIN CREATE USER mypresence FOR LOGIN mypresence; ALTER ROLE db_owner ADD MEMBER mypresence END"
+      #
+      # =====================================================================
+      # MICROSOFT OFFICE 365 / OUTLOOK CALENDAR INTEGRATION (OPTIONAL)
+      # =====================================================================
+      #
+      # Synchronizes declared off-site presences (remote work, business trip)
+      # and absences (leave, sick days) with users' Office 365 primary calendars.
+      # Uses Microsoft Entra ID Delegated permissions (Option A: Least Privilege)
+      # so each user grants access to their own calendar on-demand.
+      #
+      # ── HOW TO CONFIGURE IN MICROSOFT ENTRA ID (Azure Portal) ───────────
+      #
+      # 1. In Microsoft Entra ID (portal.azure.com), go to:
+      #    "App registrations" → "+ New registration"
+      #    - Name: MyPresence Calendar Integration
+      #    - Supported account types: Single tenant (or multitenant if applicable)
+      #    - Redirect URI (Web):
+      #      https://mypresence.your-domain.com/auth/o365/callback
+      # 2. In "Certificates & secrets":
+      #    - Click "+ New client secret"
+      #    - Copy the generated Secret Value (paste into O365_CLIENT_SECRET)
+      # 3. In "API permissions":
+      #    - Click "+ Add a permission" → "Microsoft Graph" → "Delegated permissions"
+      #    - Add: "Calendars.ReadWrite" and "offline_access"
+      #    - (Optional) Click "Grant admin consent" to avoid individual consent prompts
+      # 4. Copy "Application (client) ID" and "Directory (tenant) ID" from Overview.
+      #
+      # ── ENVIRONMENT VARIABLES ───────────────────────────────────────────
+      #
+      # Enable Office 365 calendar synchronization (default: false)
+      # - O365_SYNC_ENABLED=true
+      #
+      # Entra ID Tenant ID (Directory ID or 'common')
+      # - O365_TENANT_ID=your-azure-tenant-id
+      #
+      # Entra ID Application (Client) ID
+      # - O365_CLIENT_ID=your-azure-client-id
+      #
+      # Entra ID Client Secret value
+      # - O365_CLIENT_SECRET=your-client-secret-value
+      #
+      # Public OAuth redirect URI (must match the Redirect URI set in Entra ID)
+      # - O365_REDIRECT_URL=https://mypresence.your-domain.com/auth/o365/callback
+      #
+      # Default timezone used for half-day events (default: Europe/Paris)
+      # - O365_DEFAULT_TIMEZONE=Europe/Paris
+      #
+      # Working hours for half-day events (morning AM and afternoon PM)
+      # - O365_AM_HOURS=08:30-12:30
+      # - O365_PM_HOURS=13:30-17:30
+      # ===========================================================================
+      # OPTIONAL DATABASE SERVICES
+      # ===========================================================================
+      # Uncomment ONE section below matching the DB_DRIVER you set above.
+      # Also uncomment the corresponding depends_on block in the mypresence service
+      # and the matching volume at the bottom of this file.
+      # ===========================================================================
+    
+      # ---------------------------------------------------------------------------
+      # PostgreSQL 17
+      # ---------------------------------------------------------------------------
+      # The official image creates the database and user automatically on first boot
+      # using POSTGRES_DB, POSTGRES_USER and POSTGRES_PASSWORD.
+      #
+      # postgres:
+      #   image: postgres:17-alpine
+      #   container_name: mypresence-postgres
+      #   restart: unless-stopped
+      #   healthcheck:
+      #     test: ["CMD-SHELL", "pg_isready -U mypresence -d mypresence"]
+      #     interval: 10s
+      #     timeout: 5s
+      #     retries: 5
+      #     start_period: 15s
+      #   environment:
+      #     POSTGRES_DB: mypresence
+      #     POSTGRES_USER: mypresence
+      #     POSTGRES_PASSWORD: strongpassword   # ⚠️  change in production
+      #   volumes:
+      #     - mypresence-postgres:/var/lib/postgresql/data
+      #
+      # ---------------------------------------------------------------------------
+      # MariaDB 11 LTS  (compatible MySQL 8)
+      # ---------------------------------------------------------------------------
+      # The official image creates the database and user automatically on first boot
+      # using MARIADB_DATABASE, MARIADB_USER and MARIADB_PASSWORD.
+      #
+      # mariadb:
+      #   image: mariadb:lts
+      #   container_name: mypresence-mariadb
+      #   restart: unless-stopped
+      #   healthcheck:
+      #     test: ["CMD-SHELL", "healthcheck.sh --connect --innodb_initialized"]
+      #     interval: 10s
+      #     timeout: 5s
+      #     retries: 5
+      #     start_period: 15s
+      #   environment:
+      #     MARIADB_DATABASE: mypresence
+      #     MARIADB_USER: mypresence
+      #     MARIADB_PASSWORD: strongpassword      # ⚠️  change in production
+      #     MARIADB_ROOT_PASSWORD: rootpassword   # ⚠️  change in production
+      #   volumes:
+      #     - mypresence-mariadb:/var/lib/mysql
+    
+      # ---------------------------------------------------------------------------
+      # Microsoft SQL Server 2022
+      # ---------------------------------------------------------------------------
+      # SQL Server does not auto-create databases from env vars.
+      # A companion one-shot container (sqlserver-init) runs once after SQL Server
+      # is healthy and creates the database, login and user when they are missing.
+      #
+      # sqlserver:
+      #   image: mcr.microsoft.com/mssql/server:2022-latest
+      #   container_name: mypresence-sqlserver
+      #   restart: unless-stopped
+      #   healthcheck:
+      #     test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'StrongP@ssword1' -C -Q 'SELECT 1' 2>/dev/null || exit 1"]
+      #     interval: 10s
+      #     timeout: 5s
+      #     retries: 10
+      #     start_period: 30s
+      #   environment:
+      #     ACCEPT_EULA: "Y"
+      #     SA_PASSWORD: "StrongP@ssword1"   # ⚠️  change in production (≥8 chars, mixed case + digit + symbol)
+      #     MSSQL_PID: "Express"             # Express (free) | Standard | Enterprise
+      #   volumes:
+      #     - mypresence-sqlserver:/var/opt/mssql
+      
+      # sqlserver-init:
+      #   image: mcr.microsoft.com/mssql/server:2022-latest
+      #   container_name: mypresence-sqlserver-init
+      #   restart: on-failure                # retries until sqlcmd succeeds
+      #   depends_on:
+      #     sqlserver:
+      #       condition: service_healthy
+      #   entrypoint: /bin/bash
+      #   command:
+      #     - -c
+      #     - |
+      #       until /opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -P 'StrongP@ssword1' -C -Q 'SELECT 1' >/dev/null 2>&1; do
+      #         echo 'Waiting for SQL Server to accept connections...' && sleep 3
+      #       done
+      #       /opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -P 'StrongP@ssword1' -C \
+      #         -Q "IF NOT EXISTS(SELECT 1 FROM sys.databases WHERE name=N'mypresence') CREATE DATABASE mypresence" &&
+      #       /opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -P 'StrongP@ssword1' -C -d mypresence \
+      #         -Q "IF NOT EXISTS(SELECT 1 FROM sys.server_principals WHERE name=N'mypresence') CREATE LOGIN mypresence WITH PASSWORD=N'StrongP@ssword1'; IF NOT EXISTS(SELECT 1 FROM sys.database_principals WHERE name=N'mypresence') BEGIN CREATE USER mypresence FOR LOGIN mypresence; ALTER ROLE db_owner ADD MEMBER mypresence END"
 
 # =============================================================================
 # NAMED VOLUMES — uncomment the block matching the chosen database backend.
