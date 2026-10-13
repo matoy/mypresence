@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/matoy/mypresence/internal/db"
 	"github.com/matoy/mypresence/internal/models"
 )
 
@@ -205,12 +206,43 @@ func (h *FloorplanHandler) buildSitesReportData(r *http.Request) (*SitesReportPa
 		}
 	}
 
+	// Domains, teams, user team memberships and days lookup
+	allDomains, _ := h.DB.ListDomains()
+	domainMap := make(map[int64]models.Domain, len(allDomains))
+	for _, dm := range allDomains {
+		domainMap[dm.ID] = dm
+	}
+
+	allTeamsList, _ := h.DB.ListTeams()
+	teamMap := make(map[int64]models.Team, len(allTeamsList))
+	for _, t := range allTeamsList {
+		teamMap[t.ID] = t
+	}
+
+	userTeamIDs, _ := h.DB.GetActiveUserTeamIDs()
+	if userTeamIDs == nil {
+		userTeamIDs = make(map[int64][]int64)
+	}
+
+	daysMap := make(map[string]models.DayInfo, len(days))
+	for _, d := range days {
+		daysMap[d.Date] = d
+	}
+
+	type attributedPresence struct {
+		UserID int64
+		Date   string
+		Half   string
+		SiteID int64
+	}
+
 	// Presences on site
 	presences, _ := h.DB.GetMonthlyOnSitePresences(startDate, endDate)
 	dailySiteOnSite := make(map[int64]map[string]float64)
 	for _, s := range allSites {
 		dailySiteOnSite[s.ID] = make(map[string]float64)
 	}
+	var resolvedPresences []attributedPresence
 	for _, p := range presences {
 		// Priority 1: Desk reservation on that date
 		sID := userDateResSite[fmt.Sprintf("%d_%s", p.UserID, p.Date)]
@@ -234,6 +266,24 @@ func (h *FloorplanHandler) buildSitesReportData(r *http.Request) (*SitesReportPa
 				weight = 0.5
 			}
 			dailySiteOnSite[sID][p.Date] += weight
+			resolvedPresences = append(resolvedPresences, attributedPresence{
+				UserID: p.UserID,
+				Date:   p.Date,
+				Half:   p.Half,
+				SiteID: sID,
+			})
+		}
+	}
+
+	sitePresencesMap := make(map[int64][]attributedPresence)
+	for _, p := range resolvedPresences {
+		sitePresencesMap[p.SiteID] = append(sitePresencesMap[p.SiteID], p)
+	}
+
+	siteReservationsMap := make(map[int64][]db.SiteReservationEntry)
+	for _, r := range reservations {
+		if r.SiteID > 0 {
+			siteReservationsMap[r.SiteID] = append(siteReservationsMap[r.SiteID], r)
 		}
 	}
 
@@ -328,6 +378,232 @@ func (h *FloorplanHandler) buildSitesReportData(r *http.Request) (*SitesReportPa
 			avgRes = siteResWorkingDays / float64(siteWorkingDays)
 		}
 
+		// Domain and Team breakdown for site s
+		teamAttached := make(map[int64]int)
+		teamOnSite := make(map[int64]float64)
+		teamRes := make(map[int64]float64)
+
+		domainAttachedUsers := make(map[int64]map[int64]bool)
+		domainOnSite := make(map[int64]float64)
+		domainRes := make(map[int64]float64)
+
+		domainTeams := make(map[int64]map[int64]bool)
+
+		// 1. Attached users
+		for _, u := range activeUsersBySite[s.ID] {
+			tIDs := userTeamIDs[u.ID]
+			if len(tIDs) == 0 {
+				teamAttached[0]++
+				if domainAttachedUsers[0] == nil {
+					domainAttachedUsers[0] = make(map[int64]bool)
+				}
+				domainAttachedUsers[0][u.ID] = true
+				if domainTeams[0] == nil {
+					domainTeams[0] = make(map[int64]bool)
+				}
+				domainTeams[0][0] = true
+			} else {
+				seenDomains := make(map[int64]bool)
+				for _, tid := range tIDs {
+					teamAttached[tid]++
+					var domID int64
+					if t, ok := teamMap[tid]; ok {
+						domID = t.DomainID
+					}
+					if domainTeams[domID] == nil {
+						domainTeams[domID] = make(map[int64]bool)
+					}
+					domainTeams[domID][tid] = true
+					if !seenDomains[domID] {
+						if domainAttachedUsers[domID] == nil {
+							domainAttachedUsers[domID] = make(map[int64]bool)
+						}
+						domainAttachedUsers[domID][u.ID] = true
+						seenDomains[domID] = true
+					}
+				}
+			}
+		}
+
+		// 2. On-site presences
+		for _, p := range sitePresencesMap[s.ID] {
+			dInfo, exists := daysMap[p.Date]
+			if !exists || dInfo.IsWeekend {
+				continue
+			}
+			if _, isHol := siteHols[p.Date]; isHol {
+				continue
+			}
+			weight := 1.0
+			if p.Half == "AM" || p.Half == "PM" {
+				weight = 0.5
+			}
+			tIDs := userTeamIDs[p.UserID]
+			if len(tIDs) == 0 {
+				teamOnSite[0] += weight
+				domainOnSite[0] += weight
+				if domainTeams[0] == nil {
+					domainTeams[0] = make(map[int64]bool)
+				}
+				domainTeams[0][0] = true
+			} else {
+				seenDomains := make(map[int64]bool)
+				for _, tid := range tIDs {
+					teamOnSite[tid] += weight
+					var domID int64
+					if t, ok := teamMap[tid]; ok {
+						domID = t.DomainID
+					}
+					if domainTeams[domID] == nil {
+						domainTeams[domID] = make(map[int64]bool)
+					}
+					domainTeams[domID][tid] = true
+					if !seenDomains[domID] {
+						domainOnSite[domID] += weight
+						seenDomains[domID] = true
+					}
+				}
+			}
+		}
+
+		// 3. Desk reservations
+		for _, r := range siteReservationsMap[s.ID] {
+			dInfo, exists := daysMap[r.Date]
+			if !exists || dInfo.IsWeekend {
+				continue
+			}
+			if _, isHol := siteHols[r.Date]; isHol {
+				continue
+			}
+			weight := 1.0
+			if r.Half == "AM" || r.Half == "PM" {
+				weight = 0.5
+			}
+			tIDs := userTeamIDs[r.UserID]
+			if len(tIDs) == 0 {
+				teamRes[0] += weight
+				domainRes[0] += weight
+				if domainTeams[0] == nil {
+					domainTeams[0] = make(map[int64]bool)
+				}
+				domainTeams[0][0] = true
+			} else {
+				seenDomains := make(map[int64]bool)
+				for _, tid := range tIDs {
+					teamRes[tid] += weight
+					var domID int64
+					if t, ok := teamMap[tid]; ok {
+						domID = t.DomainID
+					}
+					if domainTeams[domID] == nil {
+						domainTeams[domID] = make(map[int64]bool)
+					}
+					domainTeams[domID][tid] = true
+					if !seenDomains[domID] {
+						domainRes[domID] += weight
+						seenDomains[domID] = true
+					}
+				}
+			}
+		}
+
+		var domainSummaries []models.SiteDomainSummary
+		for domID, tMap := range domainTeams {
+			domAttached := len(domainAttachedUsers[domID])
+			domOnSite := domainOnSite[domID]
+			domRes := domainRes[domID]
+
+			if domAttached == 0 && domOnSite == 0 && domRes == 0 {
+				continue
+			}
+
+			var domAvgOnSite, domAvgRes, domPresenceRate float64
+			if siteWorkingDays > 0 {
+				domAvgOnSite = domOnSite / float64(siteWorkingDays)
+				domAvgRes = domRes / float64(siteWorkingDays)
+			}
+			if domAttached > 0 {
+				domPresenceRate = (domAvgOnSite / float64(domAttached)) * 100
+			}
+
+			var domName string
+			if domID == 0 {
+				domName = ""
+			} else if dm, ok := domainMap[domID]; ok {
+				domName = dm.Name
+			}
+
+			var teamSummaries []models.SiteTeamSummary
+			for tid := range tMap {
+				tAttached := teamAttached[tid]
+				tOnSite := teamOnSite[tid]
+				tRes := teamRes[tid]
+
+				if tAttached == 0 && tOnSite == 0 && tRes == 0 {
+					continue
+				}
+
+				var tAvgOnSite, tAvgRes, tPresenceRate float64
+				if siteWorkingDays > 0 {
+					tAvgOnSite = tOnSite / float64(siteWorkingDays)
+					tAvgRes = tRes / float64(siteWorkingDays)
+				}
+				if tAttached > 0 {
+					tPresenceRate = (tAvgOnSite / float64(tAttached)) * 100
+				}
+
+				var tName string
+				if tid == 0 {
+					tName = ""
+				} else if t, ok := teamMap[tid]; ok {
+					tName = t.Name
+				}
+
+				teamSummaries = append(teamSummaries, models.SiteTeamSummary{
+					TeamID:                tid,
+					TeamName:              tName,
+					AttachedPeople:        tAttached,
+					TotalOnSiteDays:       tOnSite,
+					AvgOnSitePerDay:       tAvgOnSite,
+					PresenceRate:          tPresenceRate,
+					TotalReservations:     tRes,
+					AvgReservationsPerDay: tAvgRes,
+				})
+			}
+
+			sort.Slice(teamSummaries, func(i, j int) bool {
+				if teamSummaries[i].TeamID == 0 {
+					return false
+				}
+				if teamSummaries[j].TeamID == 0 {
+					return true
+				}
+				return teamSummaries[i].TeamName < teamSummaries[j].TeamName
+			})
+
+			domainSummaries = append(domainSummaries, models.SiteDomainSummary{
+				DomainID:              domID,
+				DomainName:            domName,
+				AttachedPeople:        domAttached,
+				TotalOnSiteDays:       domOnSite,
+				AvgOnSitePerDay:       domAvgOnSite,
+				PresenceRate:          domPresenceRate,
+				TotalReservations:     domRes,
+				AvgReservationsPerDay: domAvgRes,
+				Teams:                 teamSummaries,
+			})
+		}
+
+		sort.Slice(domainSummaries, func(i, j int) bool {
+			if domainSummaries[i].DomainID == 0 {
+				return false
+			}
+			if domainSummaries[j].DomainID == 0 {
+				return true
+			}
+			return domainSummaries[i].DomainName < domainSummaries[j].DomainName
+		})
+
 		sum := models.SiteReportSummary{
 			Site:                  s,
 			Seats:                 s.Seats,
@@ -341,6 +617,7 @@ func (h *FloorplanHandler) buildSitesReportData(r *http.Request) (*SitesReportPa
 			TotalReservations:     siteResWorkingDays,
 			AvgReservationsPerDay: avgRes,
 			ReservationRate:       resRate,
+			Domains:               domainSummaries,
 		}
 		summaries = append(summaries, sum)
 

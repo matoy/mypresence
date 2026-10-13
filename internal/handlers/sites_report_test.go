@@ -721,4 +721,277 @@ func TestSitesReport_ReservableSeatsRatio(t *testing.T) {
 	}
 }
 
+func TestSitesReport_DomainAndTeamBreakdown(t *testing.T) {
+	d := newExtraTestDB(t)
+	h := &FloorplanHandler{DB: d, DataDir: t.TempDir(), Render: noRender}
+
+	// 1. Create Domain
+	domID, err := d.CreateDomain("Engineering")
+	if err != nil {
+		t.Fatalf("CreateDomain: %v", err)
+	}
+
+	// 2. Create Teams
+	teamBackendID, err := d.CreateTeam("Backend Team")
+	if err != nil {
+		t.Fatalf("CreateTeam Backend: %v", err)
+	}
+	_ = d.UpdateTeamDomain(teamBackendID, domID)
+
+	teamFrontendID, err := d.CreateTeam("Frontend Team")
+	if err != nil {
+		t.Fatalf("CreateTeam Frontend: %v", err)
+	}
+	_ = d.UpdateTeamDomain(teamFrontendID, domID)
+
+	// 3. Create Site
+	siteID, err := d.CreateSite(models.Site{
+		Name:        "Lyon Hub",
+		CountryCode: "FR",
+		Seats:       20,
+	})
+	if err != nil {
+		t.Fatalf("CreateSite: %v", err)
+	}
+
+	// 4. Create Floorplan, Seat, Status
+	fpID, _ := d.CreateFloorplanWithSite("Floor 1", siteID, 1)
+	seatID, _ := d.CreateSeat(fpID, "L1", 10, 10)
+	statusID, _ := d.CreateStatus(models.Status{Name: "Office", Color: "#00ff00", Billable: true, OnSite: true, SortOrder: 1})
+
+	// 5. Users
+	// User 1: attached to Lyon Hub, Backend Team
+	u1ID, _ := d.CreateLocalUser("u1@lyon.com", "User 1", "pass")
+	_ = d.UpdateUserSite(u1ID, siteID)
+	_ = d.AddTeamMember(teamBackendID, u1ID)
+
+	// User 2: attached to Lyon Hub, both Backend AND Frontend (multi-teams)
+	u2ID, _ := d.CreateLocalUser("u2@lyon.com", "User 2", "pass")
+	_ = d.UpdateUserSite(u2ID, siteID)
+	_ = d.AddTeamMember(teamBackendID, u2ID)
+	_ = d.AddTeamMember(teamFrontendID, u2ID)
+
+	// User 3: attached to Lyon Hub, no team
+	u3ID, _ := d.CreateLocalUser("u3@lyon.com", "User 3", "pass")
+	_ = d.UpdateUserSite(u3ID, siteID)
+
+	// Presences on 2026-06-02 (Tuesday, working day)
+	_ = d.SetPresences(u1ID, []string{"2026-06-02"}, statusID, "full")
+	_ = d.SetPresences(u2ID, []string{"2026-06-02"}, statusID, "full")
+	_ = d.SetPresences(u3ID, []string{"2026-06-02"}, statusID, "full")
+
+	// Desk reservation for User 1 on 2026-06-02
+	_ = d.ReserveSeat(seatID, u1ID, "2026-06-02", "full")
+
+	// Call API
+	req := createAdminReq(t, d, http.MethodGet, fmt.Sprintf("/api/admin/sites-report?year=2026&month=6&site=%d", siteID), nil)
+	w := httptest.NewRecorder()
+	middleware.Auth(d, http.HandlerFunc(h.SitesReportAPI)).ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("SitesReportAPI returned %d: %s", w.Code, w.Body.String())
+	}
+
+	var data SitesReportPageData
+	if err := json.Unmarshal(w.Body.Bytes(), &data); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if len(data.Summaries) != 1 {
+		t.Fatalf("expected 1 site summary, got %d", len(data.Summaries))
+	}
+	siteSum := data.Summaries[0]
+	if siteSum.AttachedPeople != 3 {
+		t.Errorf("expected 3 attached people at site, got %d", siteSum.AttachedPeople)
+	}
+
+	// Verify Domains in breakdown
+	if len(siteSum.Domains) != 2 {
+		t.Fatalf("expected 2 domains (Engineering + Unassigned), got %d", len(siteSum.Domains))
+	}
+
+	var engDomain, unassignedDomain *models.SiteDomainSummary
+	for i := range siteSum.Domains {
+		if siteSum.Domains[i].DomainID == domID {
+			engDomain = &siteSum.Domains[i]
+		}
+		if siteSum.Domains[i].DomainID == 0 {
+			unassignedDomain = &siteSum.Domains[i]
+		}
+	}
+
+	if engDomain == nil {
+		t.Fatalf("Engineering domain not found in breakdown")
+	}
+	if unassignedDomain == nil {
+		t.Fatalf("Unassigned domain not found in breakdown")
+	}
+
+	// Engineering domain should have 2 attached users (User 1 and User 2)
+	if engDomain.AttachedPeople != 2 {
+		t.Errorf("expected 2 attached people in Engineering domain, got %d", engDomain.AttachedPeople)
+	}
+	// OnSiteDays for Engineering domain: 2.0 (User 1 + User 2 on working day)
+	if engDomain.TotalOnSiteDays != 2.0 {
+		t.Errorf("expected 2.0 on-site days in Engineering domain, got %f", engDomain.TotalOnSiteDays)
+	}
+	// Reservations for Engineering domain: 1.0 (User 1)
+	if engDomain.TotalReservations != 1.0 {
+		t.Errorf("expected 1.0 reservation in Engineering domain, got %f", engDomain.TotalReservations)
+	}
+
+	// Verify Teams in Engineering domain
+	if len(engDomain.Teams) != 2 {
+		t.Fatalf("expected 2 teams in Engineering, got %d", len(engDomain.Teams))
+	}
+
+	var backendTeam, frontendTeam *models.SiteTeamSummary
+	for i := range engDomain.Teams {
+		if engDomain.Teams[i].TeamID == teamBackendID {
+			backendTeam = &engDomain.Teams[i]
+		}
+		if engDomain.Teams[i].TeamID == teamFrontendID {
+			frontendTeam = &engDomain.Teams[i]
+		}
+	}
+
+	if backendTeam == nil || frontendTeam == nil {
+		t.Fatalf("expected both Backend and Frontend teams in Engineering")
+	}
+
+	// Multi-teams rule: User 2 is counted in both Backend and Frontend!
+	// Backend: User 1 + User 2 = 2 attached people
+	if backendTeam.AttachedPeople != 2 {
+		t.Errorf("expected Backend team attached = 2, got %d", backendTeam.AttachedPeople)
+	}
+	// Frontend: User 2 = 1 attached person
+	if frontendTeam.AttachedPeople != 1 {
+		t.Errorf("expected Frontend team attached = 1, got %d", frontendTeam.AttachedPeople)
+	}
+
+	// Backend OnSite: User 1 + User 2 = 2.0
+	if backendTeam.TotalOnSiteDays != 2.0 {
+		t.Errorf("expected Backend on-site = 2.0, got %f", backendTeam.TotalOnSiteDays)
+	}
+	// Frontend OnSite: User 2 = 1.0
+	if frontendTeam.TotalOnSiteDays != 1.0 {
+		t.Errorf("expected Frontend on-site = 1.0, got %f", frontendTeam.TotalOnSiteDays)
+	}
+	// Backend Reservations: User 1 = 1.0
+	if backendTeam.TotalReservations != 1.0 {
+		t.Errorf("expected Backend reservations = 1.0, got %f", backendTeam.TotalReservations)
+	}
+
+	// Verify PresenceRate (Option 1: (AvgOnSite / AttachedPeople) * 100)
+	expectedEngPresenceRate := (engDomain.AvgOnSitePerDay / float64(engDomain.AttachedPeople)) * 100
+	if engDomain.PresenceRate != expectedEngPresenceRate {
+		t.Errorf("expected Engineering PresenceRate = %f, got %f", expectedEngPresenceRate, engDomain.PresenceRate)
+	}
+
+	expectedBackendPresenceRate := (backendTeam.AvgOnSitePerDay / float64(backendTeam.AttachedPeople)) * 100
+	if backendTeam.PresenceRate != expectedBackendPresenceRate {
+		t.Errorf("expected Backend PresenceRate = %f, got %f", expectedBackendPresenceRate, backendTeam.PresenceRate)
+	}
+
+	// Unassigned domain: User 3
+	if unassignedDomain.AttachedPeople != 1 {
+		t.Errorf("expected 1 attached person in Unassigned domain, got %d", unassignedDomain.AttachedPeople)
+	}
+	if unassignedDomain.TotalOnSiteDays != 1.0 {
+		t.Errorf("expected 1.0 on-site day in Unassigned domain, got %f", unassignedDomain.TotalOnSiteDays)
+	}
+
+	// 6. Test HTML template rendering with this data
+	funcMap := template.FuncMap{
+		"index": func(m map[string]string, key string) string {
+			if m == nil {
+				return key
+			}
+			if v, ok := m[key]; ok {
+				return v
+			}
+			return key
+		},
+		"printf": fmt.Sprintf,
+		"int": func(f float64) int {
+			return int(f)
+		},
+		"fmtF": func(f float64) string {
+			return fmt.Sprintf("%.1f", f)
+		},
+		"percentF": func(a, b float64) int {
+			if b == 0 {
+				return 0
+			}
+			return int(a * 100 / b)
+		},
+		"getStrCountF": func(m map[string]float64, key string) float64 {
+			return m[key]
+		},
+		"gt": func(a, b int) bool {
+			return a > b
+		},
+		"eq": func(a, b interface{}) bool {
+			return fmt.Sprintf("%v", a) == fmt.Sprintf("%v", b)
+		},
+		"upper": strings.ToUpper,
+		"slice": func(s string, i, j int) string {
+			if i < len(s) && j <= len(s) {
+				return s[i:j]
+			}
+			return s
+		},
+		"hasRole": func(u *models.User, r string) bool {
+			return true
+		},
+	}
+
+	wd, _ := os.Getwd()
+	for !strings.HasSuffix(wd, "mypresence") {
+		parent := filepath.Dir(wd)
+		if parent == wd {
+			break
+		}
+		wd = parent
+	}
+	tplPath := filepath.Join(wd, "web/templates/admin_sites_report.html")
+	tplBytes, err := os.ReadFile(tplPath)
+	if err != nil {
+		t.Fatalf("read template: %v", err)
+	}
+
+	tmpl, err := template.New("admin_sites_report.html").Funcs(funcMap).Parse(string(tplBytes))
+	if err != nil {
+		t.Fatalf("parse template: %v", err)
+	}
+
+	viewData := map[string]interface{}{
+		"T":    i18n.T("en"),
+		"Page": "admin_sites_report",
+		"Data": &data,
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.ExecuteTemplate(&buf, "content", viewData); err != nil {
+		t.Fatalf("execute template: %v", err)
+	}
+
+	renderedHTML := buf.String()
+	if !strings.Contains(renderedHTML, "Domain breakdown") {
+		t.Errorf("rendered HTML missing 'Domain breakdown'")
+	}
+	if !strings.Contains(renderedHTML, "Teams breakdown") {
+		t.Errorf("rendered HTML missing 'Teams breakdown'")
+	}
+	if !strings.Contains(renderedHTML, "Engineering") {
+		t.Errorf("rendered HTML missing 'Engineering' domain")
+	}
+	if !strings.Contains(renderedHTML, "Backend Team") {
+		t.Errorf("rendered HTML missing 'Backend Team'")
+	}
+	if !strings.Contains(renderedHTML, "Frontend Team") {
+		t.Errorf("rendered HTML missing 'Frontend Team'")
+	}
+}
+
+
 

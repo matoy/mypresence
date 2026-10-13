@@ -1534,6 +1534,28 @@ ORDER BY t.name
 	return users
 }
 
+// GetActiveUserTeamIDs returns a mapping of user_id -> slice of team_ids for all active memberships (left_at IS NULL).
+func (d *DB) GetActiveUserTeamIDs() (map[int64][]int64, error) {
+	rows, err := d.core.Query(`
+SELECT user_id, team_id
+FROM user_teams
+WHERE left_at IS NULL
+`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() //nolint:errcheck
+
+	m := make(map[int64][]int64)
+	for rows.Next() {
+		var uid, tid int64
+		if err := rows.Scan(&uid, &tid); err == nil {
+			m[uid] = append(m[uid], tid)
+		}
+	}
+	return m, rows.Err()
+}
+
 // HydrateTeamMembersSites populates SiteName and SiteCountryCode on the given team members using ListSites.
 func (d *DB) HydrateTeamMembersSites(members []models.TeamMember) []models.TeamMember {
 	sites, err := d.ListSites()

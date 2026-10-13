@@ -741,6 +741,32 @@ type ProjectReportRow struct {
 	TotalDays       float64 // sum of all months including future
 }
 
+// SiteTeamSummary represents monthly stats for a team at a specific site.
+type SiteTeamSummary struct {
+	TeamID                int64   `json:"team_id"`
+	TeamName              string  `json:"team_name"`
+	AttachedPeople        int     `json:"attached_people"`
+	TotalOnSiteDays       float64 `json:"total_on_site_days"`
+	AvgOnSitePerDay       float64 `json:"avg_on_site_per_day"`
+	PresenceRate          float64 `json:"presence_rate"`
+	TotalReservations     float64 `json:"total_reservations"`
+	AvgReservationsPerDay float64 `json:"avg_reservations_per_day"`
+}
+
+// SiteDomainSummary represents monthly stats for a domain at a specific site,
+// including its teams.
+type SiteDomainSummary struct {
+	DomainID              int64             `json:"domain_id"`
+	DomainName            string            `json:"domain_name"`
+	AttachedPeople        int               `json:"attached_people"`
+	TotalOnSiteDays       float64           `json:"total_on_site_days"`
+	AvgOnSitePerDay       float64           `json:"avg_on_site_per_day"`
+	PresenceRate          float64           `json:"presence_rate"`
+	TotalReservations     float64           `json:"total_reservations"`
+	AvgReservationsPerDay float64           `json:"avg_reservations_per_day"`
+	Teams                 []SiteTeamSummary `json:"teams"`
+}
+
 // SiteReportSummary represents monthly aggregated stats for a site.
 type SiteReportSummary struct {
 	Site                  *Site
@@ -755,6 +781,7 @@ type SiteReportSummary struct {
 	TotalReservations     float64
 	AvgReservationsPerDay float64
 	ReservationRate       float64 // (TotalReservations / (ReservableSeats * WorkingDays)) * 100
+	Domains               []SiteDomainSummary
 }
 
 // SiteDailyReport represents daily breakdown metrics for a site.
