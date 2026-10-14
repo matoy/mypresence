@@ -29,24 +29,24 @@ func TestActivityPage_SiteFiltering(t *testing.T) {
 
 	// Create users
 	u1, _ := d.CreateLocalUser("paris@test.com", "Alice Paris", "password1")
-	d.UpdateUserSite(u1, siteParisID) //nolint:errcheck
+	_ = d.UpdateUserSite(u1, siteParisID)
 
 	u2, _ := d.CreateLocalUser("lyon@test.com", "Bob Lyon", "password1")
-	d.UpdateUserSite(u2, siteLyonID) //nolint:errcheck
+	_ = d.UpdateUserSite(u2, siteLyonID)
 
 	u3, _ := d.CreateLocalUser("none@test.com", "Charlie Unassigned", "password1")
 	// u3 has no site (site_id = 0)
 
 	// Create team and add users
 	teamID, _ := d.CreateTeam("Engineering")
-	d.AddTeamMember(teamID, u1) //nolint:errcheck
-	d.AddTeamMember(teamID, u2) //nolint:errcheck
-	d.AddTeamMember(teamID, u3) //nolint:errcheck
+	_ = d.AddTeamMember(teamID, u1)
+	_ = d.AddTeamMember(teamID, u2)
+	_ = d.AddTeamMember(teamID, u3)
 
 	// Presences in Jan 2026
-	d.SetPresences(u1, []string{"2026-01-05"}, statusID, "") // 1 billable day
-	d.SetPresences(u2, []string{"2026-01-06"}, statusID, "") // 1 billable day
-	d.SetPresences(u3, []string{"2026-01-07"}, statusID, "") // 1 billable day
+	_ = d.SetPresences(u1, []string{"2026-01-05"}, statusID, "") // 1 billable day
+	_ = d.SetPresences(u2, []string{"2026-01-06"}, statusID, "") // 1 billable day
+	_ = d.SetPresences(u3, []string{"2026-01-07"}, statusID, "") // 1 billable day
 
 	var captured map[string]interface{}
 	h := &ActivityHandler{
@@ -151,17 +151,17 @@ func TestActivityAPI_SiteFiltering(t *testing.T) {
 	siteLyonID, _ := d.CreateSite(models.Site{Name: "Lyon Office", CountryCode: "FR", Seats: 50})
 
 	u1, _ := d.CreateLocalUser("paris_api@test.com", "Alice Paris", "password1")
-	d.UpdateUserSite(u1, siteParisID) //nolint:errcheck
+	_ = d.UpdateUserSite(u1, siteParisID)
 
 	u2, _ := d.CreateLocalUser("lyon_api@test.com", "Bob Lyon", "password1")
-	d.UpdateUserSite(u2, siteLyonID) //nolint:errcheck
+	_ = d.UpdateUserSite(u2, siteLyonID)
 
 	u3, _ := d.CreateLocalUser("none_api@test.com", "Charlie Unassigned", "password1")
 
 	teamID, _ := d.CreateTeam("APITeam")
-	d.AddTeamMember(teamID, u1) //nolint:errcheck
-	d.AddTeamMember(teamID, u2) //nolint:errcheck
-	d.AddTeamMember(teamID, u3) //nolint:errcheck
+	_ = d.AddTeamMember(teamID, u1)
+	_ = d.AddTeamMember(teamID, u2)
+	_ = d.AddTeamMember(teamID, u3)
 
 	h := &ActivityHandler{DB: d, Render: noRender}
 
@@ -217,20 +217,20 @@ func TestActivityPage_SiteFiltering_DomainAndExecSummary(t *testing.T) {
 
 	// Users: Alice (Paris), Bob (Lyon), Charlie (none)
 	u1, _ := d.CreateLocalUser("alice_dom@test.com", "Alice Dom", "password1")
-	d.UpdateUserSite(u1, siteParisID) //nolint:errcheck
+	_ = d.UpdateUserSite(u1, siteParisID)
 
 	u2, _ := d.CreateLocalUser("bob_dom@test.com", "Bob Dom", "password1")
-	d.UpdateUserSite(u2, siteLyonID) //nolint:errcheck
+	_ = d.UpdateUserSite(u2, siteLyonID)
 
 	u3, _ := d.CreateLocalUser("charlie_dom@test.com", "Charlie Dom", "password1")
 
-	d.AddTeamMember(teamID, u1) //nolint:errcheck
-	d.AddTeamMember(teamID, u2) //nolint:errcheck
-	d.AddTeamMember(teamID, u3) //nolint:errcheck
+	_ = d.AddTeamMember(teamID, u1)
+	_ = d.AddTeamMember(teamID, u2)
+	_ = d.AddTeamMember(teamID, u3)
 
-	d.SetPresences(u1, []string{"2026-01-05"}, statusID, "")
-	d.SetPresences(u2, []string{"2026-01-06"}, statusID, "")
-	d.SetPresences(u3, []string{"2026-01-07"}, statusID, "")
+	_ = d.SetPresences(u1, []string{"2026-01-05"}, statusID, "")
+	_ = d.SetPresences(u2, []string{"2026-01-06"}, statusID, "")
+	_ = d.SetPresences(u3, []string{"2026-01-07"}, statusID, "")
 
 	var captured map[string]interface{}
 	h := &ActivityHandler{
@@ -300,21 +300,21 @@ func TestActivityPage_DomainTeamGroupingAndDeduplication(t *testing.T) {
 	uBob, _ := d.CreateLocalUser("bob@product.com", "Bob Multi", "password1")
 	uCharlie, _ := d.CreateLocalUser("charlie@product.com", "Charlie Beta", "password1")
 
-	d.AddTeamMember(teamAlphaID, uAlice)   //nolint:errcheck
-	d.AddTeamMember(teamAlphaID, uBob)     //nolint:errcheck
-	d.AddTeamMember(teamBetaID, uBob)      //nolint:errcheck (multi-team user!)
-	d.AddTeamMember(teamBetaID, uCharlie)  //nolint:errcheck
+	_ = d.AddTeamMember(teamAlphaID, uAlice)
+	_ = d.AddTeamMember(teamAlphaID, uBob)
+	_ = d.AddTeamMember(teamBetaID, uBob)
+	_ = d.AddTeamMember(teamBetaID, uCharlie)
 
 	// Presences:
 	// Alice: 5 days
-	d.SetPresences(uAlice, []string{"2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08", "2026-01-09"}, statusID, "")
+	_ = d.SetPresences(uAlice, []string{"2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08", "2026-01-09"}, statusID, "")
 	// Bob: 10 days
-	d.SetPresences(uBob, []string{
+	_ = d.SetPresences(uBob, []string{
 		"2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08", "2026-01-09",
 		"2026-01-12", "2026-01-13", "2026-01-14", "2026-01-15", "2026-01-16",
 	}, statusID, "")
 	// Charlie: 7 days
-	d.SetPresences(uCharlie, []string{
+	_ = d.SetPresences(uCharlie, []string{
 		"2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08", "2026-01-09",
 		"2026-01-12", "2026-01-13",
 	}, statusID, "")
