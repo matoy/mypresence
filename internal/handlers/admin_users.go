@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -24,6 +25,7 @@ type UsersAdminHandler struct {
 func (h *UsersAdminHandler) UsersPage(w http.ResponseWriter, r *http.Request) {
 	users, _ := h.DB.ListUsers()
 	sites, _ := h.DB.ListSites()
+	teams, _ := h.DB.ListTeams()
 	currentUser := middleware.GetUser(r)
 	var currentUserID int64
 	if currentUser != nil {
@@ -32,9 +34,202 @@ func (h *UsersAdminHandler) UsersPage(w http.ResponseWriter, r *http.Request) {
 	h.Render(w, r, "admin_users", map[string]interface{}{
 		"Users":         users,
 		"Sites":         sites,
+		"Teams":         teams,
 		"AllRoles":      models.AllRoles,
 		"CurrentUserID": currentUserID,
 		"Error":         r.URL.Query().Get("error"),
+	})
+}
+
+// PreprovisionUser creates a new SSO user account and optionally assigns a site and teams.
+func (h *UsersAdminHandler) PreprovisionUser(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Email   string  `json:"email"`
+		Name    string  `json:"name"`
+		SiteID  int64   `json:"site_id"`
+		TeamIDs []int64 `json:"team_ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		metrics.AdminOpsTotal.WithLabelValues("user", "preprovision", "failure").Inc()
+		jsonError(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	req.Name = strings.TrimSpace(req.Name)
+	if req.Email == "" || !strings.Contains(req.Email, "@") {
+		metrics.AdminOpsTotal.WithLabelValues("user", "preprovision", "failure").Inc()
+		jsonError(w, "Valid email is required", http.StatusBadRequest)
+		return
+	}
+
+	// Check if user already exists
+	if existing, _ := h.DB.GetUserByEmail(req.Email); existing != nil {
+		metrics.AdminOpsTotal.WithLabelValues("user", "preprovision", "failure").Inc()
+		jsonError(w, "Email already in use", http.StatusConflict)
+		return
+	}
+
+	uid, err := h.DB.PreprovisionUser(req.Email, req.Name, req.SiteID)
+	if err != nil {
+		metrics.AdminOpsTotal.WithLabelValues("user", "preprovision", "failure").Inc()
+		jsonError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	for _, tid := range req.TeamIDs {
+		if tid > 0 {
+			_ = h.DB.AddTeamMember(tid, uid)
+		}
+	}
+
+	createdUser, _ := h.DB.GetUserByID(uid)
+	if createdUser != nil {
+		hydrated := h.DB.HydrateUsersTeams([]models.User{*createdUser})
+		if len(hydrated) > 0 {
+			createdUser = &hydrated[0]
+		}
+	}
+
+	currentUser := middleware.GetUser(r)
+	if currentUser != nil {
+		h.DB.LogAdminAction(currentUser.ID, "user", uid, "preprovision", req.Email)
+		slog.Info("admin.user.preprovision", "actor", currentUser.Email, "new_user", req.Email)
+	}
+	metrics.AdminOpsTotal.WithLabelValues("user", "preprovision", "success").Inc()
+	jsonOK(w, map[string]interface{}{
+		"id":     uid,
+		"status": "ok",
+		"user":   createdUser,
+	})
+}
+
+// BatchPreprovisionUsers handles batch pre-provisioning from raw multiline text or CSV.
+func (h *UsersAdminHandler) BatchPreprovisionUsers(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Text          string `json:"text"`
+		DefaultSiteID int64  `json:"default_site_id"`
+		DefaultTeamID int64  `json:"default_team_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		metrics.AdminOpsTotal.WithLabelValues("user", "batch_preprovision", "failure").Inc()
+		jsonError(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	lines := strings.Split(req.Text, "\n")
+	var created, skipped int
+	var errMsgs []string
+
+	allSites, _ := h.DB.ListSites()
+	allTeams, _ := h.DB.ListTeams()
+
+	findSiteID := func(val string) int64 {
+		val = strings.TrimSpace(val)
+		if val == "" {
+			return req.DefaultSiteID
+		}
+		if id, err := strconv.ParseInt(val, 10, 64); err == nil && id > 0 {
+			return id
+		}
+		for _, s := range allSites {
+			if strings.EqualFold(s.Name, val) {
+				return s.ID
+			}
+		}
+		return req.DefaultSiteID
+	}
+
+	findTeamID := func(val string) int64 {
+		val = strings.TrimSpace(val)
+		if val == "" {
+			return req.DefaultTeamID
+		}
+		if id, err := strconv.ParseInt(val, 10, 64); err == nil && id > 0 {
+			return id
+		}
+		for _, t := range allTeams {
+			if strings.EqualFold(t.Name, val) {
+				return t.ID
+			}
+		}
+		return req.DefaultTeamID
+	}
+
+	for lineNum, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		lower := strings.ToLower(line)
+		if strings.HasPrefix(lower, "email") || strings.HasPrefix(lower, "courriel") {
+			continue
+		}
+
+		var cols []string
+		if strings.Contains(line, ";") {
+			cols = strings.Split(line, ";")
+		} else if strings.Contains(line, "\t") {
+			cols = strings.Split(line, "\t")
+		} else if strings.Contains(line, ",") {
+			cols = strings.Split(line, ",")
+		} else {
+			cols = []string{line}
+		}
+
+		email := strings.ToLower(strings.TrimSpace(cols[0]))
+		if email == "" || !strings.Contains(email, "@") {
+			errMsgs = append(errMsgs, fmt.Sprintf("Line %d: invalid email '%s'", lineNum+1, cols[0]))
+			continue
+		}
+
+		var name string
+		if len(cols) > 1 {
+			name = strings.TrimSpace(cols[1])
+		}
+		siteID := req.DefaultSiteID
+		if len(cols) > 2 && strings.TrimSpace(cols[2]) != "" {
+			siteID = findSiteID(cols[2])
+		}
+		teamID := req.DefaultTeamID
+		if len(cols) > 3 && strings.TrimSpace(cols[3]) != "" {
+			teamID = findTeamID(cols[3])
+		}
+
+		existing, _ := h.DB.GetUserByEmail(email)
+		if existing != nil {
+			skipped++
+			if teamID > 0 {
+				_ = h.DB.AddTeamMember(teamID, existing.ID)
+			}
+			continue
+		}
+
+		uid, err := h.DB.PreprovisionUser(email, name, siteID)
+		if err != nil {
+			errMsgs = append(errMsgs, fmt.Sprintf("Line %d (%s): %v", lineNum+1, email, err))
+			continue
+		}
+
+		if teamID > 0 {
+			_ = h.DB.AddTeamMember(teamID, uid)
+		}
+		created++
+	}
+
+	currentUser := middleware.GetUser(r)
+	if currentUser != nil {
+		h.DB.LogAdminAction(currentUser.ID, "user", 0, "batch_preprovision", fmt.Sprintf("created=%d, skipped=%d", created, skipped))
+		slog.Info("admin.user.batch_preprovision", "actor", currentUser.Email, "created", created, "skipped", skipped)
+	}
+	metrics.AdminOpsTotal.WithLabelValues("user", "batch_preprovision", "success").Inc()
+
+	users, _ := h.DB.ListUsers()
+	jsonOK(w, map[string]interface{}{
+		"status":  "ok",
+		"created": created,
+		"skipped": skipped,
+		"errors":  errMsgs,
+		"users":   users,
 	})
 }
 

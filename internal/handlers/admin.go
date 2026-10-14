@@ -277,6 +277,86 @@ func (h *AdminHandler) AddTeamMember(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
+// PreprovisionTeamMember pre-provisions a user by email and directly adds them to the team.
+func (h *AdminHandler) PreprovisionTeamMember(w http.ResponseWriter, r *http.Request) {
+	teamID, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	currentUser := middleware.GetUser(r)
+	if currentUser == nil {
+		metrics.AdminOpsTotal.WithLabelValues("team", "preprovision_member", "failure").Inc()
+		jsonError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if !currentUser.HasAnyRole(models.RoleTeamManager, models.RoleGlobal) {
+		isLeader, _ := h.DB.IsLeaderOfTeam(currentUser.ID, teamID)
+		if !isLeader {
+			metrics.AdminOpsTotal.WithLabelValues("team", "preprovision_member", "failure").Inc()
+			jsonError(w, "Access denied", http.StatusForbidden)
+			return
+		}
+	}
+	var req struct {
+		Email string `json:"email"`
+		Name  string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		metrics.AdminOpsTotal.WithLabelValues("team", "preprovision_member", "failure").Inc()
+		jsonError(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	req.Name = strings.TrimSpace(req.Name)
+	if req.Email == "" || !strings.Contains(req.Email, "@") {
+		metrics.AdminOpsTotal.WithLabelValues("team", "preprovision_member", "failure").Inc()
+		jsonError(w, "Valid email is required", http.StatusBadRequest)
+		return
+	}
+
+	var userID int64
+	existing, _ := h.DB.GetUserByEmail(req.Email)
+	if existing != nil {
+		userID = existing.ID
+	} else {
+		uid, err := h.DB.PreprovisionUser(req.Email, req.Name, 0)
+		if err != nil {
+			metrics.AdminOpsTotal.WithLabelValues("team", "preprovision_member", "failure").Inc()
+			jsonError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		userID = uid
+	}
+
+	if err := h.DB.AddTeamMember(teamID, userID); err != nil {
+		metrics.AdminOpsTotal.WithLabelValues("team", "preprovision_member", "failure").Inc()
+		jsonError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	var actorID int64
+	actorName := "Admin"
+	if currentUser != nil {
+		actorID = currentUser.ID
+		if currentUser.Name != "" {
+			actorName = currentUser.Name
+		}
+		h.DB.LogAdminAction(currentUser.ID, "team", teamID, "preprovision_member", req.Email)
+		slog.Info("admin.team.preprovision_member", "actor", currentUser.Email, "team_id", teamID, "email", req.Email)
+	}
+	teamName := h.DB.GetTeamName(teamID)
+	if teamName == "" {
+		teamName = strconv.FormatInt(teamID, 10)
+	}
+	notifTitle := "Ajout à une équipe"
+	notifMsg := fmt.Sprintf("Vous avez été ajouté à l'équipe « %s » par %s.", teamName, actorName)
+	h.DB.CreateNotification(userID, actorID, "team_added", notifTitle, notifMsg, teamName) //nolint:errcheck
+
+	user, _ := h.DB.GetUserByID(userID)
+	metrics.AdminOpsTotal.WithLabelValues("team", "preprovision_member", "success").Inc()
+	jsonOK(w, map[string]interface{}{
+		"status": "ok",
+		"user":   user,
+	})
+}
+
 // RemoveTeamMember removes a user from a team.
 func (h *AdminHandler) RemoveTeamMember(w http.ResponseWriter, r *http.Request) {
 	teamID, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)

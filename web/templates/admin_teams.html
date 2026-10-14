@@ -334,8 +334,21 @@
                         <span x-text="u.email" class="text-xs text-gray-400"></span>
                     </button>
                 </template>
-                <div x-show="(allUsers || []).filter(u => !memberIds.includes(u.id) && (memberSearch === '' || (u.name || '').toLowerCase().includes(memberSearch.toLowerCase()) || (u.email || '').toLowerCase().includes(memberSearch.toLowerCase()))).length === 0"
+                <div x-show="(allUsers || []).filter(u => !memberIds.includes(u.id) && (memberSearch === '' || (u.name || '').toLowerCase().includes(memberSearch.toLowerCase()) || (u.email || '').toLowerCase().includes(memberSearch.toLowerCase()))).length === 0 && !memberSearch.includes('@')"
                      class="px-3 py-3 text-sm text-gray-400 text-center" x-text="_t['teams.no_users']"></div>
+            </div>
+            <!-- Option to preprovision on the fly when email is entered -->
+            <div x-show="memberSearch.trim().length > 3 && memberSearch.includes('@')" class="mt-2">
+                <button type="button"
+                        @click="preprovisionMember({{.Team.ID}}, memberSearch); showAddMember = false; memberSearch = ''"
+                        class="w-full text-left px-3 py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 rounded-lg transition flex items-center justify-between text-xs font-semibold shadow-xs">
+                    <span class="truncate flex items-center gap-1.5">
+                        <span>➕</span>
+                        <span>{{index $.T "teams.preprovision_add"}} :</span>
+                        <span class="font-mono underline" x-text="memberSearch.trim()"></span>
+                    </span>
+                    <span class="px-1.5 py-0.5 text-[10px] bg-emerald-200 text-emerald-800 rounded font-bold uppercase shrink-0">SSO</span>
+                </button>
             </div>
         </div>
         {{end}}

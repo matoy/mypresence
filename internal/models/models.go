@@ -47,8 +47,9 @@ type User struct {
 	SiteName        string    `json:"site_name,omitempty"`
 	SiteCountryCode string    `json:"site_country_code,omitempty"`
 	Language        string    `json:"language,omitempty"`
-	Teams           []string  `json:"teams,omitempty"`
-	CreatedAt       time.Time `json:"created_at"`
+	Teams           []string   `json:"teams,omitempty"`
+	LastLoginAt     *time.Time `json:"last_login_at,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
 }
 
 // HasRole checks if the user has the given role, or the global role.

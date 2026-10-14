@@ -483,8 +483,9 @@ role %s NOT NULL DEFAULT 'basic',
 password_hash %s,
 disabled %s NOT NULL DEFAULT %s,
 site_id BIGINT NOT NULL DEFAULT 0,
+last_login_at %s DEFAULT NULL,
 created_at %s DEFAULT CURRENT_TIMESTAMP
-`, ai, emailType, nameType, dl.varcharType(128), text, bool_, dl.boolDefault(false), dt)),
+`, ai, emailType, nameType, dl.varcharType(128), text, bool_, dl.boolDefault(false), dt, dt)),
 
 		dl.createTableIfNotExists("teams", fmt.Sprintf(`
 id %s,
@@ -587,6 +588,7 @@ FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	d.core.Exec(`UPDATE users SET role = 'global' WHERE role = 'admin'`)                                                                                         //nolint:errcheck
 	d.core.Exec(dl.rebind(dl.addColumnIfNotExists("users", "disabled", fmt.Sprintf("%s NOT NULL DEFAULT %s", bool_, dl.boolDefault(false)))))                    //nolint:errcheck
 	d.core.Exec(dl.rebind(dl.addColumnIfNotExists("users", "site_id", "BIGINT NOT NULL DEFAULT 0")))                                                            //nolint:errcheck
+	d.core.Exec(dl.rebind(dl.addColumnIfNotExists("users", "last_login_at", dt+" DEFAULT NULL")))                                                                //nolint:errcheck
 	d.core.Exec(`UPDATE users SET role = REPLACE(role, 'stats_viewer', 'activity_viewer') WHERE role LIKE '%stats_viewer%'`)                                     //nolint:errcheck
 	d.core.Exec(`UPDATE users SET role = REPLACE(role, 'cra_viewer', 'activity_viewer') WHERE role LIKE '%cra_viewer%'`)                                         //nolint:errcheck
 	d.core.Exec(`UPDATE users SET role = REPLACE(role, 'projects_admin', 'projects_manager') WHERE role LIKE '%projects_admin%'`)                                //nolint:errcheck
@@ -1080,6 +1082,7 @@ func (d *DB) CreateSession(userID int64) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	_ = d.UpdateUserLastLogin(userID)
 	return token, nil
 }
 
@@ -1358,12 +1361,16 @@ func (d *DB) CleanExpiredResetTokens() {
 
 func (d *DB) GetUserByEmail(email string) (*models.User, error) {
 	var u models.User
+	var lastLoginAt sql.NullTime
 	err := d.core.QueryRow(
-		"SELECT id, email, name, role, COALESCE(password_hash,''), disabled, created_at, COALESCE(site_id, 0), COALESCE(language, '') FROM users WHERE email = ?",
+		"SELECT id, email, name, role, COALESCE(password_hash,''), disabled, created_at, COALESCE(site_id, 0), COALESCE(language, ''), last_login_at FROM users WHERE email = ?",
 		email,
-	).Scan(&u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt, &u.SiteID, &u.Language)
+	).Scan(&u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt, &u.SiteID, &u.Language, &lastLoginAt)
 	if err != nil {
 		return nil, err
+	}
+	if lastLoginAt.Valid {
+		u.LastLoginAt = &lastLoginAt.Time
 	}
 	u.IsLocal = u.PasswordHash != ""
 	if u.SiteID > 0 {
@@ -1377,12 +1384,16 @@ func (d *DB) GetUserByEmail(email string) (*models.User, error) {
 
 func (d *DB) GetUserByID(id int64) (*models.User, error) {
 	var u models.User
+	var lastLoginAt sql.NullTime
 	err := d.core.QueryRow(
-		"SELECT id, email, name, role, COALESCE(password_hash,''), disabled, created_at, COALESCE(site_id, 0), COALESCE(language, '') FROM users WHERE id = ?",
+		"SELECT id, email, name, role, COALESCE(password_hash,''), disabled, created_at, COALESCE(site_id, 0), COALESCE(language, ''), last_login_at FROM users WHERE id = ?",
 		id,
-	).Scan(&u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt, &u.SiteID, &u.Language)
+	).Scan(&u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt, &u.SiteID, &u.Language, &lastLoginAt)
 	if err != nil {
 		return nil, err
+	}
+	if lastLoginAt.Valid {
+		u.LastLoginAt = &lastLoginAt.Time
 	}
 	u.IsLocal = u.PasswordHash != ""
 	if u.SiteID > 0 {
@@ -1412,7 +1423,7 @@ func (d *DB) UpsertUser(email, name string) (*models.User, error) {
 }
 
 func (d *DB) ListUsers() ([]models.User, error) {
-	rows, err := d.core.Query("SELECT id, email, name, role, COALESCE(password_hash,''), disabled, created_at, COALESCE(site_id, 0), COALESCE(language, '') FROM users ORDER BY name")
+	rows, err := d.core.Query("SELECT id, email, name, role, COALESCE(password_hash,''), disabled, created_at, COALESCE(site_id, 0), COALESCE(language, ''), last_login_at FROM users ORDER BY name")
 	if err != nil {
 		return nil, err
 	}
@@ -1421,8 +1432,12 @@ func (d *DB) ListUsers() ([]models.User, error) {
 	var users []models.User
 	for rows.Next() {
 		var u models.User
-		if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt, &u.SiteID, &u.Language); err != nil {
+		var lastLoginAt sql.NullTime
+		if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt, &u.SiteID, &u.Language, &lastLoginAt); err != nil {
 			return nil, err
+		}
+		if lastLoginAt.Valid {
+			u.LastLoginAt = &lastLoginAt.Time
 		}
 		u.IsLocal = u.PasswordHash != ""
 		users = append(users, u)
@@ -1455,7 +1470,7 @@ func (d *DB) GetUserLanguage(userID int64) string {
 
 // GetUsersBySite returns all users assigned to a site.
 func (d *DB) GetUsersBySite(siteID int64) ([]models.User, error) {
-	rows, err := d.core.Query(d.dialect.rebind("SELECT id, email, name, role, COALESCE(password_hash,''), disabled, created_at, COALESCE(site_id, 0), COALESCE(language, '') FROM users WHERE site_id = ? ORDER BY name"), siteID)
+	rows, err := d.core.Query(d.dialect.rebind("SELECT id, email, name, role, COALESCE(password_hash,''), disabled, created_at, COALESCE(site_id, 0), COALESCE(language, ''), last_login_at FROM users WHERE site_id = ? ORDER BY name"), siteID)
 	if err != nil {
 		return nil, err
 	}
@@ -1464,8 +1479,12 @@ func (d *DB) GetUsersBySite(siteID int64) ([]models.User, error) {
 	var users []models.User
 	for rows.Next() {
 		var u models.User
-		if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt, &u.SiteID, &u.Language); err != nil {
+		var lastLoginAt sql.NullTime
+		if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt, &u.SiteID, &u.Language, &lastLoginAt); err != nil {
 			return nil, err
+		}
+		if lastLoginAt.Valid {
+			u.LastLoginAt = &lastLoginAt.Time
 		}
 		u.IsLocal = u.PasswordHash != ""
 		users = append(users, u)
@@ -1592,6 +1611,64 @@ func (d *DB) UpdateUserRoles(id int64, roles string) error {
 	d.sessionCache.Clear()
 	_, err := d.core.Exec("UPDATE users SET role = ? WHERE id = ?", roles, id)
 	return err
+}
+
+// UpdateUserLastLogin updates the last_login_at timestamp for a user.
+func (d *DB) UpdateUserLastLogin(userID int64) error {
+	_, err := d.core.Exec(d.dialect.rebind("UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?"), userID)
+	return err
+}
+
+// CleanNameFromEmail converts an email address into a human-readable display name.
+// E.g. "jean-pierre.dupont@company.com" -> "Jean-Pierre Dupont"
+func CleanNameFromEmail(email string) string {
+	parts := strings.Split(email, "@")
+	if len(parts) == 0 || parts[0] == "" {
+		return email
+	}
+	raw := parts[0]
+	raw = strings.ReplaceAll(raw, ".", " ")
+	raw = strings.ReplaceAll(raw, "_", " ")
+	words := strings.Fields(raw)
+	for i, w := range words {
+		if len(w) > 0 {
+			subwords := strings.Split(w, "-")
+			for j, sw := range subwords {
+				if len(sw) > 0 {
+					subwords[j] = strings.ToUpper(sw[:1]) + strings.ToLower(sw[1:])
+				}
+			}
+			words[i] = strings.Join(subwords, "-")
+		}
+	}
+	res := strings.Join(words, " ")
+	if res == "" {
+		return email
+	}
+	return res
+}
+
+// PreprovisionUser creates a new SSO/federated user account (empty password) with 'basic' role.
+// If name is blank, a clean name is inferred from the email address.
+func (d *DB) PreprovisionUser(email, name string, siteID int64) (int64, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
+	if email == "" {
+		return 0, fmt.Errorf("email is required")
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = CleanNameFromEmail(email)
+	}
+	if siteID > 0 {
+		return d.core.InsertGetID(
+			`INSERT INTO users (email, name, role, password_hash, site_id) VALUES (?, ?, 'basic', '', ?)`,
+			email, name, siteID,
+		)
+	}
+	return d.core.InsertGetID(
+		`INSERT INTO users (email, name, role, password_hash) VALUES (?, ?, 'basic', '')`,
+		email, name,
+	)
 }
 
 func (d *DB) CreateLocalUser(email, name, password string) (int64, error) {

@@ -12,6 +12,10 @@
         <h1 class="text-2xl font-bold text-gray-900">{{index $.T "users.title"}}</h1>
         <div class="flex items-center gap-3">
             <span class="text-sm text-gray-400" x-text="{{if $.SAMLEnabled}}filteredFederated.length + filteredLocal.length{{else}}filteredLocal.length{{end}} + ' ' + _t['users.accounts']"></span>
+            <button @click="openPreprovisionModal()"
+               class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
+                {{index $.T "users.preprovision"}}
+            </button>
             <button @click="openCreateModal()"
                class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
                 {{index $.T "users.create_local"}}
@@ -56,6 +60,7 @@
                         class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
                     <option value="all">{{index $.T "admin.all"}}</option>
                     <option value="active">{{index $.T "admin.active"}}</option>
+                    <option value="pending">{{index $.T "users.status_pending"}}</option>
                     <option value="disabled">{{index $.T "admin.disabled"}}</option>
                 </select>
             </div>
@@ -221,10 +226,22 @@
                                 </div>
                             </td>
                             <td class="px-4 py-3 text-center">
-                                <span x-show="!user.disabled"
-                                      class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800" x-text="_t['admin.active']"></span>
                                 <span x-show="user.disabled"
                                       class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700" x-text="_t['admin.disabled']"></span>
+                                <div x-show="!user.disabled && !user.last_login_at" class="inline-flex flex-col items-center">
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200"
+                                          :title="_t['users.pending_tooltip']">
+                                        <span>⏳</span>
+                                        <span x-text="_t['users.status_pending']"></span>
+                                    </span>
+                                    <span x-show="user.created_at"
+                                          class="text-[10px] text-gray-400 mt-0.5 whitespace-nowrap"
+                                          x-text="formatSince(user.created_at)"></span>
+                                </div>
+                                <span x-show="!user.disabled && user.last_login_at"
+                                      class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"
+                                      :title="user.last_login_at ? _t['users.last_login'] + ': ' + formatLastLogin(user.last_login_at) : ''"
+                                      x-text="_t['admin.active']"></span>
                             </td>
                             <td class="px-4 py-3 text-right">
                                 <div x-show="!user._editing" class="flex items-center justify-end gap-1.5 flex-wrap">
@@ -478,10 +495,205 @@
         </form>
     </div>
 
+    <!-- Pre-provision SSO user modal -->
+    <div x-show="showPreprovisionModal" x-cloak
+         class="fixed inset-0 z-50 flex items-center justify-center p-4"
+         @keydown.escape.window="showPreprovisionModal = false">
+        <div class="absolute inset-0 bg-black/40 backdrop-blur-xs transition-opacity" @click="showPreprovisionModal = false"></div>
+        <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-xl mx-auto p-6 overflow-hidden flex flex-col max-h-[90vh]" @click.stop>
+            <div class="flex items-center justify-between pb-3 border-b border-gray-100">
+                <div>
+                    <h2 class="text-lg font-bold text-gray-900 flex items-center gap-2">
+                        <span>🔐</span>
+                        <span>{{index $.T "users.preprovision_title"}}</span>
+                    </h2>
+                    <p class="text-xs text-gray-500 mt-0.5">{{index $.T "users.preprovision_desc"}}</p>
+                </div>
+                <button type="button" @click="showPreprovisionModal = false" class="text-gray-400 hover:text-gray-600 p-1">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Tabs -->
+            <div class="flex border-b border-gray-200 mt-3">
+                <button type="button"
+                        @click="prevTab = 'single'; prevError = ''; batchError = ''; batchResult = null"
+                        :class="prevTab === 'single' ? 'border-primary text-primary font-semibold' : 'border-transparent text-gray-500 hover:text-gray-700'"
+                        class="px-4 py-2 text-xs border-b-2 transition">
+                    👤 {{index $.T "users.preprovision_single"}}
+                </button>
+                <button type="button"
+                        @click="prevTab = 'batch'; prevError = ''; batchError = ''; batchResult = null"
+                        :class="prevTab === 'batch' ? 'border-primary text-primary font-semibold' : 'border-transparent text-gray-500 hover:text-gray-700'"
+                        class="px-4 py-2 text-xs border-b-2 transition">
+                    📋 {{index $.T "users.preprovision_batch"}}
+                </button>
+            </div>
+
+            <!-- Tab 1: Single user -->
+            <div x-show="prevTab === 'single'" class="space-y-4 pt-4 overflow-y-auto">
+                <form @submit.prevent="preprovisionSingle()" autocomplete="off">
+                    <div class="space-y-3.5">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">
+                                {{index $.T "admin.email"}} <span class="text-red-500">*</span>
+                            </label>
+                            <input type="email" x-model="prevEmail" required placeholder="user@company.com" autocomplete="off"
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">
+                                {{index $.T "admin.name"}} <span class="text-xs text-gray-400 font-normal">({{index $.T "admin.optional"}} - {{index $.T "users.name_inferred_hint"}})</span>
+                            </label>
+                            <input type="text" x-model="prevName" autocomplete="off"
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">
+                                {{index $.T "users.site"}} <span class="text-xs text-gray-400 font-normal">({{index $.T "admin.optional"}})</span>
+                            </label>
+                            <select x-model.number="prevSiteId"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+                                <option :value="0">{{index $.T "users.no_site"}}</option>
+                                <template x-for="st in allSites" :key="'single_prev_site_' + st.id">
+                                    <option :value="st.id" x-text="st.name + (st.country_code ? ' (' + st.country_code + ')' : '')"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">
+                                {{index $.T "users.teams"}} <span class="text-xs text-gray-400 font-normal">({{index $.T "admin.optional"}})</span>
+                            </label>
+                            <div class="max-h-36 overflow-y-auto border border-gray-200 rounded-lg p-2 bg-gray-50/50 space-y-1">
+                                <template x-for="t in allTeams" :key="'single_prev_team_' + t.id">
+                                    <label class="flex items-center gap-2 p-1 hover:bg-white rounded cursor-pointer text-xs text-gray-700">
+                                        <input type="checkbox" :value="t.id"
+                                               :checked="prevTeamIds.includes(t.id)"
+                                               @change="if ($event.target.checked) { prevTeamIds.push(t.id); } else { prevTeamIds = prevTeamIds.filter(id => id !== t.id); }"
+                                               class="rounded border-gray-300 text-primary focus:ring-primary/50">
+                                        <span x-text="t.name" class="font-medium"></span>
+                                    </label>
+                                </template>
+                                <div x-show="allTeams.length === 0" class="text-xs text-gray-400 italic p-1">
+                                    {{index $.T "teams.no_teams"}}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p x-show="prevError" x-text="prevError" class="mt-3 text-sm text-red-600 font-medium"></p>
+
+                    <div class="flex justify-end gap-3 mt-6 pt-3 border-t border-gray-100">
+                        <button type="button" @click="showPreprovisionModal = false"
+                                class="text-xs px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
+                            {{index $.T "admin.cancel"}}
+                        </button>
+                        <button type="submit"
+                                :disabled="prevLoading"
+                                class="text-xs px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg transition font-medium shadow-sm inline-flex items-center gap-1.5"
+                                :class="{'opacity-50 cursor-wait': prevLoading}">
+                            <span x-show="prevLoading" class="animate-spin">⟳</span>
+                            <span>{{index $.T "users.preprovision"}}</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Tab 2: Batch import -->
+            <div x-show="prevTab === 'batch'" class="space-y-4 pt-4 overflow-y-auto">
+                <form @submit.prevent="preprovisionBatch()" autocomplete="off">
+                    <div class="space-y-3.5">
+                        <div class="p-3 bg-blue-50/70 border border-blue-200/60 rounded-xl text-xs text-blue-900 leading-relaxed">
+                            <p class="font-semibold mb-1">ℹ️ {{index $.T "users.batch_format_title"}}</p>
+                            <ul class="list-disc pl-4 space-y-0.5 text-blue-800">
+                                <li>{{index $.T "users.batch_format_line1"}}</li>
+                                <li>{{index $.T "users.batch_format_line2"}}</li>
+                            </ul>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-700 mb-1">{{index $.T "users.batch_default_site"}}</label>
+                                <select x-model.number="batchSiteId"
+                                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-xs">
+                                    <option :value="0">{{index $.T "users.no_site"}}</option>
+                                    <template x-for="st in allSites" :key="'batch_site_' + st.id">
+                                        <option :value="st.id" x-text="st.name"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-700 mb-1">{{index $.T "users.batch_default_team"}}</label>
+                                <select x-model.number="batchTeamId"
+                                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-xs">
+                                    <option :value="0">{{index $.T "users.no_team"}}</option>
+                                    <template x-for="t in allTeams" :key="'batch_team_' + t.id">
+                                        <option :value="t.id" x-text="t.name"></option>
+                                    </template>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="block text-xs font-semibold text-gray-700">
+                                    {{index $.T "users.batch_help"}}
+                                </label>
+                                <label class="text-xs text-primary hover:underline cursor-pointer flex items-center gap-1 font-medium">
+                                    <span>📁 {{index $.T "users.batch_upload_file"}}</span>
+                                    <input type="file" accept=".csv,.txt" @change="handleBatchFile($event)" class="hidden">
+                                </label>
+                            </div>
+                            <textarea x-model="batchText" rows="6" required
+                                      placeholder="alice@company.com&#10;bob@company.com,Bob Martin,Paris,Engineering"
+                                      class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-xs font-mono"></textarea>
+                        </div>
+                    </div>
+
+                    <p x-show="batchError" x-text="batchError" class="mt-3 text-sm text-red-600 font-medium"></p>
+
+                    <!-- Batch Result Summary -->
+                    <template x-if="batchResult">
+                        <div class="mt-3 p-3 rounded-xl border text-xs"
+                             :class="batchResult.errors && batchResult.errors.length > 0 ? 'bg-amber-50 border-amber-200 text-amber-900' : 'bg-green-50 border-green-200 text-green-900'">
+                            <p class="font-bold mb-1">
+                                ✓ {{index $.T "users.batch_summary_title"}} <span x-text="batchResult.created"></span> {{index $.T "users.batch_summary_created"}}, <span x-text="batchResult.skipped"></span> {{index $.T "users.batch_summary_skipped"}}.
+                            </p>
+                            <template x-if="batchResult.errors && batchResult.errors.length > 0">
+                                <ul class="list-disc pl-4 mt-1 text-red-700 max-h-24 overflow-y-auto space-y-0.5">
+                                    <template x-for="err in batchResult.errors" :key="'batch_err_' + err">
+                                        <li x-text="err"></li>
+                                    </template>
+                                </ul>
+                            </template>
+                        </div>
+                    </template>
+
+                    <div class="flex justify-end gap-3 mt-6 pt-3 border-t border-gray-100">
+                        <button type="button" @click="showPreprovisionModal = false"
+                                class="text-xs px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
+                            {{index $.T "admin.cancel"}}
+                        </button>
+                        <button type="submit"
+                                :disabled="batchLoading"
+                                class="text-xs px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg transition font-medium shadow-sm inline-flex items-center gap-1.5"
+                                :class="{'opacity-50 cursor-wait': batchLoading}">
+                            <span x-show="batchLoading" class="animate-spin">⟳</span>
+                            <span>{{index $.T "users.batch_submit"}}</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 <script id="admin-users-roles-data" type="application/json">{{json .AllRoles}}</script>
 <script id="admin-users-sites-data" type="application/json">{{json .Sites}}</script>
+<script id="admin-users-teams-data" type="application/json">{{json .Teams}}</script>
 <script id="admin-users-data" type="application/json">{{json .Users}}</script>
 <script id="admin-users-current-id" type="application/json">{{.CurrentUserID}}</script>
 
@@ -497,6 +709,11 @@ function usersRolesAdmin() {
     if (sitesEl && sitesEl.textContent) {
         try { allSites = JSON.parse(sitesEl.textContent); } catch (e) {}
     }
+    let allTeams = [];
+    const teamsEl = document.getElementById('admin-users-teams-data');
+    if (teamsEl && teamsEl.textContent) {
+        try { allTeams = JSON.parse(teamsEl.textContent); } catch (e) {}
+    }
     let usersData = [];
     const usersEl = document.getElementById('admin-users-data');
     if (usersEl && usersEl.textContent) {
@@ -510,7 +727,22 @@ function usersRolesAdmin() {
     return {
         allRoles,
         allSites,
+        allTeams,
         currentUserId,
+        showPreprovisionModal: false,
+        prevTab: 'single',
+        prevEmail: '',
+        prevName: '',
+        prevSiteId: 0,
+        prevTeamIds: [],
+        prevError: '',
+        prevLoading: false,
+        batchText: '',
+        batchSiteId: 0,
+        batchTeamId: 0,
+        batchError: '',
+        batchResult: null,
+        batchLoading: false,
         users: (usersData || []).map(u => ({
             ...u,
             teams: u.teams || [],
@@ -619,7 +851,8 @@ function usersRolesAdmin() {
 
         _applyFilters(list) {
             return list.filter(u => {
-                if (this.filterActive === 'active' && u.disabled) return false;
+                if (this.filterActive === 'active' && (u.disabled || (!u.is_local && !u.last_login_at))) return false;
+                if (this.filterActive === 'pending' && (u.disabled || u.is_local || u.last_login_at)) return false;
                 if (this.filterActive === 'disabled' && !u.disabled) return false;
                 if (this.filterRole !== 'all') {
                     const userRoleList = u.roles ? u.roles.split(',').map(r => r.trim()).filter(Boolean) : [];
@@ -771,6 +1004,131 @@ function usersRolesAdmin() {
             const resp = await fetch(`/admin/users/${user.id}`, { method: 'DELETE' });
             if (resp.ok) { this.users = this.users.filter(u => u.id !== user.id); }
             else { const d = await resp.json(); alert(d.error || 'Error'); }
+        },
+
+        openPreprovisionModal() {
+            this.prevEmail = '';
+            this.prevName = '';
+            this.prevSiteId = 0;
+            this.prevTeamIds = [];
+            this.prevError = '';
+            this.prevTab = 'single';
+            this.batchText = '';
+            this.batchSiteId = 0;
+            this.batchTeamId = 0;
+            this.batchError = '';
+            this.batchResult = null;
+            this.showPreprovisionModal = true;
+        },
+
+        async preprovisionSingle() {
+            this.prevError = '';
+            this.prevLoading = true;
+            try {
+                const resp = await fetch('/api/admin/users/preprovision', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: this.prevEmail,
+                        name: this.prevName,
+                        site_id: parseInt(this.prevSiteId) || 0,
+                        team_ids: this.prevTeamIds
+                    })
+                });
+                const data = await resp.json();
+                if (resp.ok && data.user) {
+                    const u = data.user;
+                    this.users.push({
+                        ...u,
+                        teams: u.teams || [],
+                        _editing: false,
+                        _changingPw: false,
+                        _newPw: '',
+                        _editName: '',
+                        _editEmail: ''
+                    });
+                    this.showPreprovisionModal = false;
+                } else {
+                    this.prevError = data.error || (_t['users.preprovision_error'] || 'Error during pre-provisioning');
+                }
+            } catch (e) {
+                this.prevError = _t['users.network_error'] || 'Network error';
+            }
+            this.prevLoading = false;
+        },
+
+        async preprovisionBatch() {
+            this.batchError = '';
+            this.batchResult = null;
+            this.batchLoading = true;
+            try {
+                const resp = await fetch('/api/admin/users/batch-preprovision', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        text: this.batchText,
+                        default_site_id: parseInt(this.batchSiteId) || 0,
+                        default_team_id: parseInt(this.batchTeamId) || 0
+                    })
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    this.batchResult = {
+                        created: data.created || 0,
+                        skipped: data.skipped || 0,
+                        errors: data.errors || []
+                    };
+                    if (data.users) {
+                        this.users = (data.users || []).map(u => ({
+                            ...u,
+                            teams: u.teams || [],
+                            _editing: false,
+                            _changingPw: false,
+                            _newPw: '',
+                            _editName: '',
+                            _editEmail: ''
+                        }));
+                    }
+                } else {
+                    this.batchError = data.error || (_t['users.batch_error'] || 'Error during import');
+                }
+            } catch (e) {
+                this.batchError = _t['users.network_error'] || 'Network error';
+            }
+            this.batchLoading = false;
+        },
+
+        handleBatchFile(e) {
+            const file = e.target.files && e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                this.batchText = event.target.result;
+            };
+            reader.readAsText(file);
+        },
+
+        formatLastLogin(dateStr) {
+            if (!dateStr) return '';
+            try {
+                const d = new Date(dateStr);
+                return d.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+            } catch (e) {
+                return dateStr;
+            }
+        },
+
+        formatSince(dateStr) {
+            if (!dateStr) return '';
+            try {
+                const d = new Date(dateStr);
+                if (isNaN(d.getTime())) return '';
+                const formatted = d.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: 'numeric' });
+                const pattern = _t['users.pending_since'] || 'Since %s';
+                return pattern.replace('%s', formatted);
+            } catch (e) {
+                return '';
+            }
         }
     };
 }

@@ -1297,6 +1297,26 @@ function teamsAdmin(initialTeams, countriesCatalog, allUsers, initialSites) {
             window.location.reload();
         },
 
+        async preprovisionMember(teamId, email) {
+            const trimmed = (email || '').trim().toLowerCase();
+            if (!trimmed || !trimmed.includes('@')) return;
+            try {
+                const resp = await fetch(`/api/admin/teams/${teamId}/preprovision-member`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: trimmed })
+                });
+                if (resp.ok) {
+                    window.location.reload();
+                } else {
+                    const data = await resp.json().catch(() => ({}));
+                    alert(data.error || (_t['teams.preprovision_error'] || 'Error during pre-provisioning'));
+                }
+            } catch (err) {
+                alert(_t['users.network_error'] || 'Network error');
+            }
+        },
+
         async removeMember(teamId, userId) {
             if (!confirm(_t['teams.remove_member_confirm'] || 'Remove this member from the team?')) return;
             await fetch(`/admin/teams/${teamId}/members/${userId}`, { method: 'DELETE' });
