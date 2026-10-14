@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/matoy/mypresence/internal/db"
@@ -24,6 +25,7 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 	currentUser := middleware.GetUser(r)
 	allTeams, _ := h.DB.ListTeams()
 	statuses, _ := h.DB.ListStatuses()
+	sites, _ := h.DB.ListSites()
 
 	teams, myTeamIDs := filterTeamsForUser(h.DB, currentUser, allTeams)
 	myDomains, teamsByDomain := domainsAccessForUser(h.DB, currentUser, allTeams)
@@ -130,6 +132,14 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 		stats = h.computeDomainStats(domainTeams, startDate, endDate)
 	} else if teamID > 0 {
 		stats, _ = h.DB.GetTeamStats(teamID, startDate, endDate)
+	}
+
+	siteFilter := strings.TrimSpace(r.URL.Query().Get("site"))
+	if siteFilter == "0" || siteFilter == "all" {
+		siteFilter = ""
+	}
+	if siteFilter != "" {
+		stats = filterStatsBySite(stats, siteFilter)
 	}
 	showDailyBreakdown := domainID == 0
 
@@ -241,12 +251,18 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 	ytdStart := fmt.Sprintf("%04d-01-01", periodEndYear)
 	if domainID > 0 {
 		ytdStats := h.computeDomainStats(domainTeams, ytdStart, endDate)
+		if siteFilter != "" {
+			ytdStats = filterStatsBySite(ytdStats, siteFilter)
+		}
 		for _, s := range ytdStats {
 			ytdBillableByUser[s.User.ID] = s.BillableDays
 			totalYTDBillable += s.BillableDays
 		}
 	} else if teamID > 0 {
 		ytdStats, _ := h.DB.GetTeamStats(teamID, ytdStart, endDate)
+		if siteFilter != "" {
+			ytdStats = filterStatsBySite(ytdStats, siteFilter)
+		}
 		for _, s := range ytdStats {
 			ytdBillableByUser[s.User.ID] = s.BillableDays
 			totalYTDBillable += s.BillableDays
@@ -260,7 +276,7 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 	var execUserCount int
 	if showExecSummary && len(allTeams) > 0 {
 		execStatusTotals, execTotalBillable, execTotalOnSite, execTotalNotSet, execTotalWorkingDays, execProjectActivityPct, execUserCount =
-			h.computeExecSummary(allTeams, startDate, endDate, monthKeys)
+			h.computeExecSummary(allTeams, startDate, endDate, monthKeys, siteFilter)
 	}
 
 	// Certification status per user for the displayed period:
@@ -299,8 +315,76 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 		domainGroups = append(domainGroups, domainGroupView{Domain: dm, Teams: teamsByDomain[dm.ID]})
 	}
 
+	// Build domain team groups when a domain is selected
+	var domainTeamGroups []DomainTeamGroup
+	if domainID > 0 && len(domainTeams) > 0 {
+		sortedDomainTeams := make([]models.Team, len(domainTeams))
+		copy(sortedDomainTeams, domainTeams)
+		sort.Slice(sortedDomainTeams, func(i, j int) bool { return sortedDomainTeams[i].Name < sortedDomainTeams[j].Name })
+
+		for _, t := range sortedDomainTeams {
+			tStats, _ := h.DB.GetTeamStats(t.ID, startDate, endDate)
+			if siteFilter != "" {
+				tStats = filterStatsBySite(tStats, siteFilter)
+			}
+
+			tBillable, tSetDays, tStatusTotals := computeStatusTotals(tStats)
+
+			thm, _ := h.DB.GetTeamHolidayMap(t.ID, startDate, endDate)
+			tWorkingDays, tHolidayCount := computeWorkingDaysFromRange(startDate, endDate, thm)
+			tWorkingDaysExcl := tWorkingDays - tHolidayCount
+
+			tTotalWorkingDays := 0.0
+			if len(tStats) > 0 {
+				tUserIDs := make([]int64, len(tStats))
+				for i, s := range tStats {
+					tUserIDs[i] = s.User.ID
+				}
+				tUserHolsMap, _ := h.DB.GetUsersHolidayMaps(tUserIDs, startDate, endDate)
+				for _, s := range tStats {
+					uHolMap := tUserHolsMap[s.User.ID]
+					uWorkingDays, uHolCount := computeWorkingDaysFromRange(startDate, endDate, uHolMap)
+					tTotalWorkingDays += float64(uWorkingDays - uHolCount)
+				}
+			}
+			tTotalNotSet := tTotalWorkingDays - tSetDays
+			if tTotalNotSet < 0 {
+				tTotalNotSet = 0
+			}
+
+			tTotalOnSite := 0.0
+			for _, s := range tStats {
+				tTotalOnSite += s.OnSiteDays
+			}
+
+			tYTDBillable := 0.0
+			tYTDStats, _ := h.DB.GetTeamStats(t.ID, ytdStart, endDate)
+			if siteFilter != "" {
+				tYTDStats = filterStatsBySite(tYTDStats, siteFilter)
+			}
+			for _, s := range tYTDStats {
+				tYTDBillable += s.BillableDays
+			}
+
+			domainTeamGroups = append(domainTeamGroups, DomainTeamGroup{
+				Team:             t,
+				Stats:            tStats,
+				StatusTotals:     tStatusTotals,
+				TotalBillable:    tBillable,
+				TotalOnSite:      tTotalOnSite,
+				TotalSetDays:     tSetDays,
+				TotalNotSet:      tTotalNotSet,
+				TotalWorkingDays: tTotalWorkingDays,
+				WorkingDaysExcl:  tWorkingDaysExcl,
+				YTDBillable:      tYTDBillable,
+			})
+		}
+	}
+
 	h.Render(w, r, "admin_activity", map[string]interface{}{
 		"Teams":                  teams,
+		"Sites":                  sites,
+		"SelectedSite":           siteFilter,
 		"DomainGroups":           domainGroups,
 		"IsDomainManager":        len(myDomains) > 0,
 		"Statuses":               statuses,
@@ -310,6 +394,7 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 		"TotalProjectDeclared":   totalProjectDeclared,
 		"SelectedTeamID":         teamID,
 		"SelectedDomainID":       domainID,
+		"DomainTeamGroups":       domainTeamGroups,
 		"ShowDailyBreakdown":     showDailyBreakdown,
 		"Year":                   year,
 		"Month":                  month,
@@ -365,6 +450,20 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 type domainGroupView struct {
 	Domain models.Domain
 	Teams  []models.Team
+}
+
+// DomainTeamGroup holds activity statistics for one team within a domain view.
+type DomainTeamGroup struct {
+	Team             models.Team
+	Stats            []models.UserStats
+	StatusTotals     map[int64]float64
+	TotalBillable    float64
+	TotalOnSite      float64
+	TotalSetDays     float64
+	TotalNotSet      float64
+	TotalWorkingDays float64
+	WorkingDaysExcl  int
+	YTDBillable      float64
 }
 
 // domainsAccessForUser returns the domains the given user manages, along with
@@ -462,6 +561,17 @@ func (h *ActivityHandler) ActivityAPI(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		jsonError(w, "Erreur", http.StatusInternalServerError)
 		return
+	}
+
+	siteFilter := strings.TrimSpace(r.URL.Query().Get("site"))
+	if siteFilter == "" {
+		siteFilter = strings.TrimSpace(r.URL.Query().Get("site_id"))
+	}
+	if siteFilter == "0" || siteFilter == "all" {
+		siteFilter = ""
+	}
+	if siteFilter != "" {
+		stats = filterStatsBySite(stats, siteFilter)
 	}
 
 	jsonOK(w, stats)
@@ -676,6 +786,7 @@ func (h *ActivityHandler) computeExecSummary(
 	allTeams []models.Team,
 	startDate, endDate string,
 	monthKeys []string,
+	siteFilter string,
 ) (statusTotals map[int64]float64, totalBillable, totalOnSite, totalNotSet, totalWorkingDays, projectActivityPct float64, userCount int) {
 	statusTotals = make(map[int64]float64)
 	totalSetDays := 0.0
@@ -688,6 +799,9 @@ func (h *ActivityHandler) computeExecSummary(
 	stats, err := h.DB.GetTeamsStats(teamIDs, startDate, endDate)
 	if err != nil {
 		stats = nil
+	}
+	if siteFilter != "" {
+		stats = filterStatsBySite(stats, siteFilter)
 	}
 	seenUserIDs := make([]int64, 0, len(stats))
 	for _, s := range stats {
@@ -943,3 +1057,33 @@ func (h *ActivityHandler) buildActivityMemberData(stats []models.UserStats, team
 	presenceMap, _ = h.DB.GetPresences(userIDs, startDate, endDate)
 	return
 }
+
+// filterStatsBySite filters a slice of UserStats by the given site filter.
+// A blank filter, "0", or "all" keeps all entries.
+// "unassigned" or "-1" keeps only users with SiteID == 0.
+// A positive integer string keeps only users with matching SiteID.
+func filterStatsBySite(stats []models.UserStats, siteFilter string) []models.UserStats {
+	if siteFilter == "" || siteFilter == "all" || siteFilter == "0" {
+		return stats
+	}
+	var filtered []models.UserStats
+	if siteFilter == "unassigned" || siteFilter == "-1" {
+		for _, s := range stats {
+			if s.User.SiteID == 0 {
+				filtered = append(filtered, s)
+			}
+		}
+		return filtered
+	}
+	targetID, err := strconv.ParseInt(siteFilter, 10, 64)
+	if err != nil || targetID <= 0 {
+		return stats
+	}
+	for _, s := range stats {
+		if s.User.SiteID == targetID {
+			filtered = append(filtered, s)
+		}
+	}
+	return filtered
+}
+

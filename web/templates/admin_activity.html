@@ -1,6 +1,6 @@
 {{define "content"}}
 {{with .Data}}
-{{$allStatuses := .Statuses}}{{$selectedTeamID := .SelectedTeamID}}{{$selectedDomainID := .SelectedDomainID}}{{$days := .Days}}{{$presenceMap := .PresenceMap}}{{$statusTotals := .StatusTotals}}{{$workingDays := .WorkingDays}}{{$workingDaysExcl := .WorkingDaysExcl}}{{$holidayCount := .HolidayCount}}{{$dayBillable := .DayBillable}}{{$dayOnSite := .DayOnSite}}{{$showProjectActivity := .ShowProjectActivity}}{{$projectActivityByUser := .ProjectActivityByUser}}{{$showExecSummary := .ShowExecSummary}}{{$execStatusTotals := .ExecStatusTotals}}{{$execTotalBillable := .ExecTotalBillable}}{{$execTotalOnSite := .ExecTotalOnSite}}{{$execTotalNotSet := .ExecTotalNotSet}}{{$execTotalWorkingDays := .ExecTotalWorkingDays}}{{$execProjectActivityPct := .ExecProjectActivityPct}}{{$execUserCount := .ExecUserCount}}{{$ytdBillableByUser := .YTDBillableByUser}}{{$totalYTDBillable := .TotalYTDBillable}}{{$certifiedUsers := .Certified}}{{$projectCertifiedUsers := .ProjectCertified}}{{$canDecertify := .CanDecertify}}{{$month := .Month}}{{$year := .Year}}{{$showDailyBreakdown := .ShowDailyBreakdown}}
+{{$allStatuses := .Statuses}}{{$selectedTeamID := .SelectedTeamID}}{{$selectedDomainID := .SelectedDomainID}}{{$selectedSite := .SelectedSite}}{{$days := .Days}}{{$presenceMap := .PresenceMap}}{{$statusTotals := .StatusTotals}}{{$workingDays := .WorkingDays}}{{$workingDaysExcl := .WorkingDaysExcl}}{{$holidayCount := .HolidayCount}}{{$dayBillable := .DayBillable}}{{$dayOnSite := .DayOnSite}}{{$showProjectActivity := .ShowProjectActivity}}{{$projectActivityByUser := .ProjectActivityByUser}}{{$showExecSummary := .ShowExecSummary}}{{$execStatusTotals := .ExecStatusTotals}}{{$execTotalBillable := .ExecTotalBillable}}{{$execTotalOnSite := .ExecTotalOnSite}}{{$execTotalNotSet := .ExecTotalNotSet}}{{$execTotalWorkingDays := .ExecTotalWorkingDays}}{{$execProjectActivityPct := .ExecProjectActivityPct}}{{$execUserCount := .ExecUserCount}}{{$ytdBillableByUser := .YTDBillableByUser}}{{$totalYTDBillable := .TotalYTDBillable}}{{$certifiedUsers := .Certified}}{{$projectCertifiedUsers := .ProjectCertified}}{{$canDecertify := .CanDecertify}}{{$month := .Month}}{{$year := .Year}}{{$showDailyBreakdown := .ShowDailyBreakdown}}
 <div class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
     <div class="flex items-center justify-between mb-6">
         <h1 class="text-2xl font-bold text-gray-900">{{index $.T "activity.title"}}</h1>
@@ -10,7 +10,7 @@
     <div class="bg-white rounded-xl shadow-md p-4 mb-6 flex flex-wrap items-center gap-4">
         <div class="flex items-center gap-2">
             {{if .IsRange}}
-            <a href="/admin/activity?date_from={{.PrevDateFrom}}&date_to={{.PrevDateTo}}{{if .SelectedDomainID}}&domain={{.SelectedDomainID}}{{else if .SelectedTeamID}}&team={{.SelectedTeamID}}{{end}}"
+            <a href="/admin/activity?date_from={{.PrevDateFrom}}&date_to={{.PrevDateTo}}{{if .SelectedDomainID}}&domain={{.SelectedDomainID}}{{else if .SelectedTeamID}}&team={{.SelectedTeamID}}{{end}}{{if .SelectedSite}}&site={{.SelectedSite}}{{end}}"
                class="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition" title="Previous period">
                 <svg class="h-4 w-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
@@ -27,21 +27,21 @@
                     {{.PeriodStartDay}} {{index $.T (printf "cal.month.%d" .PeriodStartMonth)}} {{.PeriodStartYear}} &ndash; {{.PeriodEndDay}} {{index $.T (printf "cal.month.%d" .PeriodEndMonth)}} {{.PeriodEndYear}}
                 {{end}}
             </span>
-            <a href="/admin/activity?date_from={{.NextDateFrom}}&date_to={{.NextDateTo}}{{if .SelectedDomainID}}&domain={{.SelectedDomainID}}{{else if .SelectedTeamID}}&team={{.SelectedTeamID}}{{end}}"
+            <a href="/admin/activity?date_from={{.NextDateFrom}}&date_to={{.NextDateTo}}{{if .SelectedDomainID}}&domain={{.SelectedDomainID}}{{else if .SelectedTeamID}}&team={{.SelectedTeamID}}{{end}}{{if .SelectedSite}}&site={{.SelectedSite}}{{end}}"
                class="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition" title="Next period">
                 <svg class="h-4 w-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
                 </svg>
             </a>
             {{else}}
-            <a href="/admin/activity?year={{.PrevYear}}&month={{.PrevMonth}}{{if .SelectedDomainID}}&domain={{.SelectedDomainID}}{{else if .SelectedTeamID}}&team={{.SelectedTeamID}}{{end}}"
+            <a href="/admin/activity?year={{.PrevYear}}&month={{.PrevMonth}}{{if .SelectedDomainID}}&domain={{.SelectedDomainID}}{{else if .SelectedTeamID}}&team={{.SelectedTeamID}}{{end}}{{if .SelectedSite}}&site={{.SelectedSite}}{{end}}"
                class="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition">
                 <svg class="h-4 w-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
                 </svg>
             </a>
             <span class="text-lg font-semibold text-gray-800 min-w-[180px] text-center">{{index $.T (printf "cal.month.%d" .Month)}} {{.Year}}</span>
-            <a href="/admin/activity?year={{.NextYear}}&month={{.NextMonth}}{{if .SelectedDomainID}}&domain={{.SelectedDomainID}}{{else if .SelectedTeamID}}&team={{.SelectedTeamID}}{{end}}"
+            <a href="/admin/activity?year={{.NextYear}}&month={{.NextMonth}}{{if .SelectedDomainID}}&domain={{.SelectedDomainID}}{{else if .SelectedTeamID}}&team={{.SelectedTeamID}}{{end}}{{if .SelectedSite}}&site={{.SelectedSite}}{{end}}"
                class="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition">
                 <svg class="h-4 w-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
@@ -67,7 +67,7 @@
                 {{index $.T "activity.apply"}}
             </button>
             {{if .IsRange}}
-            <a href="/admin/activity{{if .SelectedDomainID}}?domain={{.SelectedDomainID}}{{else if .SelectedTeamID}}?team={{.SelectedTeamID}}{{end}}"
+            <a href="/admin/activity?{{if .SelectedDomainID}}domain={{.SelectedDomainID}}{{else}}team={{.SelectedTeamID}}{{end}}{{if .SelectedSite}}&site={{.SelectedSite}}{{end}}"
                class="px-2 py-1.5 text-xs text-gray-500 hover:text-gray-700 underline transition"
                title="{{index $.T "activity.reset"}}">
                 {{index $.T "activity.reset"}}
@@ -95,6 +95,18 @@
                 {{end}}
             </select>
             {{end}}
+        </div>
+
+        <div class="flex items-center gap-2">
+            <label class="text-sm text-gray-500 font-medium">{{index $.T "sites_report.site"}}</label>
+            <select onchange="changeActivitySite(this.value)"
+                    class="px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm">
+                <option value="" {{if eq $selectedSite ""}}selected{{end}}>🌐 {{index $.T "teams.filter_site_all"}}</option>
+                <option value="unassigned" {{if eq $selectedSite "unassigned"}}selected{{end}}>{{index $.T "teams.filter_site_unassigned"}}</option>
+                {{range .Sites}}
+                <option value="{{.ID}}" {{if eq (printf "%d" .ID) $selectedSite}}selected{{end}}>{{if .CountryCode}}{{flagFor .CountryCode}} {{end}}{{.Name}}</option>
+                {{end}}
+            </select>
         </div>
     </div>
 
@@ -224,9 +236,21 @@
     <!-- Summary Stats Table -->
     <div class="flex items-center justify-between mb-3">
         <h2 class="text-lg font-semibold text-gray-800">{{index $.T "activity.team_summary"}}</h2>
-        <button onclick="exportTable('summary-table', 'recap_{{if .IsRange}}{{.FilterDateFrom}}_{{.FilterDateTo}}{{else}}{{index $.T (printf `cal.month.%d` .Month)}}_{{.Year}}{{end}}', '{{if .IsRange}}{{.FilterDateFrom}} - {{.FilterDateTo}}{{else}}{{index $.T (printf `cal.month.%d` .Month)}} {{.Year}}{{end}}')" class="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 shadow-sm transition">
-            {{index $.T "admin.export"}}
-        </button>
+        <div class="flex items-center gap-2">
+            {{if .SelectedDomainID}}
+            <button type="button" onclick="toggleAllTeamsActivity(true)"
+                    class="px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 shadow-sm transition">
+                {{index $.T "logs.expand_all"}}
+            </button>
+            <button type="button" onclick="toggleAllTeamsActivity(false)"
+                    class="px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 shadow-sm transition">
+                {{index $.T "logs.collapse_all"}}
+            </button>
+            {{end}}
+            <button onclick="exportTable('summary-table', 'recap_{{if .IsRange}}{{.FilterDateFrom}}_{{.FilterDateTo}}{{else}}{{index $.T (printf `cal.month.%d` .Month)}}_{{.Year}}{{end}}', '{{if .IsRange}}{{.FilterDateFrom}} - {{.FilterDateTo}}{{else}}{{index $.T (printf `cal.month.%d` .Month)}} {{.Year}}{{end}}')" class="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 shadow-sm transition">
+                {{index $.T "admin.export"}}
+            </button>
+        </div>
     </div>
     <div class="bg-white rounded-xl shadow-md overflow-x-auto mb-6">
         <table id="summary-table" class="w-full border-collapse">
@@ -265,6 +289,193 @@
                 </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
+                {{if .SelectedDomainID}}
+                {{range $tg := .DomainTeamGroups}}
+                <!-- Team header row (always visible, click to toggle members) -->
+                <tr class="bg-indigo-50/70 hover:bg-indigo-100/70 border-t-2 border-indigo-200 cursor-pointer select-none transition"
+                    onclick="toggleTeamActivity({{$tg.Team.ID}})"
+                    title="Cliquer pour afficher / masquer les membres">
+                    <td class="px-4 py-3 text-sm font-semibold text-indigo-950" data-v="{{$tg.Team.Name}}">
+                        <div class="flex items-center gap-2">
+                            <svg id="chevron-team-{{$tg.Team.ID}}" class="w-4 h-4 text-indigo-600 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                            </svg>
+                            <span>👥 {{$tg.Team.Name}}</span>
+                            <span class="text-xs font-normal text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full border border-indigo-200">
+                                {{len $tg.Stats}} {{if eq (len $tg.Stats) 1}}{{index $.T "activity.employee"}}{{else}}{{index $.T "activity.employees"}}{{end}}
+                            </span>
+                        </div>
+                    </td>
+                    {{range $allStatuses}}
+                    <td class="px-3 py-3 text-center">
+                        {{$countF := getCountF $tg.StatusTotals .ID}}
+                        {{if $countF}}
+                        <div class="inline-flex items-center justify-center min-w-[28px] h-7 rounded-full text-white text-xs font-bold"
+                             {{safeStyle "background-color" .Color}}>
+                            {{fmtF $countF}}
+                        </div>
+                        {{else}}
+                        <span class="text-gray-300">-</span>
+                        {{end}}
+                    </td>
+                    {{end}}
+                    <td class="px-4 py-3 text-center bg-gray-50/80">
+                        {{if $tg.TotalNotSet}}
+                        <span class="inline-flex items-center justify-center min-w-[28px] h-7 rounded-full bg-gray-300 text-gray-700 text-xs font-bold">
+                            {{fmtF $tg.TotalNotSet}}
+                        </span>
+                        {{else}}
+                        <span class="text-gray-300">-</span>
+                        {{end}}
+                    </td>
+                    <td class="px-4 py-3 text-center bg-green-50/80">
+                        <span class="inline-flex items-center justify-center min-w-[28px] h-7 rounded-full bg-green-600 text-white text-xs font-bold">
+                            {{fmtF $tg.TotalBillable}}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 text-center bg-blue-50/80">
+                        {{if $tg.TotalBillable}}
+                        <span class="text-sm font-semibold text-blue-800">{{percentF $tg.TotalOnSite $tg.TotalBillable}}%</span>
+                        {{else}}
+                        <span class="text-gray-300">—</span>
+                        {{end}}
+                    </td>
+                    <td class="px-4 py-3 text-center bg-purple-50/80">
+                        {{if $tg.TotalWorkingDays}}
+                        <span class="text-sm font-semibold text-purple-800">{{percentF $tg.TotalBillable $tg.TotalWorkingDays}}%</span>
+                        {{else}}
+                        <span class="text-gray-300">—</span>
+                        {{end}}
+                    </td>
+                    {{if $showProjectActivity}}
+                    <td class="px-4 py-3 text-center bg-indigo-50/80">
+                        <span class="text-gray-300">—</span>
+                    </td>
+                    <td class="px-2 py-3 text-center bg-indigo-50/80"></td>
+                    {{end}}
+                    <td class="px-4 py-3 text-center bg-orange-50/80">
+                        <span class="inline-flex items-center justify-center min-w-[28px] h-7 rounded-full bg-orange-400 text-white text-xs font-bold">
+                            {{fmtF $tg.YTDBillable}}
+                        </span>
+                    </td>
+                </tr>
+
+                <!-- Team members rows (folded by default with hidden class) -->
+                {{if $tg.Stats}}
+                {{range $stat := $tg.Stats}}
+                <tr class="team-member-row-{{$tg.Team.ID}} hidden hover:bg-gray-50 transition bg-white border-t border-gray-100">
+                    <td class="px-4 py-2.5 text-sm font-medium text-gray-800 pl-8" data-v="{{.User.Name}}">
+                        <div class="flex items-center gap-2">
+                            <span class="text-gray-400 text-xs select-none">↳</span>
+                            <div class="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">
+                                {{slice .User.Name 0 1}}
+                            </div>
+                            {{.User.Name}}
+                            {{if and $certifiedUsers (index $certifiedUsers .User.ID)}}
+                                {{if $canDecertify}}
+                                <button type="button"
+                                        data-uid="{{.User.ID}}"
+                                        data-uname="{{.User.Name}}"
+                                        data-month="{{$month}}"
+                                        data-year="{{$year}}"
+                                        onclick="openDecertifyModal(this.dataset.uid, this.dataset.uname, this.dataset.month, this.dataset.year)"
+                                        title="{{index $.T "cert.decertify_button_title"}}"
+                                        class="leading-none hover:opacity-70 transition text-amber-500">
+                                    <svg class="h-4 w-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 10-8 0v4h8z"/></svg>
+                                </button>
+                                {{else}}
+                                <span class="text-amber-500" title="{{index $.T "cert.certified_badge_title"}}">
+                                    <svg class="h-4 w-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 10-8 0v4h8z"/></svg>
+                                </span>
+                                {{end}}
+                            {{end}}
+                            {{if and $showProjectActivity $projectCertifiedUsers (index $projectCertifiedUsers .User.ID)}}
+                                {{if $canDecertify}}
+                                <button type="button"
+                                        data-uid="{{.User.ID}}"
+                                        data-uname="{{.User.Name}}"
+                                        data-month="{{$month}}"
+                                        data-year="{{$year}}"
+                                        onclick="openDecertifyProjectModal(this.dataset.uid, this.dataset.uname, this.dataset.month, this.dataset.year)"
+                                        title="{{index $.T "cert.decertify_project_button_title"}}"
+                                        class="leading-none hover:opacity-70 transition text-blue-500">
+                                    <svg class="h-4 w-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 10-8 0v4h8z"/></svg>
+                                </button>
+                                {{else}}
+                                <span class="text-blue-500" title="{{index $.T "cert.certified_project_badge_title"}}">
+                                    <svg class="h-4 w-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 10-8 0v4h8z"/></svg>
+                                </span>
+                                {{end}}
+                            {{end}}
+                        </div>
+                    </td>
+                    {{range $allStatuses}}
+                    <td class="px-3 py-2.5 text-center">
+                        {{$countF := getCountF $stat.StatusCounts .ID}}
+                        {{if $countF}}
+                        <div class="inline-flex items-center justify-center min-w-[28px] h-7 rounded-full text-white text-xs font-bold"
+                             {{safeStyle "background-color" .Color}}>
+                            {{fmtF $countF}}
+                        </div>
+                        {{else}}
+                        <span class="text-gray-300">-</span>
+                        {{end}}
+                    </td>
+                    {{end}}
+                    <td class="px-4 py-2.5 text-center bg-gray-50">
+                        {{$setF := sumMapF $stat.StatusCounts}}
+                        {{$notSetF := subF (i2f $tg.WorkingDaysExcl) $setF}}
+                        {{if $notSetF}}
+                        <span class="inline-flex items-center justify-center min-w-[28px] h-7 rounded-full bg-gray-300 text-gray-700 text-xs font-bold">
+                            {{fmtF $notSetF}}
+                        </span>
+                        {{else}}
+                        <span class="text-gray-300">-</span>
+                        {{end}}
+                    </td>
+                    <td class="px-4 py-2.5 text-center bg-green-50">
+                        <span class="inline-flex items-center justify-center min-w-[28px] h-7 rounded-full bg-green-500 text-white text-xs font-bold">
+                            {{fmtF .BillableDays}}
+                        </span>
+                    </td>
+                    <td class="px-4 py-2.5 text-center bg-blue-50">
+                        {{if .BillableDays}}
+                        <span class="text-sm font-medium text-blue-700">{{percentF .OnSiteDays .BillableDays}}%</span>
+                        {{else}}
+                        <span class="text-gray-300">—</span>
+                        {{end}}
+                    </td>
+                    <td class="px-4 py-2.5 text-center bg-purple-50">
+                        {{if $tg.WorkingDaysExcl}}
+                        <span class="text-sm font-medium text-purple-700">{{percentF .BillableDays (i2f $tg.WorkingDaysExcl)}}%</span>
+                        {{else}}
+                        <span class="text-gray-300">—</span>
+                        {{end}}
+                    </td>
+                    {{if $showProjectActivity}}
+                    <td class="px-4 py-2.5 text-center bg-indigo-50">
+                        <span class="text-gray-300">—</span>
+                    </td>
+                    <td class="px-2 py-2.5 text-center bg-indigo-50"></td>
+                    {{end}}
+                    <td class="px-4 py-2.5 text-center bg-orange-50">
+                        <span class="inline-flex items-center justify-center min-w-[28px] h-7 rounded-full bg-orange-400 text-white text-xs font-bold">
+                            {{fmtF (getCountF $ytdBillableByUser .User.ID)}}
+                        </span>
+                    </td>
+                </tr>
+                {{end}}
+                {{else}}
+                <tr class="team-member-row-{{$tg.Team.ID}} hidden bg-white border-t border-gray-100">
+                    <td colspan="100" class="px-4 py-3 pl-12 text-xs text-gray-400 italic">
+                        {{index $.T "activity.no_data"}}
+                    </td>
+                </tr>
+                {{end}}
+                {{end}}
+
+                {{else}}
+                <!-- Single team view: standard flat list -->
                 {{range $stat := .Stats}}
                 <tr class="hover:bg-gray-50 transition">
                     <td class="px-4 py-3 text-sm font-medium text-gray-800" data-v="{{.User.Name}}">
@@ -377,6 +588,7 @@
                         </span>
                     </td>
                 </tr>
+                {{end}}
                 {{end}}
             </tbody>
             <tfoot>
@@ -620,6 +832,55 @@ function changeActivityScope(kind, id) {
     params.delete('domain');
     params.set(kind, id);
     window.location.href = '/admin/activity?' + params.toString();
+}
+
+function changeActivitySite(siteVal) {
+    const params = new URLSearchParams(window.location.search);
+    if (siteVal && siteVal !== '0' && siteVal !== 'all') {
+        params.set('site', siteVal);
+    } else {
+        params.delete('site');
+    }
+    window.location.href = '/admin/activity?' + params.toString();
+}
+
+function toggleTeamActivity(teamId) {
+    const rows = document.querySelectorAll('.team-member-row-' + teamId);
+    const chevron = document.getElementById('chevron-team-' + teamId);
+    let isNowVisible = false;
+    rows.forEach(r => {
+        r.classList.toggle('hidden');
+        if (!r.classList.contains('hidden')) {
+            isNowVisible = true;
+        }
+    });
+    if (chevron) {
+        if (isNowVisible) {
+            chevron.classList.add('rotate-90');
+        } else {
+            chevron.classList.remove('rotate-90');
+        }
+    }
+}
+
+function toggleAllTeamsActivity(expand) {
+    const allChevrons = document.querySelectorAll('[id^="chevron-team-"]');
+    allChevrons.forEach(chevron => {
+        const teamId = chevron.id.replace('chevron-team-', '');
+        const rows = document.querySelectorAll('.team-member-row-' + teamId);
+        rows.forEach(r => {
+            if (expand) {
+                r.classList.remove('hidden');
+            } else {
+                r.classList.add('hidden');
+            }
+        });
+        if (expand) {
+            chevron.classList.add('rotate-90');
+        } else {
+            chevron.classList.remove('rotate-90');
+        }
+    });
 }
 
 function exportTable(tableId, filename, sheetName) {

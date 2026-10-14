@@ -189,6 +189,7 @@ func TestAdminActivityTemplate_DecertifyButtonForGlobalAdmin(t *testing.T) {
 // admin_activity.html template tests.
 func buildActivityTemplateFuncMap() template.FuncMap {
 	return template.FuncMap{
+		"flagFor": models.FlagForCountry,
 		"fmtF": func(f float64) string {
 			if f == float64(int64(f)) {
 				return strconv.FormatInt(int64(f), 10)
@@ -314,3 +315,106 @@ func TestAdminActivityTemplate_StatusStylesAndDailyBreakdown(t *testing.T) {
 		t.Fatal("expected status footer total to have inline style background-color with opacity")
 	}
 }
+
+func TestAdminActivityTemplate_SiteSelector(t *testing.T) {
+	data := baseActivityPageData()
+	data["Sites"] = []*models.Site{
+		{ID: 10, Name: "Paris HQ", CountryCode: "FR"},
+		{ID: 20, Name: "London Office", CountryCode: "GB"},
+	}
+	data["SelectedSite"] = "10"
+
+	html := renderAdminActivityContent(t, data)
+
+	if !strings.Contains(html, `changeActivitySite(this.value)`) {
+		t.Fatal("expected changeActivitySite handler in template")
+	}
+	if !strings.Contains(html, `value="unassigned"`) {
+		t.Fatal("expected unassigned site option in template")
+	}
+	if !strings.Contains(html, `value="10" selected`) {
+		t.Fatal("expected site 10 to be selected in template")
+	}
+	if !strings.Contains(html, `Paris HQ`) {
+		t.Fatal("expected site name Paris HQ in template")
+	}
+}
+
+func TestAdminActivityTemplate_DomainTeamGroups(t *testing.T) {
+	data := baseActivityPageData()
+	data["SelectedDomainID"] = int64(10)
+	data["SelectedTeamID"] = int64(0)
+	data["ShowDailyBreakdown"] = false
+	data["DomainTeamGroups"] = []DomainTeamGroup{
+		{
+			Team: models.Team{ID: 101, Name: "Frontend Team"},
+			Stats: []models.UserStats{
+				{
+					User:         models.User{ID: 1, Name: "Alice"},
+					StatusCounts: map[int64]float64{1: 20},
+					BillableDays: 20,
+					OnSiteDays:   15,
+				},
+			},
+			StatusTotals:     map[int64]float64{1: 20},
+			TotalBillable:    20,
+			TotalOnSite:      15,
+			TotalSetDays:     20,
+			TotalNotSet:      0,
+			TotalWorkingDays: 20,
+			WorkingDaysExcl:  20,
+			YTDBillable:      40,
+		},
+		{
+			Team:             models.Team{ID: 102, Name: "Empty QA Team"},
+			Stats:            nil,
+			StatusTotals:     map[int64]float64{},
+			TotalBillable:    0,
+			TotalOnSite:      0,
+			TotalSetDays:     0,
+			TotalNotSet:      0,
+			TotalWorkingDays: 0,
+			WorkingDaysExcl:  20,
+			YTDBillable:      0,
+		},
+	}
+
+	html := renderAdminActivityContent(t, data)
+
+	// Daily table must remain hidden
+	if strings.Contains(html, `id="daily-table"`) {
+		t.Fatal("daily table should be hidden in domain view")
+	}
+
+	// Expand/collapse all buttons should be present
+	if !strings.Contains(html, "toggleAllTeamsActivity(true)") {
+		t.Fatal("expected toggleAllTeamsActivity(true) button")
+	}
+	if !strings.Contains(html, "toggleAllTeamsActivity(false)") {
+		t.Fatal("expected toggleAllTeamsActivity(false) button")
+	}
+
+	// Team header rows
+	if !strings.Contains(html, "Frontend Team") {
+		t.Fatal("expected Frontend Team header row")
+	}
+	if !strings.Contains(html, "Empty QA Team") {
+		t.Fatal("expected Empty QA Team header row")
+	}
+
+	// Empty team displays 0 members badge
+	if !strings.Contains(html, `0 `) {
+		t.Fatal("expected 0 members badge for empty team")
+	}
+
+	// Member row should be hidden by default with team-member-row-101 hidden class
+	if !strings.Contains(html, "team-member-row-101 hidden") {
+		t.Fatal("expected member row to have team-member-row-101 and hidden class")
+	}
+
+	// Empty team should have a row with team-member-row-102 hidden
+	if !strings.Contains(html, "team-member-row-102 hidden") {
+		t.Fatal("expected empty team placeholder row to have team-member-row-102 and hidden class")
+	}
+}
+
