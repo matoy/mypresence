@@ -107,39 +107,27 @@
             </div>
         </div>
     </div>
-
     <!-- Executive Summary Table -->
-    <div x-data="{ showDomains: false, showTeams: false }">
+    <div>
         <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
-            <div class="flex flex-wrap items-center gap-4">
-                <h2 class="text-lg font-semibold text-gray-800">{{index $.T "sites_report.summary"}}</h2>
-                <div class="flex items-center gap-3 pl-3 border-l border-gray-200">
-                    <!-- Domain breakdown checkbox -->
-                    <label class="inline-flex items-center gap-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 cursor-pointer select-none">
-                        <input type="checkbox"
-                               x-model="showDomains"
-                               @change="if (!showDomains) showTeams = false"
-                               class="rounded border-gray-300 text-primary focus:ring-primary h-3.5 w-3.5">
-                        <span>{{index $.T "sites_report.domain_breakdown"}}</span>
-                    </label>
-                    <!-- Teams breakdown checkbox (Option B: depends on domain breakdown) -->
-                    <label class="inline-flex items-center gap-1.5 text-xs font-medium select-none"
-                           :class="showDomains ? 'text-gray-600 hover:text-gray-900 cursor-pointer' : 'text-gray-400 cursor-not-allowed'">
-                        <input type="checkbox"
-                               x-model="showTeams"
-                               :disabled="!showDomains"
-                               class="rounded border-gray-300 text-primary focus:ring-primary h-3.5 w-3.5 disabled:opacity-50">
-                        <span>{{index $.T "sites_report.teams_breakdown"}}</span>
-                    </label>
-                </div>
+            <h2 class="text-lg font-semibold text-gray-800">{{index $.T "sites_report.summary"}}</h2>
+            <div class="flex items-center gap-2">
+                <button type="button" onclick="toggleAllSitesReport(true)"
+                        class="px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 shadow-sm transition">
+                    {{index $.T "logs.expand_all"}}
+                </button>
+                <button type="button" onclick="toggleAllSitesReport(false)"
+                        class="px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 shadow-sm transition">
+                    {{index $.T "logs.collapse_all"}}
+                </button>
+                <button onclick="exportTable('sites-summary-table', 'sites_report_{{index $.T (printf `cal.month.%d` .Month)}}_{{.Year}}', '{{index $.T (printf `cal.month.%d` .Month)}} {{.Year}}')"
+                        class="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 shadow-sm transition">
+                    <svg class="h-4 w-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                    </svg>
+                    {{index $.T "admin.export"}}
+                </button>
             </div>
-            <button onclick="exportTable('sites-summary-table', 'sites_report_{{index $.T (printf `cal.month.%d` .Month)}}_{{.Year}}', '{{index $.T (printf `cal.month.%d` .Month)}} {{.Year}}')"
-                    class="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 shadow-sm transition">
-                <svg class="h-4 w-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
-                </svg>
-                {{index $.T "admin.export"}}
-            </button>
         </div>
         <div class="bg-white rounded-xl shadow-md overflow-x-auto mb-6 border border-gray-100">
             <table id="sites-summary-table" class="w-full border-collapse">
@@ -159,13 +147,26 @@
                 </thead>
                 <tbody class="divide-y divide-gray-100">
                     {{range $site := $summaries}}
-                    <tr class="hover:bg-gray-50 transition">
-                        <td class="px-4 py-3 text-sm font-medium text-gray-800">
+                    <tr class="hover:bg-gray-50 transition{{if .Domains}} cursor-pointer select-none{{end}}"
+                        {{if .Domains}}onclick="toggleSiteRow({{.Site.ID}})" title="Cliquer pour afficher / masquer les domaines"{{end}}>
+                        <td class="px-4 py-3 text-sm font-medium text-gray-800" data-v="{{.Site.Name}}">
                             <div class="flex items-center gap-2">
+                                {{if .Domains}}
+                                <svg id="chevron-site-{{.Site.ID}}" class="w-4 h-4 text-gray-400 transition-transform duration-200 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                </svg>
+                                {{else}}
+                                <span class="w-4 flex-shrink-0 inline-block"></span>
+                                {{end}}
                                 <span class="text-base">{{if .Site.NotCorporateSite}}🏬{{else}}🏢{{end}}</span>
-                                <span>{{.Site.Name}}</span>
+                                <span class="font-semibold text-gray-900">{{.Site.Name}}</span>
                                 {{if .Site.NotCorporateSite}}
                                 <span class="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-medium">{{index $.T "sites.not_corporate"}}</span>
+                                {{end}}
+                                {{if .Domains}}
+                                <span class="text-xs font-normal text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
+                                    {{len .Domains}} {{index $.T "teams.filter_domain"}}{{if gt (len .Domains) 1}}s{{end}}
+                                </span>
                                 {{end}}
                             </div>
                         </td>
@@ -220,11 +221,25 @@
                         </td>
                     </tr>
                     {{range $domain := .Domains}}
-                    <tr x-show="showDomains" style="display: none;" class="bg-indigo-50/20 hover:bg-indigo-50/40 transition border-t border-dashed border-gray-200">
-                        <td class="px-4 py-2 text-xs font-medium text-indigo-950">
-                            <div class="flex items-center gap-2 pl-4">
-                                <span class="text-indigo-500 font-semibold">📁</span>
+                    <tr class="site-domain-row-{{$site.Site.ID}} site-subrow-{{$site.Site.ID}} hidden bg-indigo-50/30 hover:bg-indigo-50/60 transition border-t border-dashed border-indigo-100{{if $domain.Teams}} cursor-pointer select-none{{end}}"
+                        {{if $domain.Teams}}onclick="toggleDomainRow({{$site.Site.ID}}, {{$domain.DomainID}})" title="Cliquer pour afficher / masquer les équipes"{{end}}>
+                        <td class="px-4 py-2.5 text-xs font-medium text-indigo-950 pl-7" data-v="{{if $domain.DomainName}}{{$domain.DomainName}}{{else}}{{index $.T "sites_report.no_domain"}}{{end}}">
+                            <div class="flex items-center gap-2">
+                                <span class="text-gray-400 text-xs select-none">↳</span>
+                                {{if $domain.Teams}}
+                                <svg id="chevron-domain-{{$site.Site.ID}}-{{$domain.DomainID}}" class="w-3.5 h-3.5 text-indigo-600 transition-transform duration-200 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                </svg>
+                                {{else}}
+                                <span class="w-3.5 flex-shrink-0 inline-block"></span>
+                                {{end}}
+                                <span class="text-indigo-600">📁</span>
                                 <span class="font-semibold">{{if $domain.DomainName}}{{$domain.DomainName}}{{else}}{{index $.T "sites_report.no_domain"}}{{end}}</span>
+                                {{if $domain.Teams}}
+                                <span class="text-[11px] font-normal text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded-full border border-indigo-200">
+                                    {{len $domain.Teams}} {{index $.T "domains.teams"}}
+                                </span>
+                                {{end}}
                             </div>
                         </td>
                         <td class="px-4 py-2 text-center text-xs text-gray-400">—</td>
@@ -254,10 +269,11 @@
                         <td class="px-4 py-2 text-center text-xs text-gray-400 bg-purple-50/30">—</td>
                     </tr>
                     {{range $team := $domain.Teams}}
-                    <tr x-show="showDomains && showTeams" style="display: none;" class="bg-gray-50/40 hover:bg-gray-100/60 transition">
-                        <td class="px-4 py-1.5 text-xs text-gray-700">
-                            <div class="flex items-center gap-2 pl-9">
-                                <span class="text-gray-400">↳ 👥</span>
+                    <tr class="domain-team-row-{{$site.Site.ID}}-{{$domain.DomainID}} site-subrow-{{$site.Site.ID}} hidden bg-gray-50/40 hover:bg-gray-100/60 transition">
+                        <td class="px-4 py-1.5 text-xs text-gray-700 pl-14" data-v="{{if $team.TeamName}}{{$team.TeamName}}{{else}}{{index $.T "sites_report.no_team"}}{{end}}">
+                            <div class="flex items-center gap-2">
+                                <span class="text-gray-400 select-none">↳</span>
+                                <span class="text-gray-500">👥</span>
                                 <span>{{if $team.TeamName}}{{$team.TeamName}}{{else}}{{index $.T "sites_report.no_team"}}{{end}}</span>
                             </div>
                         </td>
@@ -442,6 +458,70 @@
 
 <script defer src="/static/js/xlsx.full.min.js"></script>
 <script>
+function toggleSiteRow(siteId) {
+    const domainRows = document.querySelectorAll('.site-domain-row-' + siteId);
+    const chevron = document.getElementById('chevron-site-' + siteId);
+    if (!chevron) return;
+    const isExpanding = !chevron.classList.contains('rotate-90');
+
+    if (isExpanding) {
+        chevron.classList.add('rotate-90');
+        domainRows.forEach(r => r.classList.remove('hidden'));
+    } else {
+        chevron.classList.remove('rotate-90');
+        const allSubrows = document.querySelectorAll('.site-subrow-' + siteId);
+        allSubrows.forEach(r => r.classList.add('hidden'));
+        const domainChevrons = document.querySelectorAll('[id^="chevron-domain-' + siteId + '-"]');
+        domainChevrons.forEach(c => c.classList.remove('rotate-90'));
+    }
+}
+
+function toggleDomainRow(siteId, domainId) {
+    const teamRows = document.querySelectorAll('.domain-team-row-' + siteId + '-' + domainId);
+    const chevron = document.getElementById('chevron-domain-' + siteId + '-' + domainId);
+    if (!chevron) return;
+    const isExpanding = !chevron.classList.contains('rotate-90');
+
+    if (isExpanding) {
+        chevron.classList.add('rotate-90');
+        teamRows.forEach(r => r.classList.remove('hidden'));
+    } else {
+        chevron.classList.remove('rotate-90');
+        teamRows.forEach(r => r.classList.add('hidden'));
+    }
+}
+
+function toggleAllSitesReport(expand) {
+    const siteChevrons = document.querySelectorAll('[id^="chevron-site-"]');
+    siteChevrons.forEach(chevron => {
+        const siteId = chevron.id.replace('chevron-site-', '');
+        const domainRows = document.querySelectorAll('.site-domain-row-' + siteId);
+        if (expand) {
+            chevron.classList.add('rotate-90');
+            domainRows.forEach(r => r.classList.remove('hidden'));
+        } else {
+            chevron.classList.remove('rotate-90');
+            const allSubrows = document.querySelectorAll('.site-subrow-' + siteId);
+            allSubrows.forEach(r => r.classList.add('hidden'));
+        }
+    });
+
+    const domainChevrons = document.querySelectorAll('[id^="chevron-domain-"]');
+    domainChevrons.forEach(chevron => {
+        const idParts = chevron.id.split('-');
+        const siteId = idParts[2];
+        const domainId = idParts[3];
+        const teamRows = document.querySelectorAll('.domain-team-row-' + siteId + '-' + domainId);
+        if (expand) {
+            chevron.classList.add('rotate-90');
+            teamRows.forEach(r => r.classList.remove('hidden'));
+        } else {
+            chevron.classList.remove('rotate-90');
+            teamRows.forEach(r => r.classList.add('hidden'));
+        }
+    });
+}
+
 function exportTable(tableId, filename, sheetName) {
     if (typeof XLSX === 'undefined') {
         alert('Impossible de charger la librairie Excel. Vérifiez votre connexion.');

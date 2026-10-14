@@ -976,12 +976,31 @@ func TestSitesReport_DomainAndTeamBreakdown(t *testing.T) {
 	}
 
 	renderedHTML := buf.String()
-	if !strings.Contains(renderedHTML, "Domain breakdown") {
-		t.Errorf("rendered HTML missing 'Domain breakdown'")
+	// Expand / Collapse all buttons should be present
+	if !strings.Contains(renderedHTML, "toggleAllSitesReport(true)") {
+		t.Errorf("rendered HTML missing 'toggleAllSitesReport(true)' button")
 	}
-	if !strings.Contains(renderedHTML, "Teams breakdown") {
-		t.Errorf("rendered HTML missing 'Teams breakdown'")
+	if !strings.Contains(renderedHTML, "toggleAllSitesReport(false)") {
+		t.Errorf("rendered HTML missing 'toggleAllSitesReport(false)' button")
 	}
+	// Checkboxes should no longer be present
+	if strings.Contains(renderedHTML, "showDomains") {
+		t.Errorf("rendered HTML should no longer contain showDomains checkbox")
+	}
+	// Chevron and toggle handlers for sites and domains
+	if !strings.Contains(renderedHTML, "chevron-site-") {
+		t.Errorf("rendered HTML missing 'chevron-site-'")
+	}
+	if !strings.Contains(renderedHTML, "chevron-domain-") {
+		t.Errorf("rendered HTML missing 'chevron-domain-'")
+	}
+	if !strings.Contains(renderedHTML, "toggleSiteRow(") {
+		t.Errorf("rendered HTML missing 'toggleSiteRow' handler")
+	}
+	if !strings.Contains(renderedHTML, "toggleDomainRow(") {
+		t.Errorf("rendered HTML missing 'toggleDomainRow' handler")
+	}
+	// Hierarchy content
 	if !strings.Contains(renderedHTML, "Engineering") {
 		t.Errorf("rendered HTML missing 'Engineering' domain")
 	}
