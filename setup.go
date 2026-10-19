@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/subtle"
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
@@ -24,6 +25,8 @@ import (
 	"github.com/matoy/mypresence/internal/middleware"
 	"github.com/matoy/mypresence/internal/models"
 )
+
+var appStartTime = time.Now().Unix()
 
 // buildTemplateFuncMap constructs the FuncMap used by all HTML templates.
 func buildTemplateFuncMap(cfg *config.Config) template.FuncMap {
@@ -343,7 +346,7 @@ func newRenderPage(cfg *config.Config, database *db.DB, templates map[string]*te
 			SAMLEnabled:       cfg.SAMLEnabled,
 			SMTPEnabled:       cfg.SMTPURL != "",
 			HideFooter:        cfg.HideFooter,
-			AppVersion:        config.Version,
+			AppVersion:        fmt.Sprintf("%s.%d", config.Version, appStartTime),
 			DisableFloorplans: cfg.DisableFloorplans,
 			DisableAPI:        cfg.DisableAPI,
 			DisableProjects:           cfg.DisableProjects,

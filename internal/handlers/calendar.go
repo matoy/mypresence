@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/matoy/mypresence/internal/db"
@@ -34,6 +36,8 @@ type CalendarHandler struct {
 type teamCalendarView struct {
 	Team              models.Team
 	Members           []models.User
+	Sites             []string                                      // Unique site names of team members
+	HasUnassignedSite bool                                          // True if any member has no site assigned
 	Presences         map[int64]map[string]map[string]int64         // userID → date → half → statusID
 	Overrides         map[int64]map[string]models.PresenceOverride // userID → date → PresenceOverride
 	Reservations      map[int64]map[string]bool                     // userID → date → bool
@@ -137,9 +141,26 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 		isLeader, _ := h.DB.IsLeaderOfTeam(user.ID, team.ID)
 		canEditTeam := user.HasAnyRole(models.RoleTeamManager, models.RoleGlobal) || isLeader
 		members, _ := h.DB.GetTeamMembersAt(team.ID, startDate)
+		members = h.DB.HydrateUsersSites(members)
 		if len(members) == 0 {
 			continue
 		}
+		siteSet := make(map[string]bool)
+		var teamSites []string
+		hasUnassignedSite := false
+		for _, m := range members {
+			sName := strings.TrimSpace(m.SiteName)
+			if m.SiteID <= 0 || sName == "" {
+				hasUnassignedSite = true
+			} else {
+				if !siteSet[sName] {
+					siteSet[sName] = true
+					teamSites = append(teamSites, sName)
+				}
+			}
+		}
+		sort.Strings(teamSites)
+
 		userIDs := make([]int64, len(members))
 		for i, m := range members {
 			userIDs[i] = m.ID
@@ -186,6 +207,8 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 		teamViews = append(teamViews, teamCalendarView{
 			Team:              team,
 			Members:           members,
+			Sites:             teamSites,
+			HasUnassignedSite: hasUnassignedSite,
 			Presences:         tp,
 			Overrides:         to,
 			Reservations:      teamReservations,

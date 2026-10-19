@@ -581,12 +581,99 @@ function calendarApp(statuses, currentUserId, isAdmin, presences, reservationDet
 // canEdit=true for team leaders / managers / global admins.
 // allPresences: { userId: { date: { half: statusId } } }
 // ============================================================
-function teamCalendarApp(statuses, currentUserId, canEdit, allPresences) {
+function teamCalendarApp(statuses, currentUserId, canEdit, allPresences, members) {
     return {
         statuses: statuses || [],
         currentUserId,
         canEdit,
         allPresences: allPresences || {},
+        members: members || [],
+        filterName: '',
+        filterSite: '',
+
+        get availableSites() {
+            const set = new Set();
+            (this.members || []).forEach(m => {
+                if (m) {
+                    const rawSid = (m.site_id !== undefined && m.site_id !== null) ? m.site_id : m.SiteID;
+                    const sid = parseInt(rawSid, 10) || 0;
+                    const sName = (m.site_name || m.SiteName || '').trim();
+                    if (sid > 0 && sName !== '') {
+                        set.add(sName);
+                    }
+                }
+            });
+            return Array.from(set).sort((a, b) => a.localeCompare(b));
+        },
+
+        get hasMembersWithoutSite() {
+            return (this.members || []).some(m => {
+                if (!m) return false;
+                const rawSid = (m.site_id !== undefined && m.site_id !== null) ? m.site_id : m.SiteID;
+                const sid = parseInt(rawSid, 10) || 0;
+                const sName = (m.site_name || m.SiteName || '').trim();
+                return sid <= 0 || sName === '';
+            });
+        },
+
+        isMemberVisibleByID(memberId) {
+            const m = (this.members || []).find(x => x && (x.id === memberId || x.ID === memberId));
+            if (!m) return true;
+
+            if (this.filterName) {
+                const query = this.filterName.toLowerCase().trim();
+                if (!m.name || !m.name.toLowerCase().includes(query)) {
+                    return false;
+                }
+            }
+            if (this.filterSite) {
+                const rawSid = (m.site_id !== undefined && m.site_id !== null) ? m.site_id : m.SiteID;
+                const sid = parseInt(rawSid, 10) || 0;
+                const sName = (m.site_name || m.SiteName || '').trim();
+                const hasNoSite = sid <= 0 || sName === '';
+
+                if (this.filterSite === '__none__' || this.filterSite === 'unassigned') {
+                    if (!hasNoSite) {
+                        return false;
+                    }
+                } else if (hasNoSite || sName !== this.filterSite) {
+                    return false;
+                }
+            }
+            return true;
+        },
+
+        isMemberVisible(name, siteName) {
+            if (this.filterName) {
+                const query = this.filterName.toLowerCase().trim();
+                if (!name || !name.toLowerCase().includes(query)) {
+                    return false;
+                }
+            }
+            if (this.filterSite) {
+                const sName = (siteName || '').trim();
+                const hasNoSite = sName === '';
+                if (this.filterSite === '__none__' || this.filterSite === 'unassigned') {
+                    if (!hasNoSite) {
+                        return false;
+                    }
+                } else if (hasNoSite || sName !== this.filterSite) {
+                    return false;
+                }
+            }
+            return true;
+        },
+
+        get visibleMembersCount() {
+            return (this.members || []).filter(m => m && this.isMemberVisibleByID(m.id || m.ID)).length;
+        },
+
+        get hasNoVisibleMembers() {
+            if (this.members && this.members.length > 0) {
+                return this.visibleMembersCount === 0;
+            }
+            return false;
+        },
 
         selecting: false,
         selectedUserId: null,
