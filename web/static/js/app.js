@@ -1747,7 +1747,7 @@ function statusAdmin(initialStatuses) {
         filterText: '',
         filterBillable: 'all',
         filterOnSite: 'all',
-        filterDisabled: 'all',
+        filterEnabled: 'all',
         filterShowAs: 'all',
 
         get totalCount() {
@@ -1762,7 +1762,7 @@ function statusAdmin(initialStatuses) {
             this.filterText = '';
             this.filterBillable = 'all';
             this.filterOnSite = 'all';
-            this.filterDisabled = 'all';
+            this.filterEnabled = 'all';
             this.filterShowAs = 'all';
         },
 
@@ -1784,8 +1784,8 @@ function statusAdmin(initialStatuses) {
             if (this.filterBillable === '0' && billable) return false;
             if (this.filterOnSite === '1' && !onSite) return false;
             if (this.filterOnSite === '0' && onSite) return false;
-            if (this.filterDisabled === '0' && disabled) return false;
-            if (this.filterDisabled === '1' && !disabled) return false;
+            if (this.filterEnabled === '1' && disabled) return false;
+            if (this.filterEnabled === '0' && !disabled) return false;
             if (this.filterShowAs !== 'all' && (showAs || 'none') !== this.filterShowAs) return false;
             return true;
         },

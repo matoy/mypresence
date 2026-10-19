@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"encoding/json"
 	"html/template"
 	"os"
 	"path/filepath"
@@ -417,4 +418,131 @@ func TestAdminActivityTemplate_DomainTeamGroups(t *testing.T) {
 		t.Fatal("expected empty team placeholder row to have team-member-row-102 and hidden class")
 	}
 }
+
+func TestFilterActiveOrUsedStatuses(t *testing.T) {
+	statuses := []models.Status{
+		{ID: 1, Name: "Active with no data", Disabled: false},
+		{ID: 2, Name: "Active with data", Disabled: false},
+		{ID: 3, Name: "Disabled with data", Disabled: true},
+		{ID: 4, Name: "Disabled with zero data", Disabled: true},
+		{ID: 5, Name: "Disabled with missing entry", Disabled: true},
+	}
+	totals := map[int64]float64{
+		1: 0,
+		2: 10,
+		3: 5,
+		4: 0,
+	}
+
+	filtered := filterActiveOrUsedStatuses(statuses, totals)
+
+	if len(filtered) != 3 {
+		t.Fatalf("expected 3 statuses, got %d", len(filtered))
+	}
+	expectedIDs := []int64{1, 2, 3}
+	for i, s := range filtered {
+		if s.ID != expectedIDs[i] {
+			t.Errorf("expected filtered[%d].ID = %d, got %d (%s)", i, expectedIDs[i], s.ID, s.Name)
+		}
+	}
+}
+
+func TestAdminActivityTemplate_DisabledStatusExclusion(t *testing.T) {
+	allStatuses := []models.Status{
+		{ID: 1, Name: "ActiveZero", Color: "#22c55e", Disabled: false},
+		{ID: 2, Name: "DisabledWithData", Color: "#3b82f6", Disabled: true},
+		{ID: 3, Name: "DisabledZero", Color: "#ef4444", Disabled: true},
+	}
+	totals := map[int64]float64{
+		1: 0,
+		2: 5,
+		3: 0,
+	}
+
+	execStatuses := filterActiveOrUsedStatuses(allStatuses, totals)
+	teamStatuses := filterActiveOrUsedStatuses(allStatuses, totals)
+
+	data := baseActivityPageData()
+	data["Statuses"] = allStatuses
+	data["ExecStatuses"] = execStatuses
+	data["TeamStatuses"] = teamStatuses
+	data["StatusTotals"] = totals
+	data["ShowExecSummary"] = true
+	data["ExecStatusTotals"] = totals
+
+	html := renderAdminActivityContent(t, data)
+
+	// ActiveZero should be present
+	if !strings.Contains(html, "ActiveZero") {
+		t.Errorf("expected ActiveZero to be rendered in tables")
+	}
+	// DisabledWithData should be present
+	if !strings.Contains(html, "DisabledWithData") {
+		t.Errorf("expected DisabledWithData to be rendered in tables")
+	}
+	// DisabledZero should NOT be present in Exec or Team summary tables
+	if strings.Contains(html, "DisabledZero") {
+		t.Errorf("expected DisabledZero to be omitted from tables, but it was found in html")
+	}
+}
+
+func TestAdminStatusesTemplate_EnabledColumnAndBadges(t *testing.T) {
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	tplPath := filepath.Clean(filepath.Join(filepath.Dir(thisFile), "../../web/templates/admin_statuses.html"))
+	tplBytes, err := os.ReadFile(tplPath)
+	if err != nil {
+		t.Fatalf("read admin_statuses template: %v", err)
+	}
+
+	funcMap := template.FuncMap{
+		"json": func(v interface{}) template.JS {
+			b, _ := json.Marshal(v)
+			return template.JS(b)
+		},
+	}
+
+	tmpl, err := template.New("admin_statuses.html").Funcs(funcMap).Parse(string(tplBytes))
+	if err != nil {
+		t.Fatalf("parse admin_statuses template: %v", err)
+	}
+
+	translations := map[string]string{
+		"statuses.enabled": "Actif",
+		"admin.yes":        "Oui",
+		"admin.no":         "Non",
+		"admin.all":        "Tous",
+	}
+
+	statuses := []models.Status{
+		{ID: 1, Name: "Office", Color: "#22c55e", Disabled: false},
+		{ID: 2, Name: "Archived", Color: "#ef4444", Disabled: true},
+	}
+
+	root := models.PageData{
+		Data: map[string]interface{}{
+			"Statuses": statuses,
+		},
+		T: translations,
+	}
+
+	var out bytes.Buffer
+	if err := tmpl.ExecuteTemplate(&out, "content", root); err != nil {
+		t.Fatalf("execute admin_statuses template: %v", err)
+	}
+	html := out.String()
+
+	if !strings.Contains(html, "Actif") {
+		t.Errorf("expected 'Actif' column header/filter in html")
+	}
+	if !strings.Contains(html, "Oui") {
+		t.Errorf("expected 'Oui' badge in html")
+	}
+	if !strings.Contains(html, "Non") {
+		t.Errorf("expected 'Non' badge in html")
+	}
+}
+
 

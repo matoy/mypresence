@@ -1,6 +1,6 @@
 {{define "content"}}
 {{with .Data}}
-{{$allStatuses := .Statuses}}{{$selectedTeamID := .SelectedTeamID}}{{$selectedDomainID := .SelectedDomainID}}{{$selectedSite := .SelectedSite}}{{$days := .Days}}{{$presenceMap := .PresenceMap}}{{$statusTotals := .StatusTotals}}{{$workingDays := .WorkingDays}}{{$workingDaysExcl := .WorkingDaysExcl}}{{$holidayCount := .HolidayCount}}{{$dayBillable := .DayBillable}}{{$dayOnSite := .DayOnSite}}{{$showProjectActivity := .ShowProjectActivity}}{{$projectActivityByUser := .ProjectActivityByUser}}{{$showExecSummary := .ShowExecSummary}}{{$execStatusTotals := .ExecStatusTotals}}{{$execTotalBillable := .ExecTotalBillable}}{{$execTotalOnSite := .ExecTotalOnSite}}{{$execTotalNotSet := .ExecTotalNotSet}}{{$execTotalWorkingDays := .ExecTotalWorkingDays}}{{$execProjectActivityPct := .ExecProjectActivityPct}}{{$execUserCount := .ExecUserCount}}{{$ytdBillableByUser := .YTDBillableByUser}}{{$totalYTDBillable := .TotalYTDBillable}}{{$certifiedUsers := .Certified}}{{$projectCertifiedUsers := .ProjectCertified}}{{$canDecertify := .CanDecertify}}{{$month := .Month}}{{$year := .Year}}{{$showDailyBreakdown := .ShowDailyBreakdown}}
+{{$allStatuses := .Statuses}}{{$execStatuses := .ExecStatuses}}{{if not $execStatuses}}{{$execStatuses = $allStatuses}}{{end}}{{$teamStatuses := .TeamStatuses}}{{if not $teamStatuses}}{{$teamStatuses = $allStatuses}}{{end}}{{$selectedTeamID := .SelectedTeamID}}{{$selectedDomainID := .SelectedDomainID}}{{$selectedSite := .SelectedSite}}{{$days := .Days}}{{$presenceMap := .PresenceMap}}{{$statusTotals := .StatusTotals}}{{$workingDays := .WorkingDays}}{{$workingDaysExcl := .WorkingDaysExcl}}{{$holidayCount := .HolidayCount}}{{$dayBillable := .DayBillable}}{{$dayOnSite := .DayOnSite}}{{$showProjectActivity := .ShowProjectActivity}}{{$projectActivityByUser := .ProjectActivityByUser}}{{$showExecSummary := .ShowExecSummary}}{{$execStatusTotals := .ExecStatusTotals}}{{$execTotalBillable := .ExecTotalBillable}}{{$execTotalOnSite := .ExecTotalOnSite}}{{$execTotalNotSet := .ExecTotalNotSet}}{{$execTotalWorkingDays := .ExecTotalWorkingDays}}{{$execProjectActivityPct := .ExecProjectActivityPct}}{{$execUserCount := .ExecUserCount}}{{$ytdBillableByUser := .YTDBillableByUser}}{{$totalYTDBillable := .TotalYTDBillable}}{{$certifiedUsers := .Certified}}{{$projectCertifiedUsers := .ProjectCertified}}{{$canDecertify := .CanDecertify}}{{$month := .Month}}{{$year := .Year}}{{$showDailyBreakdown := .ShowDailyBreakdown}}
 <div class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
     <div class="flex items-center justify-between mb-6">
         <h1 class="text-2xl font-bold text-gray-900">{{index $.T "activity.title"}}</h1>
@@ -123,7 +123,7 @@
                     <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase border-b border-blue-100">
                         {{index $.T "activity.employee"}}
                     </th>
-                    {{range .Statuses}}
+                    {{range $execStatuses}}
                     <th class="px-3 py-3 text-center text-xs font-semibold border-b border-blue-100 min-w-[80px]"
                         {{safeStyle "color" .Color}}>
                         {{.Name}}
@@ -154,7 +154,7 @@
                     <td class="px-4 py-3 text-sm font-medium text-gray-800">
                         🌐 {{index $.T "activity.all_teams"}} ({{$execUserCount}} {{index $.T "activity.employees"}})
                     </td>
-                    {{range .Statuses}}
+                    {{range $execStatuses}}
                     <td class="px-3 py-3 text-center">
                         {{$countF := getCountF $execStatusTotals .ID}}
                         {{if $countF}}
@@ -259,7 +259,7 @@
                     <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase border-b border-gray-200">
                         {{index $.T "activity.employee"}}
                     </th>
-                    {{range .Statuses}}
+                    {{range $teamStatuses}}
                     <th class="px-3 py-3 text-center text-xs font-semibold border-b border-gray-200 min-w-[80px]"
                         {{safeStyle "color" .Color}}>
                         {{.Name}}
@@ -306,7 +306,7 @@
                             </span>
                         </div>
                     </td>
-                    {{range $allStatuses}}
+                    {{range $teamStatuses}}
                     <td class="px-3 py-3 text-center">
                         {{$countF := getCountF $tg.StatusTotals .ID}}
                         {{if $countF}}
@@ -409,7 +409,7 @@
                             {{end}}
                         </div>
                     </td>
-                    {{range $allStatuses}}
+                    {{range $teamStatuses}}
                     <td class="px-3 py-2.5 text-center">
                         {{$countF := getCountF $stat.StatusCounts .ID}}
                         {{if $countF}}
@@ -522,7 +522,7 @@
                             {{end}}
                         </div>
                     </td>
-                    {{range $allStatuses}}
+                    {{range $teamStatuses}}
                     <td class="px-3 py-3 text-center">
                         {{$countF := getCountF $stat.StatusCounts .ID}}
                         {{if $countF}}
@@ -594,7 +594,7 @@
             <tfoot>
                 <tr class="bg-gray-50 font-semibold">
                     <td class="px-4 py-3 text-sm text-gray-700">{{index $.T "activity.total_billable_row"}}</td>
-                    {{range $allStatuses}}
+                    {{range $teamStatuses}}
                     <td class="px-3 py-3 text-center text-sm">
                         {{$totalF := getCountF $statusTotals .ID}}
                         {{if $totalF}}

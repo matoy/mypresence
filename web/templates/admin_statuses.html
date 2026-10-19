@@ -37,11 +37,11 @@
                 </select>
             </div>
             <div>
-                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "statuses.disabled_badge"}}</label>
-                <select x-model="filterDisabled" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
+                <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "statuses.enabled"}}</label>
+                <select x-model="filterEnabled" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
                     <option value="all">{{index $.T "admin.all"}}</option>
-                    <option value="0">{{index $.T "admin.yes"}}</option>
-                    <option value="1">{{index $.T "admin.no"}}</option>
+                    <option value="1">{{index $.T "admin.yes"}}</option>
+                    <option value="0">{{index $.T "admin.no"}}</option>
                 </select>
             </div>
             <div>
@@ -74,7 +74,7 @@
                     <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">{{index $.T "statuses.on_site"}}</th>
                     <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase" title="{{index $.T "statuses.show_as_help"}}">{{index $.T "statuses.show_as"}}</th>
                     <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">{{index $.T "admin.order"}}</th>
-                    <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">{{index $.T "statuses.disabled_badge"}}</th>
+                    <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">{{index $.T "statuses.enabled"}}</th>
                     <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">{{index $.T "admin.actions"}}</th>
                 </tr>
             </thead>
@@ -198,11 +198,11 @@
                                    class="w-16 px-2 py-1 border rounded text-sm text-center">
                         </template>
                     </td>
-                    <!-- Disabled status badge -->
+                    <!-- Enabled status badge -->
                     <td class="px-4 py-3 text-center">
                         {{if .Disabled}}
                         <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
-                            {{index $.T "statuses.disabled_badge"}}
+                            {{index $.T "admin.no"}}
                         </span>
                         {{else}}
                         <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">

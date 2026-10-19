@@ -381,6 +381,9 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	execStatuses := filterActiveOrUsedStatuses(statuses, execStatusTotals)
+	teamStatuses := filterActiveOrUsedStatuses(statuses, statusTotals)
+
 	h.Render(w, r, "admin_activity", map[string]interface{}{
 		"Teams":                  teams,
 		"Sites":                  sites,
@@ -388,6 +391,8 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 		"DomainGroups":           domainGroups,
 		"IsDomainManager":        len(myDomains) > 0,
 		"Statuses":               statuses,
+		"ExecStatuses":           execStatuses,
+		"TeamStatuses":           teamStatuses,
 		"Stats":                  stats,
 		"ShowProjectActivity":    showProjectActivity,
 		"ProjectActivityByUser":  projectActivityByUser,
@@ -1081,6 +1086,18 @@ func filterStatsBySite(stats []models.UserStats, siteFilter string) []models.Use
 	}
 	for _, s := range stats {
 		if s.User.SiteID == targetID {
+			filtered = append(filtered, s)
+		}
+	}
+	return filtered
+}
+
+// filterActiveOrUsedStatuses returns all statuses except those that are both disabled
+// and have zero activity in the provided totals map.
+func filterActiveOrUsedStatuses(statuses []models.Status, totals map[int64]float64) []models.Status {
+	var filtered []models.Status
+	for _, s := range statuses {
+		if !s.Disabled || (totals != nil && totals[s.ID] > 0) {
 			filtered = append(filtered, s)
 		}
 	}
