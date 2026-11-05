@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"net/http"
 	"net/http/httptest"
@@ -200,6 +201,12 @@ func TestCalendarTemplate_RendersProjectActivityBadge(t *testing.T) {
 		},
 		"presenceOverride": func(m map[string]models.PresenceOverride, date string) *models.PresenceOverride {
 			return nil
+		},
+		"fmtF": func(f float64) string {
+			if f == float64(int64(f)) {
+				return fmt.Sprintf("%d", int64(f))
+			}
+			return fmt.Sprintf("%.1f", f)
 		},
 	}
 

@@ -228,6 +228,14 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// YTD billable days for current user (Jan 1 of displayed year → end of displayed month)
+	ytdStart := fmt.Sprintf("%04d-01-01", year)
+	ytdBillable, err := h.DB.GetUserBillableDaysForRange(user.ID, ytdStart, endDate)
+	if err != nil {
+		slog.Error("failed to get user YTD billable days", "userID", user.ID, "error", err)
+		ytdBillable = 0
+	}
+
 	h.Render(w, r, "calendar", map[string]interface{}{
 		"Year":              year,
 		"Month":             month,
@@ -246,6 +254,7 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 		"CalendarComplete":  calendarComplete,
 		"DeclarableDays":    declarableDays,
 		"DeclaredDays":      declaredDays,
+		"YTDBillable":       ytdBillable,
 		"TeamViews":         teamViews,
 		"Certified":         certified,
 		"ProjectActivities": userProjectActivities,

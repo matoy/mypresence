@@ -39,6 +39,18 @@ ORDER BY p.date`, userID, startDate, endDate, true)
 	return result, rows.Err()
 }
 
+// GetUserBillableDaysForRange returns the total billable presence days for a user in [startDate, endDate].
+// Full days count as 1.0, half-days as 0.5.
+func (d *DB) GetUserBillableDaysForRange(userID int64, startDate, endDate string) (float64, error) {
+	var total float64
+	err := d.presence.QueryRow(d.dialect.rebind(`
+SELECT COALESCE(SUM(CASE WHEN p.half = 'full' THEN 1.0 ELSE 0.5 END), 0)
+FROM presences p
+JOIN statuses s ON p.status_id = s.id
+WHERE p.user_id = ? AND p.date >= ? AND p.date <= ? AND s.billable = ?`), userID, startDate, endDate, true).Scan(&total)
+	return total, err
+}
+
 // GetUsersBillableDatesForRange returns a nested map[userID]map[date]weight (1.0 for full day, 0.5 for half day)
 // for all specified users and dates in [startDate, endDate] that have a billable presence status.
 func (d *DB) GetUsersBillableDatesForRange(userIDs []int64, startDate, endDate string) (map[int64]map[string]float64, error) {

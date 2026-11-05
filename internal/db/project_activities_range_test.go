@@ -38,6 +38,32 @@ func TestGetUserBillableDatesForRange(t *testing.T) {
 	if _, ok := weights["2026-05-15"]; ok {
 		t.Errorf("May 15 should not be included in range [05-05, 05-12]")
 	}
+
+	// Test GetUserBillableDaysForRange
+	daysSub, err := d.GetUserBillableDaysForRange(uid, "2026-05-05", "2026-05-12")
+	if err != nil {
+		t.Fatalf("GetUserBillableDaysForRange sub: %v", err)
+	}
+	if daysSub != 1.5 {
+		t.Errorf("expected 1.5 billable days in range [05-05, 05-12], got %v", daysSub)
+	}
+
+	daysAll, err := d.GetUserBillableDaysForRange(uid, "2026-01-01", "2026-12-31")
+	if err != nil {
+		t.Fatalf("GetUserBillableDaysForRange all: %v", err)
+	}
+	if daysAll != 3.5 {
+		t.Errorf("expected 3.5 total billable days, got %v", daysAll)
+	}
+
+	// Non-existent user should return 0, nil
+	daysZero, err := d.GetUserBillableDaysForRange(99999, "2026-01-01", "2026-12-31")
+	if err != nil {
+		t.Fatalf("GetUserBillableDaysForRange zero: %v", err)
+	}
+	if daysZero != 0.0 {
+		t.Errorf("expected 0 billable days for nonexistent user, got %v", daysZero)
+	}
 }
 
 func TestListUserActivitiesForRange(t *testing.T) {
