@@ -338,6 +338,30 @@ func TestTeamReminderKeys_AllLanguages(t *testing.T) {
 	}
 }
 
+func TestTeamLogsKeys_AllLanguages(t *testing.T) {
+	requiredKeys := []string{
+		"teams.members",
+		"teams.departed",
+		"teams.view_logs",
+		"teams.view_member_logs",
+		"logs.team_title",
+		"logs.team_member",
+		"logs.all_members",
+		"logs.self_declared",
+	}
+
+	langs := []string{"en", "fr", "de", "es", "it"}
+	for _, lang := range langs {
+		m := T(lang)
+		for _, key := range requiredKeys {
+			val, ok := m[key]
+			if !ok || val == "" {
+				t.Errorf("lang %q is missing required team logs key %q", lang, key)
+			}
+		}
+	}
+}
+
 func TestCalendarLegendKeys_AllLanguages(t *testing.T) {
 	requiredKeys := []string{
 		"cal.desk_reserved",

@@ -419,6 +419,7 @@ type UserStats struct {
 type PresenceLog struct {
 	ID          int64     `json:"id"`
 	UserID      int64     `json:"user_id"`
+	UserName    string    `json:"user_name,omitempty"`
 	ActorID     int64     `json:"actor_id"`
 	ActorName   string    `json:"actor_name"`
 	Action      string    `json:"action"` // "set" or "clear"

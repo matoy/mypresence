@@ -613,7 +613,16 @@
      x-data="teamCalendarApp({{json $allStatuses}}, {{$uid}}, {{if $tv.CanEdit}}true{{else}}false{{end}}, {{json $tv.Presences}}, {{json $tv.Members}})">
 
     <div class="flex flex-wrap items-center gap-2.5 mb-2">
-        <h3 class="text-base font-semibold text-gray-700">👥 {{$tv.Team.Name}}</h3>
+        <div class="flex items-center gap-2">
+            <h3 class="text-base font-semibold text-gray-700">👥 {{$tv.Team.Name}}</h3>
+            {{if $tv.CanEdit}}
+            <a href="/admin/teams/{{$tv.Team.ID}}/logs?from=calendar"
+               class="text-xs text-gray-400 hover:text-primary transition p-0.5 rounded"
+               title="{{index $.T "teams.view_logs"}}">
+                📋
+            </a>
+            {{end}}
+        </div>
 
         <!-- Filter by name -->
         <div class="relative">
@@ -691,10 +700,21 @@
                 <tr class="border-b border-gray-100 last:border-0"
                     x-show="isMemberVisibleByID({{$memberID}})">
                     <td class="sticky left-0 z-10 bg-white border-r border-gray-200 px-2 py-1 align-middle">
-                        <span class="text-xs font-semibold {{if eq $memberID $uid}}text-primary{{else}}text-gray-700{{end}} break-words whitespace-normal leading-tight block"
-                              title="{{.Name}}{{if .SiteName}} ({{.SiteName}}){{end}}">
-                            {{.Name}}
-                        </span>
+                        <div class="flex items-center justify-between gap-1">
+                            <span class="text-xs font-semibold {{if eq $memberID $uid}}text-primary{{else}}text-gray-700{{end}} break-words whitespace-normal leading-tight block truncate"
+                                  title="{{.Name}}{{if .SiteName}} ({{.SiteName}}){{end}}">
+                                {{.Name}}
+                            </span>
+                            {{if $tv.CanEdit}}
+                            <a href="/admin/teams/members/{{$memberID}}/logs?from=calendar"
+                               class="text-gray-300 hover:text-primary transition p-0.5 rounded shrink-0"
+                               title="{{index $.T "teams.view_member_logs"}}">
+                                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                </svg>
+                            </a>
+                            {{end}}
+                        </div>
                     </td>
                     {{range $days}}
                     {{$fullSid := presenceHalf $memberPresences .Date "full"}}

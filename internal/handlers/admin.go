@@ -568,6 +568,144 @@ func (h *AdminHandler) SetTeamLeadersAPI(w http.ResponseWriter, r *http.Request)
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
+// MemberLogsPage renders presence and notification logs for a team member, accessible by team leaders or admins.
+func (h *AdminHandler) MemberLogsPage(w http.ResponseWriter, r *http.Request) {
+	currentUser := middleware.GetUser(r)
+	if currentUser == nil {
+		http.Error(w, "Accès refusé", http.StatusForbidden)
+		return
+	}
+
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id <= 0 {
+		http.NotFound(w, r)
+		return
+	}
+	targetUser, err := h.DB.GetUserByID(id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	canManage := currentUser.HasAnyRole(models.RoleGlobal, models.RoleTeamManager)
+	isLeaderOfTarget := h.DB.IsTeamLeaderOf(currentUser.ID, id)
+	if !canManage && !isLeaderOfTarget {
+		http.Error(w, "Accès refusé", http.StatusForbidden)
+		return
+	}
+
+	// Parse period filter: 7 (default), 30, 90, 0 = all
+	daysParam := r.URL.Query().Get("days")
+	days := 7
+	if daysParam != "" {
+		if v, err := strconv.Atoi(daysParam); err == nil && v >= 0 {
+			days = v
+		}
+	}
+	var since time.Time
+	if days > 0 {
+		since = time.Now().AddDate(0, 0, -days)
+	}
+
+	logs, _ := h.DB.GetUserLogs(id, since)
+	notifLogs, _ := h.DB.GetUserNotificationLogs(id, since)
+	var adminLogs []models.AdminLog
+	if canManage {
+		adminLogs, _ = h.DB.GetAdminLogsByActor(id, since)
+	}
+	statuses, _ := h.DB.ListStatuses()
+
+	fromParam := r.URL.Query().Get("from")
+	backURL := "/admin/teams"
+	if fromParam == "calendar" {
+		backURL = "/"
+	} else if strings.HasPrefix(fromParam, "team_") {
+		teamIDStr := strings.TrimPrefix(fromParam, "team_")
+		backURL = "/admin/teams/" + teamIDStr + "/logs"
+	}
+
+	h.Render(w, r, "admin_user_logs", map[string]interface{}{
+		"TargetUser":       targetUser,
+		"Logs":             logs,
+		"AdminLogs":        adminLogs,
+		"NotificationLogs": notifLogs,
+		"Statuses":         statuses,
+		"Days":             days,
+		"BackURL":          backURL,
+		"FilterBaseURL":    "/admin/teams/members/" + strconv.FormatInt(id, 10) + "/logs",
+		"FromParam":        fromParam,
+		"HideAdminSection": !canManage,
+	})
+}
+
+// TeamLogsPage renders consolidated presence logs for all members of a team, accessible by team leaders or admins.
+func (h *AdminHandler) TeamLogsPage(w http.ResponseWriter, r *http.Request) {
+	currentUser := middleware.GetUser(r)
+	if currentUser == nil {
+		http.Error(w, "Accès refusé", http.StatusForbidden)
+		return
+	}
+
+	teamID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || teamID <= 0 {
+		http.NotFound(w, r)
+		return
+	}
+	team, err := h.DB.GetTeam(teamID)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	canManage := currentUser.HasAnyRole(models.RoleGlobal, models.RoleTeamManager)
+	isLeader, _ := h.DB.IsLeaderOfTeam(currentUser.ID, teamID)
+	if !canManage && !isLeader {
+		http.Error(w, "Accès refusé", http.StatusForbidden)
+		return
+	}
+
+	// Parse period filter: 7 (default), 30, 90, 0 = all
+	daysParam := r.URL.Query().Get("days")
+	days := 7
+	if daysParam != "" {
+		if v, err := strconv.Atoi(daysParam); err == nil && v >= 0 {
+			days = v
+		}
+	}
+	var since time.Time
+	if days > 0 {
+		since = time.Now().AddDate(0, 0, -days)
+	}
+
+	memberIDParam := r.URL.Query().Get("member_id")
+	var memberID int64
+	if memberIDParam != "" {
+		memberID, _ = strconv.ParseInt(memberIDParam, 10, 64)
+	}
+
+	logs, _ := h.DB.GetTeamLogs(teamID, memberID, since)
+	members, _ := h.DB.GetAllTeamMembers(teamID)
+	statuses, _ := h.DB.ListStatuses()
+
+	fromParam := r.URL.Query().Get("from")
+	backURL := "/admin/teams"
+	if fromParam == "calendar" {
+		backURL = "/"
+	}
+
+	h.Render(w, r, "admin_team_logs", map[string]interface{}{
+		"Team":             team,
+		"Members":          members,
+		"Logs":             logs,
+		"Statuses":         statuses,
+		"Days":             days,
+		"SelectedMemberID": memberID,
+		"BackURL":          backURL,
+		"FilterBaseURL":    "/admin/teams/" + strconv.FormatInt(teamID, 10) + "/logs",
+		"FromParam":        fromParam,
+	})
+}
+
 // --- Status management ---
 
 // StatusesPage renders the status management page.

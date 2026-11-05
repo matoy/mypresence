@@ -274,6 +274,8 @@ func buildAppMux(cfg *config.Config, database *db.DB) http.Handler {
 	teamMux.HandleFunc("GET /admin/teams", adminHandler.TeamsPage)
 	teamMux.HandleFunc("GET /api/teams", adminHandler.ListTeamsAPI)
 	teamMux.HandleFunc("POST /admin/teams", adminHandler.CreateTeam)
+	teamMux.HandleFunc("GET /admin/teams/{id}/logs", adminHandler.TeamLogsPage)
+	teamMux.HandleFunc("GET /admin/teams/members/{id}/logs", adminHandler.MemberLogsPage)
 	teamMux.HandleFunc("PUT /admin/teams/{id}", adminHandler.UpdateTeam)
 	teamMux.HandleFunc("DELETE /admin/teams/{id}", adminHandler.DeleteTeam)
 	teamMux.HandleFunc("GET /api/admin/teams/{id}/leaders", adminHandler.GetTeamLeadersAPI)

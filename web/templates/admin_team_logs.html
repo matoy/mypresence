@@ -1,0 +1,249 @@
+{{define "content"}}
+{{with .Data}}
+{{$team := .Team}}
+{{$statuses := .Statuses}}
+{{$members := .Members}}
+{{$days := .Days}}
+{{$base := .FilterBaseURL}}
+{{$selMember := .SelectedMemberID}}
+{{$from := .FromParam}}
+
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6" x-data="{
+        filterMember: '{{if $selMember}}{{$selMember}}{{end}}',
+        filterStatus: '',
+        filterAction: '',
+        search: '',
+        matches(el) {
+            const uid = el.dataset.userId;
+            const st = el.dataset.status;
+            const act = el.dataset.action;
+            const uname = el.dataset.userName || '';
+            const aname = el.dataset.actorName || '';
+            const d = el.dataset.date || '';
+
+            if (this.filterMember && uid !== this.filterMember) return false;
+            if (this.filterStatus && st !== this.filterStatus) return false;
+            if (this.filterAction && act !== this.filterAction) return false;
+            if (this.search) {
+                const q = this.search.toLowerCase();
+                return uname.toLowerCase().includes(q) ||
+                       aname.toLowerCase().includes(q) ||
+                       d.includes(q) ||
+                       st.toLowerCase().includes(q);
+            }
+            return true;
+        }
+     }">
+
+    <!-- En-tête -->
+    <div class="flex items-center gap-3">
+        <a href="{{if .BackURL}}{{.BackURL}}{{else}}/admin/teams{{end}}"
+            class="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition" title="Retour">
+            <svg class="h-4 w-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            </svg>
+        </a>
+        <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+                <h1 class="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                    <span>📋</span>
+                    <span>{{index $.T "logs.team_title"}}</span>
+                </h1>
+                <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-primary/10 text-primary">
+                    {{$team.Name}}
+                </span>
+            </div>
+            <p class="text-sm text-gray-500 mt-0.5">
+                {{len $members}} {{index $.T "teams.members"}} &mdash; {{len .Logs}} {{index $.T "logs.entries"}}
+                ({{$days}}{{if eq $days 0}}{{index $.T "logs.all"}}{{else}}j{{end}})
+            </p>
+        </div>
+    </div>
+
+    <!-- Barre de filtres combinée -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 space-y-4">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <!-- Période -->
+            <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-xs font-medium text-gray-500 whitespace-nowrap">{{index $.T "logs.period"}}</span>
+                <a href="{{$base}}?days=7{{if $selMember}}&member_id={{$selMember}}{{end}}{{if $from}}&from={{$from}}{{end}}"
+                    class="px-2.5 py-1 text-xs rounded-lg border transition {{if eq $days 7}}bg-gray-200 text-gray-800 border-gray-300 font-semibold{{else}}bg-white text-gray-600 border-gray-200 hover:bg-gray-50{{end}}">
+                    {{index $.T "logs.7d"}}
+                </a>
+                <a href="{{$base}}?days=30{{if $selMember}}&member_id={{$selMember}}{{end}}{{if $from}}&from={{$from}}{{end}}"
+                    class="px-2.5 py-1 text-xs rounded-lg border transition {{if eq $days 30}}bg-gray-200 text-gray-800 border-gray-300 font-semibold{{else}}bg-white text-gray-600 border-gray-200 hover:bg-gray-50{{end}}">
+                    {{index $.T "logs.30d"}}
+                </a>
+                <a href="{{$base}}?days=90{{if $selMember}}&member_id={{$selMember}}{{end}}{{if $from}}&from={{$from}}{{end}}"
+                    class="px-2.5 py-1 text-xs rounded-lg border transition {{if eq $days 90}}bg-gray-200 text-gray-800 border-gray-300 font-semibold{{else}}bg-white text-gray-600 border-gray-200 hover:bg-gray-50{{end}}">
+                    {{index $.T "logs.90d"}}
+                </a>
+                <a href="{{$base}}?days=0{{if $selMember}}&member_id={{$selMember}}{{end}}{{if $from}}&from={{$from}}{{end}}"
+                    class="px-2.5 py-1 text-xs rounded-lg border transition {{if eq $days 0}}bg-gray-200 text-gray-800 border-gray-300 font-semibold{{else}}bg-white text-gray-600 border-gray-200 hover:bg-gray-50{{end}}">
+                    {{index $.T "logs.all"}}
+                </a>
+            </div>
+
+            <!-- Recherche rapide texte -->
+            <div class="relative max-w-xs w-full">
+                <input type="text" x-model="search" placeholder="{{index $.T " cal.filter_name_placeholder"}}"
+                    class="w-full text-xs border border-gray-200 rounded-lg pl-8 pr-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-primary/40">
+                <svg class="h-3.5 w-3.5 text-gray-400 absolute left-2.5 top-2.5 pointer-events-none" fill="none"
+                    stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+            </div>
+        </div>
+
+        <!-- Filtres interactifs par facettes -->
+        <div class="flex flex-wrap items-center gap-3 pt-3 border-t border-gray-100">
+            <!-- Filtre Membre -->
+            <div class="flex items-center gap-1.5">
+                <label class="text-xs text-gray-500 whitespace-nowrap">{{index $.T "logs.team_member"}} :</label>
+                <select x-model="filterMember"
+                    class="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-primary/40 font-medium">
+                    <option value="">{{index $.T "logs.all_members"}} ({{len $members}})</option>
+                    {{range $members}}
+                    <option value="{{.ID}}">{{.Name}}{{if .LeftAt}} ({{index $.T "teams.departed"}}){{end}}</option>
+                    {{end}}
+                </select>
+            </div>
+
+            <!-- Filtre Statut -->
+            <div class="flex items-center gap-1.5">
+                <label class="text-xs text-gray-500 whitespace-nowrap">{{index $.T "logs.status"}} :</label>
+                <select x-model="filterStatus"
+                    class="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-primary/40">
+                    <option value="">{{index $.T "logs.filter_all_statuses"}}</option>
+                    {{range $statuses}}
+                    <option value="{{.Name}}">{{.Name}}</option>
+                    {{end}}
+                </select>
+            </div>
+
+            <!-- Filtre Action -->
+            <div class="flex items-center gap-1.5">
+                <label class="text-xs text-gray-500 whitespace-nowrap">{{index $.T "logs.action"}} :</label>
+                <select x-model="filterAction"
+                    class="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-primary/40">
+                    <option value="">{{index $.T "logs.filter_all_actions"}}</option>
+                    <option value="set">{{index $.T "logs.action_set"}}</option>
+                    <option value="clear">{{index $.T "logs.action_clear"}}</option>
+                </select>
+            </div>
+
+            <!-- Réinitialiser -->
+            <button type="button" x-show="filterMember || filterStatus || filterAction || search"
+                @click="filterMember = ''; filterStatus = ''; filterAction = ''; search = '';"
+                class="text-xs text-gray-500 hover:text-red-600 underline ml-auto transition" x-cloak>
+                {{index $.T "cal.clear"}}
+            </button>
+        </div>
+    </div>
+
+    <!-- Tableau des logs -->
+    <section class="border border-gray-200 rounded-2xl bg-white shadow-sm overflow-hidden">
+        {{if .Logs}}
+        <div class="overflow-x-auto">
+            <table class="w-full border-collapse">
+                <thead>
+                    <tr class="bg-gray-50 border-b border-gray-200">
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T
+                            "logs.date"}}</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T
+                            "logs.team_member"}}</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T
+                            "logs.declared_day"}}</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">{{index $.T
+                            "logs.action"}}</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T
+                            "logs.status"}}</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T
+                            "logs.modified_by"}}</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    {{range .Logs}}
+                    <tr class="hover:bg-gray-50 transition" data-user-id="{{.UserID}}" data-user-name="{{.UserName}}"
+                        data-status="{{.StatusName}}" data-action="{{.Action}}" data-actor-name="{{.ActorName}}"
+                        data-date="{{.Date}}" x-show="matches($el)">
+                        <!-- Date & heure -->
+                        <td class="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">
+                            {{.CreatedAt.Format "02/01/2006 15:04"}}
+                        </td>
+                        <!-- Membre de l'équipe -->
+                        <td class="px-4 py-3 text-sm whitespace-nowrap">
+                            <a href="/admin/teams/members/{{.UserID}}/logs?from=team_{{$team.ID}}"
+                                class="inline-flex items-center gap-2 group text-gray-900 hover:text-primary transition"
+                                title="{{index $.T " teams.view_member_logs"}}">
+                                <div
+                                    class="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary group-hover:bg-primary group-hover:text-white transition shrink-0">
+                                    {{if .UserName}}{{slice .UserName 0 1}}{{else}}?{{end}}
+                                </div>
+                                <span class="font-medium group-hover:underline">{{if .UserName}}{{.UserName}}{{else}}ID
+                                    {{.UserID}}{{end}}</span>
+                                <span class="text-xs text-gray-400 group-hover:text-primary transition">↳</span>
+                            </a>
+                        </td>
+                        <!-- Jour déclaré -->
+                        <td class="px-4 py-3 text-sm text-gray-700 font-mono whitespace-nowrap">
+                            {{.Date}}{{if and .Half (ne .Half "full")}} <span
+                                class="text-xs text-gray-500 font-sans">({{.Half}})</span>{{end}}
+                        </td>
+                        <!-- Action (set / clear) -->
+                        <td class="px-4 py-3 text-center whitespace-nowrap">
+                            {{if eq .Action "set"}}
+                            <span
+                                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                {{index $.T "logs.action_set"}}
+                            </span>
+                            {{else}}
+                            <span
+                                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                                {{index $.T "logs.action_clear"}}
+                            </span>
+                            {{end}}
+                        </td>
+                        <!-- Statut -->
+                        <td class="px-4 py-3 text-sm whitespace-nowrap">
+                            {{if and (eq .Action "set") .StatusName}}
+                            <span class="inline-flex items-center gap-1.5">
+                                <span class="h-2.5 w-2.5 rounded-full flex-shrink-0"
+                                    style="background-color: {{.StatusColor}};"></span>
+                                <span class="font-medium text-gray-700">{{.StatusName}}</span>
+                            </span>
+                            {{else}}
+                            <span class="text-gray-400">—</span>
+                            {{end}}
+                        </td>
+                        <!-- Modifié par (auto-déclaration vs tiers) -->
+                        <td class="px-4 py-3 text-sm whitespace-nowrap">
+                            {{if eq .ActorID .UserID}}
+                            <span class="text-xs text-gray-400 font-normal">
+                                {{index $.T "logs.self_declared"}}
+                            </span>
+                            {{else}}
+                            <span
+                                class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                                <span>✍️</span>
+                                <span>{{if .ActorName}}{{.ActorName}}{{else}}ID {{.ActorID}}{{end}}</span>
+                            </span>
+                            {{end}}
+                        </td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+        {{else}}
+        <div class="p-12 text-center text-gray-400">
+            <span class="text-3xl block mb-2">📋</span>
+            <p class="text-sm">{{index $.T "logs.no_presence"}}</p>
+        </div>
+        {{end}}
+    </section>
+
+</div>
+{{end}}
+{{end}}

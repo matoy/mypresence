@@ -53,6 +53,7 @@
                 setTopic(t) {
                     if (!t || t === '') t = 'calendar';
                     if (t === 'admin_user_logs') t = 'admin_users';
+                    if (t === 'admin_team_logs') t = 'admin_teams';
                     if (t === 'settings_change_password' || t === 'settings_passkeys' || t === 'pat') t = 'settings';
                     this.topic = t;
                 },
@@ -144,7 +145,7 @@
                          x-data="{ adminMenuOpen: false }"
                          @click.outside="adminMenuOpen = false">
                         <button @click="adminMenuOpen = !adminMenuOpen"
-                                class="flex items-center gap-2 text-white/80 hover:text-white transition px-2 py-1 rounded-md {{if or (eq .Page "admin_sites") (eq .Page "admin_floorplans") (eq .Page "admin_teams") (eq .Page "admin_domains") (eq .Page "admin_holidays") (eq .Page "admin_statuses") (eq .Page "admin_projects") (eq .Page "admin_users") (eq .Page "admin_user_logs") (eq .Page "admin_general_settings") (eq .Page "admin_news") (eq .Page "admin_notifications")}}bg-white/20 text-white{{end}}">
+                                class="flex items-center gap-2 text-white/80 hover:text-white transition px-2 py-1 rounded-md {{if or (eq .Page "admin_sites") (eq .Page "admin_floorplans") (eq .Page "admin_teams") (eq .Page "admin_team_logs") (eq .Page "admin_domains") (eq .Page "admin_holidays") (eq .Page "admin_statuses") (eq .Page "admin_projects") (eq .Page "admin_users") (eq .Page "admin_user_logs") (eq .Page "admin_general_settings") (eq .Page "admin_news") (eq .Page "admin_notifications")}}bg-white/20 text-white{{end}}">
                             <span class="text-sm font-medium">Admin</span>
                             <svg class="h-3.5 w-3.5 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -178,7 +179,7 @@
                             </a>
                             {{end}}
                             {{if or (.User.HasRole "team_manager") .IsTeamLeader}}
-                            <a href="/admin/teams" class="flex items-center gap-2.5 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition {{if eq .Page "admin_teams"}}font-semibold{{end}}">
+                            <a href="/admin/teams" class="flex items-center gap-2.5 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition {{if or (eq .Page "admin_teams") (eq .Page "admin_team_logs")}}font-semibold{{end}}">
                                 {{index .T "nav.teams"}}
                             </a>
                             {{end}}

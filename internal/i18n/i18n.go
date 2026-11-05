@@ -456,6 +456,10 @@ var en = map[string]string{
 	"domains.no_domains":        "No domains yet. Create one using the button above.",
 	"domains.delete_confirm":    "Delete this domain?",
 	"teams.member_left":         "Left the team",
+	"teams.members":             "members",
+	"teams.departed":            "Departed",
+	"teams.view_logs":           "Team logs",
+	"teams.view_member_logs":    "Member logs",
 
 	// Sites
 	"sites.title":                 "🏢 Sites",
@@ -652,6 +656,10 @@ var en = map[string]string{
 	"logs.toggle_admin":         "Admin actions",
 	"logs.toggle_notifications": "Notifications",
 	"logs.toggle_presence":      "Presence declarations",
+	"logs.team_title":           "Team Activity Log",
+	"logs.team_member":          "Member",
+	"logs.all_members":          "All members",
+	"logs.self_declared":        "Self-declared",
 
 	// Notifications
 	"notifications.title":            "Notifications",
@@ -1402,6 +1410,10 @@ var fr = map[string]string{
 	"domains.no_domains":        "Aucun domaine. Créez-en un avec le bouton ci-dessus.",
 	"domains.delete_confirm":    "Supprimer ce domaine ?",
 	"teams.member_left":         "A quitté l'équipe",
+	"teams.members":             "membres",
+	"teams.departed":            "Sorti",
+	"teams.view_logs":           "Journal d'équipe",
+	"teams.view_member_logs":    "Logs du membre",
 
 	// Sites
 	"sites.title":                 "🏢 Sites",
@@ -1594,6 +1606,10 @@ var fr = map[string]string{
 	"logs.toggle_admin":         "Actions d'admin",
 	"logs.toggle_notifications": "Notifications",
 	"logs.toggle_presence":      "Déclarations de présence",
+	"logs.team_title":           "Journal d'activité de l'équipe",
+	"logs.team_member":          "Membre",
+	"logs.all_members":          "Tous les membres",
+	"logs.self_declared":        "Collaborateur",
 
 	// Notifications
 	"notifications.title":            "Notifications",
@@ -2341,6 +2357,10 @@ var de = map[string]string{
 	"domains.no_domains":        "Noch keine Bereiche. Erstellen Sie einen mit der Schaltfläche oben.",
 	"domains.delete_confirm":    "Diesen Bereich löschen?",
 	"teams.member_left":         "Hat das Team verlassen",
+	"teams.members":             "Mitglieder",
+	"teams.departed":            "Ausgeschieden",
+	"teams.view_logs":           "Teamprotokoll",
+	"teams.view_member_logs":    "Mitglied-Protokolle",
 
 	// Standorte
 	"sites.title":                 "🏢 Standorte",
@@ -2533,6 +2553,10 @@ var de = map[string]string{
 	"logs.toggle_admin":         "Admin-Aktionen",
 	"logs.toggle_notifications": "Benachrichtigungen",
 	"logs.toggle_presence":      "Anwesenheitserklärungen",
+	"logs.team_title":           "Team-Aktivitätsprotokoll",
+	"logs.team_member":          "Mitglied",
+	"logs.all_members":          "Alle Mitglieder",
+	"logs.self_declared":        "Selbst erfasst",
 
 	// Notifications
 	"notifications.title":            "Benachrichtigungen",
@@ -3275,6 +3299,10 @@ var es = map[string]string{
 	"domains.no_domains":        "Aún no hay dominios. Cree uno con el botón de arriba.",
 	"domains.delete_confirm":    "¿Eliminar este dominio?",
 	"teams.member_left":         "Abandonó el equipo",
+	"teams.members":             "miembros",
+	"teams.departed":            "Salido",
+	"teams.view_logs":           "Registro del equipo",
+	"teams.view_member_logs":    "Registros del miembro",
 
 	// Sedes
 	"sites.title":                 "🏢 Sedes",
@@ -3467,6 +3495,10 @@ var es = map[string]string{
 	"logs.toggle_admin":         "Acciones de admin",
 	"logs.toggle_notifications": "Notificaciones",
 	"logs.toggle_presence":      "Declaraciones de presencia",
+	"logs.team_title":           "Registro de actividad del equipo",
+	"logs.team_member":          "Miembro",
+	"logs.all_members":          "Todos los miembros",
+	"logs.self_declared":        "Autodeclarado",
 
 	// Notifications
 	"notifications.title":            "Notificaciones",
@@ -4213,6 +4245,10 @@ var it = map[string]string{
 	"domains.no_domains":        "Nessun dominio. Creane uno con il pulsante sopra.",
 	"domains.delete_confirm":    "Eliminare questo dominio?",
 	"teams.member_left":         "Ha lasciato il team",
+	"teams.members":             "membri",
+	"teams.departed":            "Uscito",
+	"teams.view_logs":           "Registro del team",
+	"teams.view_member_logs":    "Log del membro",
 
 	// Sedi
 	"sites.title":                 "🏢 Sedi",
@@ -4409,6 +4445,10 @@ var it = map[string]string{
 	"logs.toggle_admin":         "Azioni di admin",
 	"logs.toggle_notifications": "Notifiche",
 	"logs.toggle_presence":      "Dichiarazioni di presenza",
+	"logs.team_title":           "Registro attività del team",
+	"logs.team_member":          "Membro",
+	"logs.all_members":          "Tutti i membri",
+	"logs.self_declared":        "Autodichiarato",
 
 	// Notifications
 	"notifications.title":            "Notifiche",

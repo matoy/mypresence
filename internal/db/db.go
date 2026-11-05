@@ -2895,6 +2895,7 @@ WHERE pl.user_id = ?`
 
 	var logs []models.PresenceLog
 	actorIDs := make(map[int64]struct{})
+	actorIDs[userID] = struct{}{}
 	for rows.Next() {
 		var l models.PresenceLog
 		if err := rows.Scan(
@@ -2915,6 +2916,102 @@ WHERE pl.user_id = ?`
 	names := d.fetchUserNames(actorIDs)
 	for i := range logs {
 		logs[i].ActorName = names[logs[i].ActorID]
+		logs[i].UserName = names[logs[i].UserID]
+	}
+	return logs, nil
+}
+
+// GetTeamLogs returns presence logs for all members of the team, most recent first.
+// If memberID > 0, logs are restricted to that single member.
+// Both actor names and user names are resolved via core.db.
+func (d *DB) GetTeamLogs(teamID int64, memberID int64, since time.Time) ([]models.PresenceLog, error) {
+	var userIDs []int64
+	if memberID > 0 {
+		var exists int
+		err := d.core.QueryRow(d.dialect.rebind("SELECT 1 FROM user_teams WHERE team_id = ? AND user_id = ?"), teamID, memberID).Scan(&exists)
+		if err != nil {
+			return nil, nil
+		}
+		userIDs = []int64{memberID}
+	} else {
+		members, err := d.GetAllTeamMembers(teamID)
+		if err != nil {
+			return nil, err
+		}
+		if len(members) == 0 {
+			return nil, nil
+		}
+		userIDs = make([]int64, len(members))
+		for i, m := range members {
+			userIDs[i] = m.ID
+		}
+	}
+
+	if len(userIDs) == 0 {
+		return nil, nil
+	}
+
+	placeholders := make([]string, len(userIDs))
+	args := make([]interface{}, len(userIDs))
+	for i, id := range userIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+
+	query := fmt.Sprintf(`
+SELECT pl.id, pl.user_id, pl.actor_id,
+       pl.action, pl.date, pl.half,
+       COALESCE(pl.status_id, 0), COALESCE(s.name, ''), COALESCE(s.color, ''),
+       pl.created_at
+FROM presence_logs pl
+LEFT JOIN statuses s ON pl.status_id = s.id
+WHERE pl.user_id IN (%s)`, strings.Join(placeholders, ","))
+
+	if !since.IsZero() {
+		query += " AND pl.created_at >= ?"
+		args = append(args, since)
+	}
+	query += " ORDER BY pl.created_at DESC, pl.id DESC LIMIT 1000"
+
+	rows, err := d.presence.Query(d.dialect.rebind(query), args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() //nolint:errcheck
+
+	var logs []models.PresenceLog
+	actorIDs := make(map[int64]struct{})
+	logUserIDs := make(map[int64]struct{})
+	for rows.Next() {
+		var l models.PresenceLog
+		if err := rows.Scan(
+			&l.ID, &l.UserID, &l.ActorID,
+			&l.Action, &l.Date, &l.Half,
+			&l.StatusID, &l.StatusName, &l.StatusColor,
+			&l.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		logs = append(logs, l)
+		actorIDs[l.ActorID] = struct{}{}
+		logUserIDs[l.UserID] = struct{}{}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	allIDs := make(map[int64]struct{}, len(actorIDs)+len(logUserIDs))
+	for id := range actorIDs {
+		allIDs[id] = struct{}{}
+	}
+	for id := range logUserIDs {
+		allIDs[id] = struct{}{}
+	}
+
+	names := d.fetchUserNames(allIDs)
+	for i := range logs {
+		logs[i].ActorName = names[logs[i].ActorID]
+		logs[i].UserName = names[logs[i].UserID]
 	}
 	return logs, nil
 }
