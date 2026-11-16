@@ -37,6 +37,15 @@ func renderLayoutForUser(t *testing.T, user *models.User, disableProjects bool) 
 		"newsBgColor": func(hex string, opacity int) template.CSS {
 			return template.CSS(hex)
 		},
+		"safeStyle": func(args ...string) template.HTMLAttr {
+			if len(args) == 0 {
+				return ""
+			}
+			if len(args) == 1 {
+				return template.HTMLAttr("style=\"" + args[0] + "\"")
+			}
+			return template.HTMLAttr("style=\"" + args[0] + ": " + args[1] + ";\"")
+		},
 	}
 	base := string(layoutBytes) + `{{define "content"}}content{{end}}`
 	tmpl, err := template.New("layout.html").Funcs(funcMap).Parse(base)
@@ -223,6 +232,15 @@ func TestLayoutTemplate_ActiveNewsBanner_RendersTrack(t *testing.T) {
 			}
 			return template.CSS("rgba(220, 38, 38, 0.80)")
 		},
+		"safeStyle": func(args ...string) template.HTMLAttr {
+			if len(args) == 0 {
+				return ""
+			}
+			if len(args) == 1 {
+				return template.HTMLAttr("style=\"" + args[0] + "\"")
+			}
+			return template.HTMLAttr("style=\"" + args[0] + ": " + args[1] + ";\"")
+		},
 	}
 	base := string(layoutBytes) + `{{define "content"}}content{{end}}`
 	tmpl, err := template.New("layout.html").Funcs(funcMap).Parse(base)
@@ -283,6 +301,15 @@ func TestLayoutTemplate_ActiveNewsBanner_WithOpacityAndTextColor(t *testing.T) {
 		"newsBgColor": func(hex string, opacity int) template.CSS {
 			return template.CSS("rgba(59, 130, 246, 0.80)")
 		},
+		"safeStyle": func(args ...string) template.HTMLAttr {
+			if len(args) == 0 {
+				return ""
+			}
+			if len(args) == 1 {
+				return template.HTMLAttr("style=\"" + args[0] + "\"")
+			}
+			return template.HTMLAttr("style=\"" + args[0] + ": " + args[1] + ";\"")
+		},
 	}
 	base := string(layoutBytes) + `{{define "content"}}content{{end}}`
 	tmpl, err := template.New("layout.html").Funcs(funcMap).Parse(base)
@@ -336,6 +363,15 @@ func TestLayoutTemplate_NotificationsToast_Renders(t *testing.T) {
 		},
 		"newsBgColor": func(hex string, opacity int) template.CSS {
 			return template.CSS(hex)
+		},
+		"safeStyle": func(args ...string) template.HTMLAttr {
+			if len(args) == 0 {
+				return ""
+			}
+			if len(args) == 1 {
+				return template.HTMLAttr("style=\"" + args[0] + "\"")
+			}
+			return template.HTMLAttr("style=\"" + args[0] + ": " + args[1] + ";\"")
 		},
 	}
 	base := string(layoutBytes) + `{{define "content"}}content{{end}}`

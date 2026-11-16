@@ -25,7 +25,17 @@ func TestAdminUserLogsTemplate_RendersAllSections(t *testing.T) {
 		t.Fatalf("read template: %v", err)
 	}
 
-	tmpl, err := template.New("admin_user_logs.html").Parse(string(logsBytes))
+	tmpl, err := template.New("admin_user_logs.html").Funcs(template.FuncMap{
+		"safeStyle": func(args ...string) template.HTMLAttr {
+			if len(args) == 0 {
+				return ""
+			}
+			if len(args) == 1 {
+				return template.HTMLAttr("style=\"" + args[0] + "\"")
+			}
+			return template.HTMLAttr("style=\"" + args[0] + ": " + args[1] + ";\"")
+		},
+	}).Parse(string(logsBytes))
 	if err != nil {
 		t.Fatalf("parse template: %v", err)
 	}

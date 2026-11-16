@@ -84,12 +84,23 @@ func (h *FloorplanHandler) FloorplanPage(w http.ResponseWriter, r *http.Request)
 
 	var currentFP *models.Floorplan
 	var seats []models.SeatWithStatus
+	lockerRanges := []models.FloorplanLockerRange{}
+	userLockers := []models.Locker{}
 	var isOnSite bool
 	var isFavorite bool
+
+	if user != nil {
+		if ul, err := h.DB.GetUserLockers(user.ID); err == nil && ul != nil {
+			userLockers = ul
+		}
+	}
 
 	if fpID > 0 {
 		currentFP, _ = h.DB.GetFloorplan(fpID)
 		if currentFP != nil {
+			if lr, err := h.DB.ListFloorplanLockerRanges(fpID); err == nil && lr != nil {
+				lockerRanges = lr
+			}
 			for _, id := range favIDs {
 				if id == currentFP.ID {
 					isFavorite = true
@@ -113,13 +124,15 @@ func (h *FloorplanHandler) FloorplanPage(w http.ResponseWriter, r *http.Request)
 	}
 
 	h.Render(w, r, "floorplan", map[string]interface{}{
-		"Floorplans": floorplans,
-		"CurrentFP":  currentFP,
-		"Seats":      seats,
-		"Date":       dateStr,
-		"Half":       half,
-		"IsOnSite":   isOnSite,
-		"IsFavorite": isFavorite,
+		"Floorplans":   floorplans,
+		"CurrentFP":    currentFP,
+		"Seats":        seats,
+		"LockerRanges": lockerRanges,
+		"UserLockers":  userLockers,
+		"Date":         dateStr,
+		"Half":         half,
+		"IsOnSite":     isOnSite,
+		"IsFavorite":   isFavorite,
 	})
 }
 

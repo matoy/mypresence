@@ -293,7 +293,8 @@
                 {{range $tg := .DomainTeamGroups}}
                 <!-- Team header row (always visible, click to toggle members) -->
                 <tr class="bg-indigo-50/70 hover:bg-indigo-100/70 border-t-2 border-indigo-200 cursor-pointer select-none transition"
-                    onclick="toggleTeamActivity({{$tg.Team.ID}})"
+                    data-team-id="{{$tg.Team.ID}}"
+                    onclick="toggleTeamActivity(this.dataset.teamId)"
                     title="Cliquer pour afficher / masquer les membres">
                     <td class="px-4 py-3 text-sm font-semibold text-indigo-950" data-v="{{$tg.Team.Name}}">
                         <div class="flex items-center gap-2">

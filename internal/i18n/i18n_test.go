@@ -362,6 +362,74 @@ func TestTeamLogsKeys_AllLanguages(t *testing.T) {
 	}
 }
 
+func TestLockersKeys_AllLanguages(t *testing.T) {
+	requiredKeys := []string{
+		"nav.lockers",
+		"lockers.admin_title",
+		"lockers.title",
+		"lockers.create",
+		"lockers.bulk_create",
+		"lockers.manage_btn",
+		"lockers.count_badge",
+		"lockers.number",
+		"lockers.zone",
+		"lockers.zone_placeholder",
+		"lockers.code",
+		"lockers.code_placeholder",
+		"lockers.code_hint",
+		"lockers.status",
+		"lockers.status_active",
+		"lockers.status_maintenance",
+		"lockers.status_free",
+		"lockers.status_assigned",
+		"lockers.assigned_to",
+		"lockers.unassigned",
+		"lockers.notes",
+		"lockers.release",
+		"lockers.release_confirm",
+		"lockers.claim_btn",
+		"lockers.claim_title",
+		"lockers.claim_confirm",
+		"lockers.no_available",
+		"lockers.my_locker",
+		"lockers.show_code",
+		"lockers.hide_code",
+		"lockers.set_code",
+		"lockers.save_code",
+		"lockers.bulk_prefix",
+		"lockers.bulk_start",
+		"lockers.bulk_end",
+		"lockers.bulk_padding",
+		"lockers.bulk_submit",
+		"lockers.filter_all_zones",
+		"lockers.filter_all_statuses",
+		"lockers.filter_disabled_user",
+		"lockers.disabled_user_warning",
+		"lockers.mode_ranges",
+		"lockers.range_legend",
+		"lockers.new_range",
+		"lockers.range_label_ph",
+		"lockers.view_on_plan",
+		"lockers.existing_zones",
+		"lockers.show_all_site",
+		"lockers.error_exists",
+		"fp.mode_seats",
+		"notifications.locker_assigned_title",
+		"notifications.locker_assigned_msg",
+	}
+
+	langs := []string{"en", "fr", "de", "es", "it"}
+	for _, lang := range langs {
+		m := T(lang)
+		for _, key := range requiredKeys {
+			val, ok := m[key]
+			if !ok || val == "" {
+				t.Errorf("lang %q is missing required locker key %q", lang, key)
+			}
+		}
+	}
+}
+
 func TestCalendarLegendKeys_AllLanguages(t *testing.T) {
 	requiredKeys := []string{
 		"cal.desk_reserved",

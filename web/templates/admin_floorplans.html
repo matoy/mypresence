@@ -105,9 +105,21 @@
 
                 <template x-if="selectedFpID !== 0">
                     <div>
-                        <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+                        <div class="px-4 py-3 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2">
                             <span class="font-semibold text-gray-800" x-text="selectedFpName"></span>
-                            <div class="flex items-center gap-2">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <div class="inline-flex rounded-lg border border-gray-200 overflow-hidden text-xs">
+                                    <button type="button" @click="editorMode = 'seat'"
+                                            :class="editorMode === 'seat' ? 'bg-primary text-white font-semibold' : 'bg-white text-gray-600 hover:bg-gray-50'"
+                                            class="px-2.5 py-1.5 transition">
+                                        🪑 {{index $.T "fp.mode_seats"}}
+                                    </button>
+                                    <button type="button" @click="editorMode = 'locker_range'"
+                                            :class="editorMode === 'locker_range' ? 'bg-amber-600 text-white font-semibold' : 'bg-white text-gray-600 hover:bg-gray-50'"
+                                            class="px-2.5 py-1.5 transition border-l border-gray-200">
+                                        🔐 {{index $.T "lockers.mode_ranges"}}
+                                    </button>
+                                </div>
                                 <span class="text-xs text-gray-400">{{index $.T "fp.editor_hint"}}</span>
                                 <!-- Upload image button -->
                                 <label class="cursor-pointer bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-sm font-medium transition">
@@ -120,7 +132,7 @@
                         <!-- Image area -->
                         <div x-ref="imgContainer"
                              class="relative overflow-auto bg-gray-50"
-                             :style="'min-height: 300px; max-height: 70vh; touch-action: pan-x pan-y; cursor: ' + (draggingSeat !== null ? 'grabbing' : 'crosshair') + ';'"
+                             :style="'min-height: 300px; max-height: 70vh; touch-action: pan-x pan-y; cursor: ' + ((draggingSeat !== null || draggingRange !== null) ? 'grabbing' : 'crosshair') + ';'"
                              @click="handleImageClick($event)">
 
                             <template x-if="!currentImage">
@@ -155,6 +167,33 @@
                                                         @click.stop="confirmDeleteSeat(seat)"
                                                         class="w-5 h-5 bg-red-500 hover:bg-red-600 text-white rounded-full text-xs flex items-center justify-center shadow transition"
                                                         :title="_t['admin.delete']">×</button>
+                                            </div>
+                                        </div>
+                                    </template>
+
+                                    <!-- Existing locker range markers -->
+                                    <template x-for="lr in currentLockerRanges" :key="'lr-' + lr.id">
+                                        <div :style="'position:absolute;left:'+lr.x_pct+'%;top:'+lr.y_pct+'%;transform:translate(-50%,-50%);z-index:'+(draggingRange===lr.id?10:2)+';'"
+                                             :class="draggingRange === lr.id
+                                                 ? 'group/range px-2.5 py-1 rounded-full bg-amber-500 text-white text-xs font-bold flex items-center gap-1 shadow-xl border-2 border-amber-700 scale-110 cursor-grabbing whitespace-nowrap'
+                                                 : 'group/range px-2.5 py-1 rounded-full bg-amber-600 text-white text-xs font-bold flex items-center gap-1 shadow-md border-2 border-white cursor-grab whitespace-nowrap'"
+                                             @mousedown.prevent.stop="startDragRange(lr, $event)"
+                                             @dblclick.stop="openEditRange(lr)"
+                                             @click.stop
+                                             :title="'🔐 ' + lr.label + (lr.zone ? ' (' + lr.zone + ')' : '')">
+                                            <span>🔐</span>
+                                            <span x-text="lr.label"></span>
+                                            <span x-show="lr.total_count > 0"
+                                                  class="ml-0.5 px-1.5 py-0.2 rounded-full bg-black/20 text-[10px]"
+                                                  x-text="lr.available_count + '/' + lr.total_count"></span>
+                                            <div x-show="draggingRange !== lr.id"
+                                                 class="absolute -top-3 -right-3 hidden group-hover/range:flex items-center gap-0.5 z-20">
+                                                <button @mousedown.stop
+                                                        @click.stop="openEditRange(lr)"
+                                                        class="w-5 h-5 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-[10px] flex items-center justify-center shadow transition">✏️</button>
+                                                <button @mousedown.stop
+                                                        @click.stop="confirmDeleteRange(lr)"
+                                                        class="w-5 h-5 bg-red-500 hover:bg-red-600 text-white rounded-full text-xs flex items-center justify-center shadow transition">×</button>
                                             </div>
                                         </div>
                                     </template>
@@ -219,6 +258,52 @@
         </div>
     </div>
 
+    <!-- Add / Edit locker range modal -->
+    <div x-show="rangeModal.show" x-cloak x-transition.opacity
+         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" @click.self="rangeModal.show = false; pendingRange = null">
+        <div class="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4">
+            <h3 class="text-lg font-bold text-gray-800 mb-1" x-text="rangeModal.id ? _t['lockers.mode_ranges'] : _t['lockers.new_range']"></h3>
+            <form @submit.prevent="saveLockerRange()" class="space-y-3 mt-3">
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">{{index $.T "lockers.number"}} *</label>
+                    <input x-model="rangeModal.label" type="text" :placeholder="_t['lockers.range_label_ph']" maxlength="64" required
+                           x-ref="rangeLabelInput"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500/50">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">{{index $.T "lockers.zone"}}</label>
+                    <input x-model="rangeModal.zone" type="text" list="fp-locker-zones-list"
+                           placeholder="{{index $.T "lockers.zone_placeholder"}}" maxlength="128"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500/50">
+                    <datalist id="fp-locker-zones-list">
+                        <template x-for="z in allKnownZones" :key="'dl-' + z">
+                            <option :value="z"></option>
+                        </template>
+                    </datalist>
+                    <div x-show="allKnownZones.length > 0" class="mt-2">
+                        <span class="block text-[11px] text-gray-400 mb-1">{{index $.T "lockers.existing_zones"}}</span>
+                        <div class="flex flex-wrap gap-1">
+                            <template x-for="z in allKnownZones" :key="'chip-' + z">
+                                <button type="button" @click="rangeModal.zone = z"
+                                        :class="rangeModal.zone === z ? 'bg-amber-600 text-white border-amber-600' : 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'"
+                                        class="text-[11px] px-2 py-0.5 rounded-full border transition"
+                                        x-text="z"></button>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex gap-3 justify-end pt-1">
+                    <button type="button" @click="rangeModal.show = false; pendingRange = null"
+                            class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium" x-text="_t['admin.cancel']">
+                    </button>
+                    <button type="submit"
+                            class="text-xs px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition font-medium" x-text="_t['admin.save']">
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Confirm delete modal -->
     <div x-show="confirm.show" x-transition.opacity
          class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" @click.self="confirm.show = false">
@@ -264,10 +349,16 @@ function adminFloorplanApp(allFloorplans, allSites) {
         editSiteID: 0,
         currentImage: null,
         currentSeats: [],
+        currentLockerRanges: [],
+        siteLockerZones: [],
+        editorMode: 'seat',
         cacheBust: Date.now(),
         draggingSeat: null,
+        draggingRange: null,
         pendingSeat: null,
+        pendingRange: null,
         seatModal: { show: false, label: '' },
+        rangeModal: { show: false, id: 0, label: '', zone: '' },
         renameModal: { show: false, seat: null, label: '' },
         confirm: { show: false, title: '', message: '', action: ()=>{} },
         toast: { show: false, message: '', error: false },
@@ -299,7 +390,33 @@ function adminFloorplanApp(allFloorplans, allSites) {
             const fp = this.allFloorplans.find(f => f.id === id);
             this.currentImage = (fp && fp.image_path) ? `/floorplan-img/${fp.image_path}` : null;
             this.cacheBust = Date.now();
-            await this.loadSeats();
+            await Promise.all([this.loadSeats(), this.loadLockerRanges(), this.loadSiteLockerZones(fp ? fp.site_id : 0)]);
+        },
+
+        async loadSiteLockerZones(siteId) {
+            if (!siteId) {
+                this.siteLockerZones = [];
+                return;
+            }
+            const resp = await fetch(`/api/admin/lockers?site_id=${siteId}`);
+            if (resp.ok) {
+                const lockers = (await resp.json()) || [];
+                const set = new Set();
+                for (const l of lockers) {
+                    if (l.zone && l.zone.trim()) set.add(l.zone.trim());
+                }
+                this.siteLockerZones = Array.from(set).sort();
+            } else {
+                this.siteLockerZones = [];
+            }
+        },
+
+        get allKnownZones() {
+            const set = new Set(this.siteLockerZones || []);
+            for (const lr of (this.currentLockerRanges || [])) {
+                if (lr.zone && lr.zone.trim()) set.add(lr.zone.trim());
+            }
+            return Array.from(set).sort();
         },
 
         async loadSeats() {
@@ -307,6 +424,14 @@ function adminFloorplanApp(allFloorplans, allSites) {
             const resp = await fetch(`/api/admin/seats?floorplan_id=${this.selectedFpID}`);
             if (resp.ok) {
                 this.currentSeats = await resp.json();
+            }
+        },
+
+        async loadLockerRanges() {
+            if (!this.selectedFpID) return;
+            const resp = await fetch(`/api/admin/locker-ranges?floorplan_id=${this.selectedFpID}`);
+            if (resp.ok) {
+                this.currentLockerRanges = (await resp.json()) || [];
             }
         },
 
@@ -406,9 +531,116 @@ function adminFloorplanApp(allFloorplans, allSites) {
             const rect = img.getBoundingClientRect();
             const xPct = ((event.clientX - rect.left) / rect.width) * 100;
             const yPct = ((event.clientY - rect.top) / rect.height) * 100;
+            if (this.editorMode === 'locker_range') {
+                this.pendingRange = { x_pct: parseFloat(xPct.toFixed(2)), y_pct: parseFloat(yPct.toFixed(2)) };
+                this.rangeModal = { show: true, id: 0, label: '', zone: '' };
+                this.$nextTick(() => { if (this.$refs.rangeLabelInput) this.$refs.rangeLabelInput.focus(); });
+                return;
+            }
             this.pendingSeat = { x_pct: xPct.toFixed(2), y_pct: yPct.toFixed(2) };
             this.seatModal = { show: true, label: '' };
             this.$nextTick(() => { if (this.$refs.seatLabelInput) this.$refs.seatLabelInput.focus(); });
+        },
+
+        openEditRange(lr) {
+            this.pendingRange = null;
+            this.rangeModal = { show: true, id: lr.id, label: lr.label || '', zone: lr.zone || '' };
+            this.$nextTick(() => { if (this.$refs.rangeLabelInput) this.$refs.rangeLabelInput.focus(); });
+        },
+
+        async saveLockerRange() {
+            if (!this.rangeModal.label.trim()) return;
+            if (this.rangeModal.id) {
+                const resp = await fetch(`/admin/locker-ranges/${this.rangeModal.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ label: this.rangeModal.label.trim(), zone: this.rangeModal.zone.trim() })
+                });
+                if (resp.ok) {
+                    this.showToast(_t['admin.save'] || 'OK');
+                    await this.loadLockerRanges();
+                } else {
+                    this.showToast(_t['fp.error'], true);
+                }
+            } else if (this.pendingRange) {
+                const resp = await fetch(`/admin/floorplans/${this.selectedFpID}/locker-ranges`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        label: this.rangeModal.label.trim(),
+                        zone: this.rangeModal.zone.trim(),
+                        x_pct: this.pendingRange.x_pct,
+                        y_pct: this.pendingRange.y_pct
+                    })
+                });
+                if (resp.ok) {
+                    this.showToast(_t['lockers.new_range'] || 'OK');
+                    await this.loadLockerRanges();
+                } else {
+                    this.showToast(_t['fp.error'], true);
+                }
+            }
+            this.rangeModal = { show: false, id: 0, label: '', zone: '' };
+            this.pendingRange = null;
+        },
+
+        startDragRange(lr, event) {
+            this.draggingRange = lr.id;
+            const originalX = lr.x_pct;
+            const originalY = lr.y_pct;
+            const onMove = (e) => {
+                const img = this.$refs.planImg;
+                if (!img) return;
+                const rect = img.getBoundingClientRect();
+                lr.x_pct = parseFloat(Math.min(100, Math.max(0, (e.clientX - rect.left) / rect.width * 100)).toFixed(2));
+                lr.y_pct = parseFloat(Math.min(100, Math.max(0, (e.clientY - rect.top) / rect.height * 100)).toFixed(2));
+            };
+            const onUp = async (e) => {
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp);
+                this.draggingRange = null;
+                const img = this.$refs.planImg;
+                if (!img) return;
+                const rect = img.getBoundingClientRect();
+                const xPct = parseFloat(Math.min(100, Math.max(0, (e.clientX - rect.left) / rect.width * 100)).toFixed(2));
+                const yPct = parseFloat(Math.min(100, Math.max(0, (e.clientY - rect.top) / rect.height * 100)).toFixed(2));
+                if (Math.abs(xPct - parseFloat(originalX)) < 0.5 && Math.abs(yPct - parseFloat(originalY)) < 0.5) {
+                    lr.x_pct = originalX;
+                    lr.y_pct = originalY;
+                    return;
+                }
+                lr.x_pct = xPct;
+                lr.y_pct = yPct;
+                const resp = await fetch(`/admin/locker-ranges/${lr.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ x_pct: xPct, y_pct: yPct })
+                });
+                if (!resp.ok) {
+                    lr.x_pct = originalX;
+                    lr.y_pct = originalY;
+                    this.showToast(_t['fp.error'], true);
+                }
+            };
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        },
+
+        confirmDeleteRange(lr) {
+            this.confirm = {
+                show: true,
+                title: _t['admin.delete'] + ' ' + _t['lockers.mode_ranges'],
+                message: `${_t['admin.delete']} "${lr.label}" ?`,
+                action: async () => {
+                    const resp = await fetch(`/admin/locker-ranges/${lr.id}`, { method: 'DELETE' });
+                    if (resp.ok) {
+                        this.showToast(_t['admin.delete']);
+                        await this.loadLockerRanges();
+                    } else {
+                        this.showToast(_t['fp.error'], true);
+                    }
+                }
+            };
         },
 
         async createSeat() {

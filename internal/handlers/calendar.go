@@ -236,6 +236,21 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 		ytdBillable = 0
 	}
 
+	var userLockers []models.Locker
+	var lockerSites []*models.Site
+	if !h.DisableFloorplans {
+		userLockers, _ = h.DB.GetUserLockers(user.ID)
+		if user.SiteID > 0 {
+			if allLockerSites, err := h.DB.ListSitesWithLockers(); err == nil {
+				for _, s := range allLockerSites {
+					if s.ID == user.SiteID {
+						lockerSites = append(lockerSites, s)
+					}
+				}
+			}
+		}
+	}
+
 	h.Render(w, r, "calendar", map[string]interface{}{
 		"Year":              year,
 		"Month":             month,
@@ -251,6 +266,8 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 		"ReservationDates":    reservationDates,
 		"ReservationDetails":  userDayReservations,
 		"Floorplans":          floorplans,
+		"UserLockers":         userLockers,
+		"LockerSites":         lockerSites,
 		"CalendarComplete":  calendarComplete,
 		"DeclarableDays":    declarableDays,
 		"DeclaredDays":      declaredDays,

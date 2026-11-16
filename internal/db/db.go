@@ -824,6 +824,30 @@ user_id      BIGINT NOT NULL,
 UNIQUE(floorplan_id, user_id),
 FOREIGN KEY (floorplan_id) REFERENCES floorplans(id) ON DELETE CASCADE
 `),
+
+		dl.createTableIfNotExists("lockers", fmt.Sprintf(`
+id %s,
+site_id BIGINT NOT NULL,
+number %s NOT NULL,
+zone %s NOT NULL DEFAULT '',
+status %s NOT NULL DEFAULT 'active',
+user_id BIGINT NOT NULL DEFAULT 0,
+code %s NOT NULL DEFAULT '',
+notes %s NOT NULL DEFAULT '',
+assigned_at %s DEFAULT NULL,
+UNIQUE(site_id, number),
+FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE
+`, ai, dl.varcharType(64), dl.varcharType(128), dl.varcharType(16), dl.varcharType(32), dl.textType(), dt)),
+
+		dl.createTableIfNotExists("floorplan_locker_ranges", fmt.Sprintf(`
+id %s,
+floorplan_id BIGINT NOT NULL,
+label %s NOT NULL,
+zone %s NOT NULL DEFAULT '',
+x_pct %s NOT NULL DEFAULT 0,
+y_pct %s NOT NULL DEFAULT 0,
+FOREIGN KEY (floorplan_id) REFERENCES floorplans(id) ON DELETE CASCADE
+`, ai, dl.varcharType(64), dl.varcharType(128), real_, real_)),
 	}
 
 	for _, stmt := range stmts {
@@ -848,6 +872,9 @@ FOREIGN KEY (floorplan_id) REFERENCES floorplans(id) ON DELETE CASCADE
 	_ = d.ensureIndex(d.floorplan, "idx_seat_reservations_date", "seat_reservations", "date")
 	_ = d.ensureIndex(d.floorplan, "idx_seats_floorplan_id", "seats", "floorplan_id")
 	_ = d.ensureIndex(d.floorplan, "idx_floorplans_site_id", "floorplans", "site_id")
+	_ = d.ensureIndex(d.floorplan, "idx_lockers_site_id", "lockers", "site_id")
+	_ = d.ensureIndex(d.floorplan, "idx_lockers_user_id", "lockers", "user_id")
+	_ = d.ensureIndex(d.floorplan, "idx_fp_locker_ranges_fp_id", "floorplan_locker_ranges", "floorplan_id")
 
 	return nil
 }
@@ -1101,10 +1128,10 @@ func (d *DB) GetSessionUser(token string) (*models.User, error) {
 
 	var u models.User
 	err := d.core.QueryRow(d.dialect.rebind(`
-SELECT u.id, u.email, u.name, u.role, COALESCE(u.password_hash,''), u.disabled, u.created_at
+SELECT u.id, u.email, u.name, u.role, COALESCE(u.password_hash,''), u.disabled, u.created_at, COALESCE(u.site_id, 0)
 FROM sessions s JOIN users u ON s.user_id = u.id
 WHERE s.id = ? AND s.expires_at > `+d.dialect.now()+` AND u.disabled = `+d.dialect.boolDefault(false)+`
-`), tokenHash).Scan(&u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt)
+`), tokenHash).Scan(&u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt, &u.SiteID)
 	if err != nil {
 		return nil, err
 	}
@@ -1278,13 +1305,13 @@ func (d *DB) GetUserByPAT(token string) (*models.User, error) {
 
 	var u models.User
 	err := d.core.QueryRow(d.dialect.rebind(`
-SELECT u.id, u.email, u.name, u.role, COALESCE(u.password_hash,''), u.disabled, u.created_at
+SELECT u.id, u.email, u.name, u.role, COALESCE(u.password_hash,''), u.disabled, u.created_at, COALESCE(u.site_id, 0)
 FROM personal_access_tokens t
 JOIN users u ON t.user_id = u.id
 WHERE t.token_hash = ?
   AND (t.expires_at IS NULL OR t.expires_at > `+d.dialect.now()+`)
   AND u.disabled = `+d.dialect.boolDefault(false)+`
-`), tokenHash).Scan(&u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt)
+`), tokenHash).Scan(&u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt, &u.SiteID)
 	if err != nil {
 		return nil, err
 	}
@@ -1452,6 +1479,7 @@ func (d *DB) ListUsers() ([]models.User, error) {
 // UpdateUserSite updates a user's assigned site.
 func (d *DB) UpdateUserSite(userID, siteID int64) error {
 	_, err := d.core.Exec("UPDATE users SET site_id = ? WHERE id = ?", siteID, userID)
+	d.ClearSessionCache()
 	return err
 }
 
@@ -3369,6 +3397,10 @@ func (d *DB) GetSite(id int64) (*models.Site, error) {
 			s.FloorplanIDs = append(s.FloorplanIDs, fp.ID)
 		}
 	}
+	if totalCounts, availCounts, err := d.GetSiteLockerCounts(); err == nil {
+		s.LockersCount = totalCounts[id]
+		s.AvailableLockersCount = availCounts[id]
+	}
 	return &s, nil
 }
 
@@ -3406,6 +3438,13 @@ func (d *DB) ListSites() ([]*models.Site, error) {
 					s.FloorplanIDs = append(s.FloorplanIDs, fp.ID)
 				}
 			}
+		}
+	}
+
+	if totalCounts, availCounts, err := d.GetSiteLockerCounts(); err == nil {
+		for _, s := range sites {
+			s.LockersCount = totalCounts[s.ID]
+			s.AvailableLockersCount = availCounts[s.ID]
 		}
 	}
 

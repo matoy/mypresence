@@ -458,9 +458,11 @@ type Site struct {
 	Name             string       `json:"name"`
 	CountryCode      string       `json:"country_code"`
 	NotCorporateSite bool         `json:"not_corporate_site"`
-	Seats            int          `json:"seats"`
-	FloorplanIDs     []int64      `json:"floorplan_ids,omitempty"`
-	Floorplans       []*Floorplan `json:"floorplans,omitempty"`
+	Seats                 int          `json:"seats"`
+	LockersCount          int          `json:"lockers_count"`
+	AvailableLockersCount int          `json:"available_lockers_count"`
+	FloorplanIDs          []int64      `json:"floorplan_ids,omitempty"`
+	Floorplans            []*Floorplan `json:"floorplans,omitempty"`
 }
 
 // CountryList returns the list of uppercase country codes for the site.
@@ -523,6 +525,38 @@ type SeatReservation struct {
 type UserDayReservation struct {
 	HasSelf    bool     `json:"has_self"`
 	GuestNames []string `json:"guest_names,omitempty"`
+}
+
+// Locker represents a physical numbered code locker on a site.
+type Locker struct {
+	ID           int64      `json:"id"`
+	SiteID       int64      `json:"site_id"`
+	SiteName     string     `json:"site_name,omitempty"`
+	Number       string     `json:"number"`
+	Zone         string     `json:"zone"`
+	Status       string     `json:"status"` // "active" or "maintenance"
+	UserID       int64      `json:"user_id"`
+	UserName     string     `json:"user_name,omitempty"`
+	UserEmail    string     `json:"user_email,omitempty"`
+	UserDisabled bool       `json:"user_disabled,omitempty"`
+	Code          string     `json:"code,omitempty"`
+	Notes         string     `json:"notes,omitempty"`
+	AssignedAt    *time.Time `json:"assigned_at,omitempty"`
+	FloorplanID   int64      `json:"floorplan_id,omitempty"`
+	FloorplanName string     `json:"floorplan_name,omitempty"`
+}
+
+// FloorplanLockerRange represents a visual marker on a floorplan indicating a range/bank of lockers.
+type FloorplanLockerRange struct {
+	ID             int64   `json:"id"`
+	FloorplanID    int64   `json:"floorplan_id"`
+	SiteID         int64   `json:"site_id,omitempty"`
+	Label          string  `json:"label"` // e.g. "001-050"
+	Zone           string  `json:"zone"`
+	XPct           float64 `json:"x_pct"`
+	YPct           float64 `json:"y_pct"`
+	TotalCount     int     `json:"total_count"`
+	AvailableCount int     `json:"available_count"`
 }
 
 // PersonalAccessToken represents a user-generated API token.
@@ -610,6 +644,17 @@ func (n *Notification) Localize(tr map[string]string) {
 			n.Title = t
 		}
 		if tpl, ok := tr["notifications.team_added_msg"]; ok && tpl != "" && n.Link != "" {
+			actor := n.ActorName
+			if actor == "" {
+				actor = "Admin"
+			}
+			n.Message = fmt.Sprintf(tpl, n.Link, actor)
+		}
+	case "locker_assigned":
+		if t, ok := tr["notifications.locker_assigned_title"]; ok && t != "" {
+			n.Title = t
+		}
+		if tpl, ok := tr["notifications.locker_assigned_msg"]; ok && tpl != "" && n.Link != "" {
 			actor := n.ActorName
 			if actor == "" {
 				actor = "Admin"

@@ -43,6 +43,15 @@ func TestProjectsTemplate_ManualMode_HideFutureFilter(t *testing.T) {
 		"newsBgColor": func(hex string, opacity int) template.CSS {
 			return template.CSS(hex)
 		},
+		"safeStyle": func(args ...string) template.HTMLAttr {
+			if len(args) == 0 {
+				return ""
+			}
+			if len(args) == 1 {
+				return template.HTMLAttr("style=\"" + args[0] + "\"")
+			}
+			return template.HTMLAttr("style=\"" + args[0] + ": " + args[1] + ";\"")
+		},
 	}
 
 	for _, lang := range []string{"en", "fr"} {

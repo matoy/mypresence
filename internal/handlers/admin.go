@@ -331,16 +331,13 @@ func (h *AdminHandler) PreprovisionTeamMember(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	var actorID int64
+	actorID := currentUser.ID
 	actorName := "Admin"
-	if currentUser != nil {
-		actorID = currentUser.ID
-		if currentUser.Name != "" {
-			actorName = currentUser.Name
-		}
-		h.DB.LogAdminAction(currentUser.ID, "team", teamID, "preprovision_member", req.Email)
-		slog.Info("admin.team.preprovision_member", "actor", currentUser.Email, "team_id", teamID, "email", req.Email)
+	if currentUser.Name != "" {
+		actorName = currentUser.Name
 	}
+	h.DB.LogAdminAction(currentUser.ID, "team", teamID, "preprovision_member", req.Email)
+	slog.Info("admin.team.preprovision_member", "actor", currentUser.Email, "team_id", teamID, "email", req.Email)
 	teamName := h.DB.GetTeamName(teamID)
 	if teamName == "" {
 		teamName = strconv.FormatInt(teamID, 10)

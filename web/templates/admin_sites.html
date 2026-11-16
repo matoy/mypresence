@@ -101,6 +101,7 @@
                             {{end}}
                             <span class="text-xs bg-indigo-50 text-indigo-700 px-2.5 py-0.5 rounded-full font-medium">🪑 {{.Seats}} {{index $.T "sites.seats"}}</span>
                             <span class="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-medium" x-text="editFloorIds.length + ' {{index $.T "sites.floors_assigned"}}'"></span>
+                            <a href="/admin/lockers?site={{.ID}}" class="text-xs bg-amber-50 hover:bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full font-medium transition">🔐 {{.LockersCount}} {{index $.T "lockers.count_badge"}}</a>
                         </div>
                         {{if .Floorplans}}
                         <div class="flex items-center gap-1.5 mt-3 flex-wrap">
@@ -203,6 +204,9 @@
                 </template>
             </div>
             <div class="flex items-center gap-2">
+                <a href="/admin/lockers?site={{.ID}}"
+                   class="p-2 text-amber-600 hover:text-amber-800 transition"
+                   title="{{index $.T "lockers.manage_btn"}}">🔐</a>
                 <button @click="editSite = !editSite; $nextTick(() => $refs.editNameInput?.focus())"
                         type="button"
                         class="p-2 text-gray-400 hover:text-gray-600 transition" title="Edit">
