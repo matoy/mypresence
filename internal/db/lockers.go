@@ -14,10 +14,11 @@ import (
 )
 
 var (
-	ErrLockerAlreadyTaken         = errors.New("locker is already assigned or unavailable")
-	ErrUserAlreadyHasLockerOnSite = errors.New("user already has a locker assigned on this site")
-	ErrLockerNotFound             = errors.New("locker not found")
-	ErrLockerWrongSite            = errors.New("locker is not on user's assigned site")
+	ErrLockerAlreadyTaken          = errors.New("locker is already assigned or unavailable")
+	ErrUserAlreadyHasLockerOnSite  = errors.New("user already has a locker assigned on this site")
+	ErrLockerNotFound              = errors.New("locker not found")
+	ErrLockerWrongSite             = errors.New("locker is not on user's assigned site")
+	ErrLockerUserDisabled          = errors.New("user account is disabled")
 )
 
 // naturalLess compares two strings with embedded integers compared numerically.
@@ -257,24 +258,42 @@ type siteFloorplanRange struct {
 	FloorplanName string
 }
 
-// hydrateLockerFloorplans resolves FloorplanID and FloorplanName for each locker
-// by matching its zone or number against floorplan_locker_ranges on the same site.
+// hydrateLockerFloorplans resolves FloorplanID, FloorplanName and MatchingRangeIDs for each locker
+// by matching its zone or number against floorplan_locker_ranges on the locker's site(s).
 func (d *DB) hydrateLockerFloorplans(lockers []models.Locker) {
 	if len(lockers) == 0 {
 		return
 	}
-	rows, err := d.floorplan.Query(`
+	siteSet := make(map[int64]struct{})
+	var placeholders []string
+	var args []interface{}
+	for _, l := range lockers {
+		if l.SiteID > 0 {
+			if _, ok := siteSet[l.SiteID]; !ok {
+				siteSet[l.SiteID] = struct{}{}
+				placeholders = append(placeholders, "?")
+				args = append(args, l.SiteID)
+			}
+		}
+	}
+	if len(args) == 0 {
+		return
+	}
+
+	query := fmt.Sprintf(`
 SELECT r.id, r.floorplan_id, f.site_id, f.name, r.label, r.zone, r.x_pct, r.y_pct
 FROM floorplan_locker_ranges r
 JOIN floorplans f ON f.id = r.floorplan_id
-WHERE f.site_id > 0
-ORDER BY f.sort_order, f.id, r.id`)
+WHERE f.site_id IN (%s)
+ORDER BY f.sort_order, f.id, r.id`, strings.Join(placeholders, ","))
+
+	rows, err := d.floorplan.Query(query, args...)
 	if err != nil {
 		return
 	}
 	defer rows.Close() //nolint:errcheck
 
-	bySite := make(map[int64][]siteFloorplanRange)
+	bySite := make(map[int64][]siteFloorplanRange, len(siteSet))
 	for rows.Next() {
 		var sr siteFloorplanRange
 		if err := rows.Scan(&sr.ID, &sr.FloorplanID, &sr.SiteID, &sr.FloorplanName, &sr.Label, &sr.Zone, &sr.XPct, &sr.YPct); err == nil {
@@ -289,9 +308,11 @@ ORDER BY f.sort_order, f.id, r.id`)
 		ranges := bySite[lockers[i].SiteID]
 		for _, sr := range ranges {
 			if LockerMatchesRange(lockers[i], sr.FloorplanLockerRange) {
-				lockers[i].FloorplanID = sr.FloorplanID
-				lockers[i].FloorplanName = sr.FloorplanName
-				break
+				if lockers[i].FloorplanID == 0 {
+					lockers[i].FloorplanID = sr.FloorplanID
+					lockers[i].FloorplanName = sr.FloorplanName
+				}
+				lockers[i].MatchingRangeIDs = append(lockers[i].MatchingRangeIDs, sr.ID)
 			}
 		}
 	}
@@ -345,9 +366,9 @@ func (d *DB) BulkCreateLockers(siteID int64, prefix string, startNum, endNum, pa
 	}
 	defer tx.Rollback() //nolint:errcheck
 
-	stmt, err := tx.Prepare(d.dialect.rebind(
+	stmt, err := tx.Prepare(
 		"INSERT INTO lockers (site_id, number, zone, status, user_id, code, notes, assigned_at) VALUES (?, ?, ?, 'active', 0, '', '', NULL)",
-	))
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -563,16 +584,39 @@ func (d *DB) DeleteLocker(id int64) error {
 	return nil
 }
 
-// ClaimLocker assigns a free, active locker to userID in self-service, enforcing 1 locker per user per site
-// and requiring the user to be assigned to the locker's site.
+// ClaimLocker assigns a free, active locker to userID in self-service inside an atomic transaction,
+// enforcing 1 locker per user per site, active account state, and matching site assignment.
 func (d *DB) ClaimLocker(lockerID, userID int64, code string) error {
+	var userSiteID int64
+	var userDisabled bool
+	err := d.core.QueryRow("SELECT COALESCE(site_id, 0), disabled FROM users WHERE id = ?", userID).Scan(&userSiteID, &userDisabled)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrLockerWrongSite
+		}
+		return err
+	}
+
+	if d.dialect.isSQLite() {
+		d.lockerMu.Lock()
+		defer d.lockerMu.Unlock()
+	}
+
+	tx, err := d.floorplan.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() //nolint:errcheck
+
 	var siteID int64
 	var status string
 	var currentHolder int64
 	var existingCode string
-	err := d.floorplan.QueryRow(
-		"SELECT site_id, status, user_id, code FROM lockers WHERE id = ?", lockerID,
-	).Scan(&siteID, &status, &currentHolder, &existingCode)
+	selectLockerQ := "SELECT site_id, status, user_id, code FROM lockers WHERE id = ?"
+	if d.dialect.isPostgres() {
+		selectLockerQ += " FOR UPDATE"
+	}
+	err = tx.QueryRow(selectLockerQ, lockerID).Scan(&siteID, &status, &currentHolder, &existingCode)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrLockerNotFound
@@ -582,17 +626,15 @@ func (d *DB) ClaimLocker(lockerID, userID int64, code string) error {
 	if status != "active" || currentHolder != 0 {
 		return ErrLockerAlreadyTaken
 	}
-
-	var userSiteID int64
-	if err := d.core.QueryRow("SELECT COALESCE(site_id, 0) FROM users WHERE id = ?", userID).Scan(&userSiteID); err != nil {
-		return err
+	if userDisabled {
+		return ErrLockerUserDisabled
 	}
 	if userSiteID <= 0 || userSiteID != siteID {
 		return ErrLockerWrongSite
 	}
 
 	var existingCount int
-	if err := d.floorplan.QueryRow(
+	if err := tx.QueryRow(
 		"SELECT COUNT(*) FROM lockers WHERE site_id = ? AND user_id = ?", siteID, userID,
 	).Scan(&existingCount); err != nil {
 		return err
@@ -606,11 +648,15 @@ func (d *DB) ClaimLocker(lockerID, userID int64, code string) error {
 		finalCode = existingCode
 	}
 
-	res, err := d.floorplan.Exec(
+	res, err := tx.Exec(
 		"UPDATE lockers SET user_id = ?, code = ?, assigned_at = ? WHERE id = ? AND user_id = 0 AND status = 'active'",
 		userID, finalCode, time.Now(), lockerID,
 	)
 	if err != nil {
+		msgLower := strings.ToLower(err.Error())
+		if strings.Contains(msgLower, "unique") || strings.Contains(msgLower, "duplicate") {
+			return ErrUserAlreadyHasLockerOnSite
+		}
 		return err
 	}
 	n, err := res.RowsAffected()
@@ -620,7 +666,237 @@ func (d *DB) ClaimLocker(lockerID, userID int64, code string) error {
 	if n != 1 {
 		return ErrLockerAlreadyTaken
 	}
-	return nil
+	return tx.Commit()
+}
+
+// UserHasLockerOnSite reports whether userID already holds another locker on siteID.
+func (d *DB) UserHasLockerOnSite(siteID, userID, excludeLockerID int64) (bool, error) {
+	if siteID <= 0 || userID <= 0 {
+		return false, nil
+	}
+	var count int
+	err := d.floorplan.QueryRow(
+		"SELECT COUNT(*) FROM lockers WHERE site_id = ? AND user_id = ? AND id <> ?",
+		siteID, userID, excludeLockerID,
+	).Scan(&count)
+	return count > 0, err
+}
+
+// ReleaseLockersForUser automatically releases lockers held by userID (excluding keepSiteID when > 0),
+// preserving physical codes, and returns the released locker records for auditing and admin notifications.
+func (d *DB) ReleaseLockersForUser(userID, keepSiteID int64) ([]models.Locker, error) {
+	if userID <= 0 {
+		return nil, nil
+	}
+	if d.dialect.isSQLite() {
+		d.lockerMu.Lock()
+		defer d.lockerMu.Unlock()
+	}
+
+	tx, err := d.floorplan.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	selectQ := `
+SELECT l.id, l.site_id, COALESCE(s.name, ''), l.number, l.zone
+FROM lockers l
+LEFT JOIN sites s ON s.id = l.site_id
+WHERE l.user_id = ?`
+	updateQ := "UPDATE lockers SET user_id = 0, assigned_at = NULL WHERE user_id = ?"
+	args := []interface{}{userID}
+	if keepSiteID > 0 {
+		selectQ += " AND l.site_id <> ?"
+		updateQ += " AND site_id <> ?"
+		args = append(args, keepSiteID)
+	}
+
+	rows, err := tx.Query(selectQ, args...)
+	if err != nil {
+		return nil, err
+	}
+	var released []models.Locker
+	for rows.Next() {
+		var l models.Locker
+		if err := rows.Scan(&l.ID, &l.SiteID, &l.SiteName, &l.Number, &l.Zone); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		released = append(released, l)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(released) == 0 {
+		return nil, nil
+	}
+
+	if _, err := tx.Exec(updateQ, args...); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	sortLockers(released)
+	return released, nil
+}
+
+// ListLockerUserOptions returns a minimal user projection for locker assignment dropdowns.
+func (d *DB) ListLockerUserOptions(siteID int64, search string, limit int) ([]models.LockerUserOption, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	query := "SELECT id, name, email, COALESCE(site_id, 0), disabled FROM users WHERE 1=1"
+	var args []interface{}
+	if siteID > 0 {
+		query += " AND site_id = ?"
+		args = append(args, siteID)
+	}
+	if q := strings.ToLower(strings.TrimSpace(search)); q != "" {
+		like := "%" + q + "%"
+		query += " AND (LOWER(name) LIKE ? OR LOWER(email) LIKE ?)"
+		args = append(args, like, like)
+	}
+	query += " ORDER BY disabled ASC, name ASC"
+
+	rows, err := d.core.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() //nolint:errcheck
+
+	users := make([]models.LockerUserOption, 0)
+	for rows.Next() {
+		var u models.LockerUserOption
+		if err := rows.Scan(&u.ID, &u.Name, &u.Email, &u.SiteID, &u.Disabled); err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+		if len(users) >= limit {
+			break
+		}
+	}
+	return users, rows.Err()
+}
+
+// GetLockerAdminUserIDs returns the IDs of all active users holding global or floorplan_manager roles.
+func (d *DB) GetLockerAdminUserIDs() ([]int64, error) {
+	rows, err := d.core.Query(
+		"SELECT id, role FROM users WHERE disabled = " + d.dialect.boolDefault(false),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() //nolint:errcheck
+
+	var ids []int64
+	for rows.Next() {
+		var u models.User
+		if err := rows.Scan(&u.ID, &u.Roles); err != nil {
+			return nil, err
+		}
+		if u.HasAnyRole(models.RoleGlobal, models.RoleFloorplanManager) {
+			ids = append(ids, u.ID)
+		}
+	}
+	return ids, rows.Err()
+}
+
+// ListLockersFiltered returns paginated naturally-sorted lockers along with total filtered count,
+// site-scoped statistics, and available zones.
+func (d *DB) ListLockersFiltered(siteID int64, zone, status, search string, page, limit int) ([]models.Locker, int, models.LockerStats, []string, error) {
+	all, err := d.ListLockers(siteID)
+	if err != nil {
+		return nil, 0, models.LockerStats{}, nil, err
+	}
+
+	var stats models.LockerStats
+	zoneSet := make(map[string]struct{})
+	for _, l := range all {
+		stats.Total++
+		if l.Status == "maintenance" {
+			stats.Maintenance++
+		} else if l.UserID > 0 {
+			stats.Assigned++
+		} else {
+			stats.Free++
+		}
+		if l.UserID > 0 && l.UserDisabled {
+			stats.DisabledUser++
+		}
+		if z := strings.TrimSpace(l.Zone); z != "" {
+			zoneSet[z] = struct{}{}
+		}
+	}
+	if siteID > 0 {
+		if fpZones, zErr := d.GetSiteFloorplanLockerZones(); zErr == nil {
+			for _, z := range fpZones[siteID] {
+				if tz := strings.TrimSpace(z); tz != "" {
+					zoneSet[tz] = struct{}{}
+				}
+			}
+		}
+	}
+	zones := make([]string, 0, len(zoneSet))
+	for z := range zoneSet {
+		zones = append(zones, z)
+	}
+	sort.Slice(zones, func(i, j int) bool { return naturalLess(zones[i], zones[j]) })
+
+	cleanZone := strings.TrimSpace(zone)
+	q := strings.ToLower(strings.TrimSpace(search))
+	filtered := make([]models.Locker, 0, len(all))
+	for _, l := range all {
+		if cleanZone != "" && strings.TrimSpace(l.Zone) != cleanZone {
+			continue
+		}
+		switch status {
+		case "free":
+			if l.Status != "active" || l.UserID > 0 {
+				continue
+			}
+		case "assigned":
+			if l.UserID <= 0 {
+				continue
+			}
+		case "maintenance":
+			if l.Status != "maintenance" {
+				continue
+			}
+		case "disabled_user":
+			if l.UserID <= 0 || !l.UserDisabled {
+				continue
+			}
+		}
+		if q != "" {
+			hay := strings.ToLower(l.Number + " " + l.Zone + " " + l.SiteName + " " + l.UserName + " " + l.UserEmail + " " + l.Notes)
+			if !strings.Contains(hay, q) {
+				continue
+			}
+		}
+		filtered = append(filtered, l)
+	}
+
+	totalFiltered := len(filtered)
+	if limit <= 0 {
+		return filtered, totalFiltered, stats, zones, nil
+	}
+	if page < 1 {
+		page = 1
+	}
+	start := (page - 1) * limit
+	if start >= totalFiltered {
+		return []models.Locker{}, totalFiltered, stats, zones, nil
+	}
+	end := start + limit
+	if end > totalFiltered {
+		end = totalFiltered
+	}
+	return filtered[start:end], totalFiltered, stats, zones, nil
 }
 
 // UpdateUserLockerCode updates the collaborator's personal code memo on their own locker.
@@ -701,6 +977,9 @@ ORDER BY r.id`,
 				}
 			}
 			_ = lRows.Close()
+			if err := lRows.Err(); err != nil {
+				return nil, err
+			}
 			for i := range ranges {
 				for _, l := range siteLockers {
 					if LockerMatchesRange(l, ranges[i]) {

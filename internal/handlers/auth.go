@@ -225,12 +225,13 @@ func (h *AuthHandler) LocalLogin(w http.ResponseWriter, r *http.Request) {
 	metrics.AuthLoginsTotal.WithLabelValues("local", "success").Inc()
 	slog.Info("auth.login", "result", "success", "user", username, "method", "local", "ip", clientIP(r))
 
+	secureCookie := requestIsHTTPS(r, h.Config)
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session",
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
+		Secure:   secureCookie,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   86400 * 30,
 	})
@@ -249,7 +250,7 @@ func (h *AuthHandler) LocalLogin(w http.ResponseWriter, r *http.Request) {
 			MaxAge:   365 * 24 * 3600,
 			SameSite: http.SameSiteLaxMode,
 			HttpOnly: true,
-			Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
+			Secure:   secureCookie,
 		})
 	}
 
@@ -366,7 +367,7 @@ func (h *AuthHandler) SAMLACS(w http.ResponseWriter, r *http.Request) {
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
+		Secure:   requestIsHTTPS(r, h.Config),
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   86400 * 30,
 	})
@@ -555,6 +556,14 @@ func generateSelfSignedCert() (tls.Certificate, error) {
 		Certificate: [][]byte{certDER},
 		PrivateKey:  key,
 	}, nil
+}
+
+// requestIsHTTPS checks whether the request uses HTTPS directly or via a trusted proxy.
+func requestIsHTTPS(r *http.Request, cfg *config.Config) bool {
+	if cfg != nil && cfg.TrustedProxies != "" {
+		return middleware.IsHTTPS(r, middleware.ParseTrustedProxies(cfg.TrustedProxies))
+	}
+	return middleware.IsHTTPS(r)
 }
 
 // clientIP returns the best-effort client IP address from a request,

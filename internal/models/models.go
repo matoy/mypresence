@@ -529,21 +529,40 @@ type UserDayReservation struct {
 
 // Locker represents a physical numbered code locker on a site.
 type Locker struct {
-	ID           int64      `json:"id"`
-	SiteID       int64      `json:"site_id"`
-	SiteName     string     `json:"site_name,omitempty"`
-	Number       string     `json:"number"`
-	Zone         string     `json:"zone"`
-	Status       string     `json:"status"` // "active" or "maintenance"
-	UserID       int64      `json:"user_id"`
-	UserName     string     `json:"user_name,omitempty"`
-	UserEmail    string     `json:"user_email,omitempty"`
-	UserDisabled bool       `json:"user_disabled,omitempty"`
-	Code          string     `json:"code,omitempty"`
-	Notes         string     `json:"notes,omitempty"`
-	AssignedAt    *time.Time `json:"assigned_at,omitempty"`
-	FloorplanID   int64      `json:"floorplan_id,omitempty"`
-	FloorplanName string     `json:"floorplan_name,omitempty"`
+	ID               int64      `json:"id"`
+	SiteID           int64      `json:"site_id"`
+	SiteName         string     `json:"site_name,omitempty"`
+	Number           string     `json:"number"`
+	Zone             string     `json:"zone"`
+	Status           string     `json:"status"` // "active" or "maintenance"
+	UserID           int64      `json:"user_id"`
+	UserName         string     `json:"user_name,omitempty"`
+	UserEmail        string     `json:"user_email,omitempty"`
+	UserDisabled     bool       `json:"user_disabled,omitempty"`
+	Code             string     `json:"code,omitempty"`
+	Notes            string     `json:"notes,omitempty"`
+	AssignedAt       *time.Time `json:"assigned_at,omitempty"`
+	FloorplanID      int64      `json:"floorplan_id,omitempty"`
+	FloorplanName    string     `json:"floorplan_name,omitempty"`
+	MatchingRangeIDs []int64    `json:"matching_range_ids,omitempty"`
+}
+
+// LockerUserOption is a minimal user projection exposed to locker administration forms.
+type LockerUserOption struct {
+	ID       int64  `json:"id"`
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	SiteID   int64  `json:"site_id"`
+	Disabled bool   `json:"disabled,omitempty"`
+}
+
+// LockerStats summarizes locker counts for a site or across all sites.
+type LockerStats struct {
+	Total        int `json:"total"`
+	Free         int `json:"free"`
+	Assigned     int `json:"assigned"`
+	Maintenance  int `json:"maintenance"`
+	DisabledUser int `json:"disabled_user"`
 }
 
 // FloorplanLockerRange represents a visual marker on a floorplan indicating a range/bank of lockers.
@@ -660,6 +679,10 @@ func (n *Notification) Localize(tr map[string]string) {
 				actor = "Admin"
 			}
 			n.Message = fmt.Sprintf(tpl, n.Link, actor)
+		}
+	case "locker_auto_released":
+		if t, ok := tr["notifications.locker_auto_released_title"]; ok && t != "" {
+			n.Title = t
 		}
 	}
 }

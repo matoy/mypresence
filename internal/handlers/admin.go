@@ -413,6 +413,11 @@ func (h *AdminHandler) UpdateUserSite(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "Access denied", http.StatusForbidden)
 		return
 	}
+	if targetUserID <= 0 {
+		metrics.AdminOpsTotal.WithLabelValues("user", "update_site", "failure").Inc()
+		jsonError(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
 
 	var req struct {
 		SiteID int64 `json:"site_id"`
@@ -422,6 +427,20 @@ func (h *AdminHandler) UpdateUserSite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var siteName, siteCountry string
+	if req.SiteID > 0 {
+		s, err := h.DB.GetSite(req.SiteID)
+		if err != nil || s == nil {
+			metrics.AdminOpsTotal.WithLabelValues("user", "update_site", "failure").Inc()
+			jsonError(w, "Site not found", http.StatusNotFound)
+			return
+		}
+		siteName = s.Name
+		siteCountry = s.CountryCode
+	}
+
+	targetUser, _ := h.DB.GetUserByID(targetUserID)
+
 	if err := h.DB.UpdateUserSite(targetUserID, req.SiteID); err != nil {
 		slog.Error("admin.user.update_site", "error", err)
 		metrics.AdminOpsTotal.WithLabelValues("user", "update_site", "failure").Inc()
@@ -429,14 +448,7 @@ func (h *AdminHandler) UpdateUserSite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	siteName := ""
-	siteCountry := ""
-	if req.SiteID > 0 {
-		if s, _ := h.DB.GetSite(req.SiteID); s != nil {
-			siteName = s.Name
-			siteCountry = s.CountryCode
-		}
-	}
+	autoReleaseAndNotifyUserLockers(h.DB, currentUser, targetUser, targetUserID, req.SiteID, "lockers.reason_site_changed", requestTranslations(r, h.Config, currentUser))
 
 	if currentUser != nil {
 		h.DB.LogAdminAction(currentUser.ID, "user", targetUserID, "update_site", fmt.Sprintf("site_id=%d", req.SiteID))
@@ -618,7 +630,9 @@ func (h *AdminHandler) MemberLogsPage(w http.ResponseWriter, r *http.Request) {
 		backURL = "/"
 	} else if strings.HasPrefix(fromParam, "team_") {
 		teamIDStr := strings.TrimPrefix(fromParam, "team_")
-		backURL = "/admin/teams/" + teamIDStr + "/logs"
+		if tid, err := strconv.ParseInt(teamIDStr, 10, 64); err == nil && tid > 0 {
+			backURL = "/admin/teams/" + strconv.FormatInt(tid, 10) + "/logs"
+		}
 	}
 
 	h.Render(w, r, "admin_user_logs", map[string]interface{}{

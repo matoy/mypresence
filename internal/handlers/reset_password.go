@@ -173,7 +173,7 @@ func (h *ResetPasswordHandler) baseURL(r *http.Request) string {
 		return strings.TrimRight(h.Config.AppURL, "/")
 	}
 	scheme := "http"
-	if r.Header.Get("X-Forwarded-Proto") == "https" || r.TLS != nil {
+	if requestIsHTTPS(r, h.Config) {
 		scheme = "https"
 	}
 	host := "localhost:8080"

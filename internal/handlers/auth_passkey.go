@@ -303,7 +303,7 @@ func (h *AuthHandler) PasskeyLoginFinish(w http.ResponseWriter, r *http.Request)
 		Value:    sessionToken,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
+		Secure:   requestIsHTTPS(r, h.Config),
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   86400 * 30,
 	})

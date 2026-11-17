@@ -161,8 +161,11 @@
 
     <!-- Confirmation modal -->
     <div x-show="confirm.show"
+         x-cloak
          x-transition.opacity
-         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+         role="dialog" aria-modal="true"
+         @keydown.escape.window="confirm.show = false"
+         class="fixed inset-0 z-[60] flex items-center justify-center bg-black/40"
          @click.self="confirm.show = false">
         <div class="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4">
             <h3 class="text-lg font-bold text-gray-800 mb-2" x-text="confirm.title"></h3>
@@ -185,6 +188,8 @@
     <div x-show="reserveModal.show"
          x-cloak
          x-transition.opacity
+         role="dialog" aria-modal="true"
+         @keydown.escape.window="reserveModal.show = false"
          class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
          @click.self="reserveModal.show = false">
         <div class="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4">
@@ -229,6 +234,8 @@
     <div x-show="lockerModal.show"
          x-cloak
          x-transition.opacity
+         role="dialog" aria-modal="true"
+         @keydown.escape.window="if (!confirm.show) lockerModal.show = false"
          class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
          @click.self="lockerModal.show = false">
         <div class="bg-white rounded-2xl shadow-2xl p-6 max-w-lg w-full mx-4 max-h-[85vh] flex flex-col">
@@ -240,7 +247,9 @@
                     </h3>
                     <p x-show="lockerModal.range?.zone" class="text-xs text-gray-500 mt-0.5" x-text="lockerModal.range?.zone"></p>
                 </div>
-                <button type="button" @click="lockerModal.show = false" class="text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
+                <button type="button" @click="lockerModal.show = false"
+                        :aria-label="_t['fp.cancel'] || 'Close'"
+                        class="text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
             </div>
 
             <div x-show="lockerModal.error" class="bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg p-2.5 mb-3" x-text="lockerModal.error"></div>
@@ -265,6 +274,8 @@
                                    :placeholder="_t['lockers.code_placeholder'] || '4829'"
                                    class="flex-1 px-3 py-1.5 border border-amber-300 rounded-lg text-sm font-mono bg-white">
                             <button type="button" @click="lockerModal.showCode = !lockerModal.showCode"
+                                    :aria-label="lockerModal.showCode ? (_t['lockers.hide_code'] || 'Hide code') : (_t['lockers.show_code'] || 'Show code')"
+                                    :title="lockerModal.showCode ? (_t['lockers.hide_code'] || 'Hide code') : (_t['lockers.show_code'] || 'Show code')"
                                     class="px-2.5 py-1.5 bg-white border border-amber-300 rounded-lg text-xs"
                                     x-text="lockerModal.showCode ? '🙈' : '👁️'"></button>
                             <button type="submit"
@@ -309,7 +320,7 @@
                     </div>
 
                     <div class="mt-3 pt-3 border-t border-gray-100">
-                        <label class="block text-xs font-medium text-gray-600 mb-1" x-text="(_t['lockers.code'] || 'Code') + ' (optionnel)'"></label>
+                        <label class="block text-xs font-medium text-gray-600 mb-1" x-text="(_t['lockers.code'] || 'Code') + ' ' + (_t['lockers.optional'] || '(optional)')"></label>
                         <input type="text" x-model="lockerModal.code" maxlength="32"
                                :placeholder="_t['lockers.code_placeholder'] || '4829'"
                                class="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-mono">
@@ -321,7 +332,7 @@
                                 x-text="_t['fp.cancel'] || 'Cancel'"></button>
                         <button type="button" @click="claimFromFloorplan()" :disabled="!lockerModal.selectedId"
                                 class="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-medium disabled:opacity-40"
-                                x-text="_t['lockers.claim_confirm'] || 'Prendre ce casier'"></button>
+                                x-text="_t['lockers.claim_confirm'] || 'Claim this locker'"></button>
                     </div>
                 </div>
             </template>
@@ -372,42 +383,12 @@ function floorplanApp(initialSeats, initialDate, initialHalf, initialFpID, initi
             return (this.userLockers || []).find(l => l.site_id === siteId) || null;
         },
 
-        lockerMatchesRange(locker, lr) {
-            if (!lr) return true;
-            const lZone = (locker.zone || '').trim().toLowerCase();
-            const rZone = (lr.zone || '').trim().toLowerCase();
-            if (lZone && rZone && lZone !== rZone) return false;
-            const rLabel = (lr.label || '').trim();
-            const lNum = (locker.number || '').trim();
-            if (lNum && rLabel && lNum.toLowerCase() === rLabel.toLowerCase()) return true;
-            const parseToks = s => {
-                const toks = [];
-                const re = /([a-zA-Z]+[-_]?)?(\d+)/g;
-                let m;
-                while ((m = re.exec(s)) !== null) {
-                    const p = (m[1] || '').replace(/[-_]$/, '').toLowerCase();
-                    toks.push({ p, n: parseInt(m[2], 10) });
-                }
-                return toks;
-            };
-            const rToks = parseToks(rLabel);
-            if (rToks.length === 2 && rToks[0].n <= rToks[1].n) {
-                const lToks = parseToks(lNum);
-                if (lToks.length !== 1) return false;
-                const lt = lToks[0];
-                if (rToks[0].p && rToks[1].p && rToks[0].p !== rToks[1].p) return false;
-                const rp = rToks[0].p || rToks[1].p;
-                if (rp && rp !== lt.p) return false;
-                return lt.n >= rToks[0].n && lt.n <= rToks[1].n;
-            }
-            if (rZone && lZone && lZone === rZone) return true;
-            if (lZone && rLabel && lZone === rLabel.toLowerCase()) return true;
-            return false;
-        },
-
         get filteredRangeAvailable() {
             if (this.lockerModal.showAllSite || !this.lockerModal.range) return this.lockerModal.available;
-            return (this.lockerModal.available || []).filter(l => this.lockerMatchesRange(l, this.lockerModal.range));
+            const rangeId = this.lockerModal.range.id;
+            return (this.lockerModal.available || []).filter(
+                l => Array.isArray(l.matching_range_ids) && l.matching_range_ids.includes(rangeId)
+            );
         },
 
         async openLockerRangeById(rangeId) {
@@ -473,15 +454,22 @@ function floorplanApp(initialSeats, initialDate, initialHalf, initialFpID, initi
             }
         },
 
-        async releaseFloorplanLocker() {
+        releaseFloorplanLocker() {
             const lk = this.currentSiteLocker;
             if (!lk) return;
             const tpl = _t['lockers.release_confirm'] || 'Release #%s?';
-            if (!confirm(tpl.replace('%s', lk.number))) return;
-            const resp = await fetch(`/api/lockers/${lk.id}/release`, { method: 'POST' });
-            if (resp.ok) {
-                window.location.reload();
-            }
+            this.confirm = {
+                show: true,
+                title: (_t['lockers.release'] || 'Release') + ' #' + lk.number,
+                message: tpl.replace('%s', lk.number),
+                danger: true,
+                action: async () => {
+                    const resp = await fetch(`/api/lockers/${lk.id}/release`, { method: 'POST' });
+                    if (resp.ok) {
+                        window.location.reload();
+                    }
+                }
+            };
         },
 
         async toggleFavorite() {

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/matoy/mypresence/internal/config"
 	"github.com/matoy/mypresence/internal/db"
 	"github.com/matoy/mypresence/internal/i18n"
 	"github.com/matoy/mypresence/internal/metrics"
@@ -23,6 +24,7 @@ import (
 // FloorplanHandler handles both the user-facing floorplan page and the admin management.
 type FloorplanHandler struct {
 	DB      *db.DB
+	Config  *config.Config
 	DataDir string
 	Render  func(w http.ResponseWriter, r *http.Request, page string, data interface{})
 }

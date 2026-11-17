@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/matoy/mypresence/internal/config"
 	"github.com/matoy/mypresence/internal/db"
 	"github.com/matoy/mypresence/internal/metrics"
 	"github.com/matoy/mypresence/internal/middleware"
@@ -18,6 +19,7 @@ import (
 // UsersAdminHandler handles local user account management.
 type UsersAdminHandler struct {
 	DB     *db.DB
+	Config *config.Config
 	Render func(w http.ResponseWriter, r *http.Request, page string, data interface{})
 }
 
@@ -350,10 +352,17 @@ func (h *UsersAdminHandler) SetDisabled(w http.ResponseWriter, r *http.Request) 
 		Disabled bool `json:"disabled"`
 	}
 	json.NewDecoder(r.Body).Decode(&req) //nolint:errcheck
+	var targetUser *models.User
+	if req.Disabled && id > 0 {
+		targetUser, _ = h.DB.GetUserByID(id)
+	}
 	if err := h.DB.SetUserDisabled(id, req.Disabled); err != nil {
 		metrics.AdminOpsTotal.WithLabelValues("user", "set_disabled", "failure").Inc()
 		jsonError(w, "Error updating user", http.StatusInternalServerError)
 		return
+	}
+	if req.Disabled && id > 0 {
+		autoReleaseAndNotifyUserLockers(h.DB, currentUser, targetUser, id, 0, "lockers.reason_user_disabled", requestTranslations(r, h.Config, currentUser))
 	}
 	if currentUser != nil {
 		action := "set_enabled"
@@ -377,6 +386,9 @@ func (h *UsersAdminHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	targetUser, _ := h.DB.GetUserByID(id)
+	if id > 0 {
+		autoReleaseAndNotifyUserLockers(h.DB, currentUser, targetUser, id, 0, "lockers.reason_user_deleted", requestTranslations(r, h.Config, currentUser))
+	}
 	if err := h.DB.DeleteLocalUser(id); err != nil {
 		metrics.AdminOpsTotal.WithLabelValues("user", "delete", "failure").Inc()
 		jsonError(w, "Error deleting user", http.StatusInternalServerError)

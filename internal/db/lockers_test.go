@@ -2,6 +2,7 @@ package db
 
 import (
 	"errors"
+	"sync"
 	"testing"
 
 	"github.com/matoy/mypresence/internal/models"
@@ -293,5 +294,158 @@ func TestLockerFloorplanLinking_AndAvailabilityCounts(t *testing.T) {
 	if len(zonesMap[siteID]) != 2 {
 		t.Errorf("expected 2 floorplan locker zones for site, got %+v", zonesMap[siteID])
 	}
+
+	// Verify MatchingRangeIDs populated for backend-single-source matching
+	avail, _ := d.ListAvailableLockersBySite(siteID)
+	foundL1Match := false
+	for _, al := range avail {
+		if al.ID == l1 && len(al.MatchingRangeIDs) > 0 {
+			foundL1Match = true
+		}
+	}
+	if !foundL1Match {
+		t.Errorf("expected MatchingRangeIDs populated on available locker %d, got %+v", l1, avail)
+	}
 }
+
+func TestSQLitePragmasEnabledOnAllPoolConnections(t *testing.T) {
+	d := newTestDB(t)
+
+	// Hold one connection inside a transaction so subsequent queries open another pooled connection.
+	tx, err := d.floorplan.Begin()
+	if err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	for i := 0; i < 3; i++ {
+		var fk, busy int
+		if err := d.floorplan.QueryRow("PRAGMA foreign_keys").Scan(&fk); err != nil {
+			t.Fatalf("conn %d foreign_keys: %v", i, err)
+		}
+		if err := d.floorplan.QueryRow("PRAGMA busy_timeout").Scan(&busy); err != nil {
+			t.Fatalf("conn %d busy_timeout: %v", i, err)
+		}
+		if fk != 1 {
+			t.Fatalf("conn %d expected foreign_keys=1, got %d", i, fk)
+		}
+		if busy < 5000 {
+			t.Fatalf("conn %d expected busy_timeout>=5000, got %d", i, busy)
+		}
+	}
+}
+
+func TestClaimLocker_ConcurrentRace(t *testing.T) {
+	d := newTestDB(t)
+	siteID, _ := d.CreateSite(models.Site{Name: "RaceSite", CountryCode: "FR"})
+	uID := seedUser(t, d, "racer@test.com")
+	_ = d.UpdateUserSite(uID, siteID)
+
+	l1, _ := d.CreateLocker(models.Locker{SiteID: siteID, Number: "R-01"})
+	l2, _ := d.CreateLocker(models.Locker{SiteID: siteID, Number: "R-02"})
+	lockerIDs := []int64{l1, l2}
+
+	const workers = 8
+	var wg sync.WaitGroup
+	errs := make(chan error, workers)
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		lid := lockerIDs[i%len(lockerIDs)]
+		go func() {
+			defer wg.Done()
+			errs <- d.ClaimLocker(lid, uID, "1111")
+		}()
+	}
+	wg.Wait()
+	close(errs)
+
+	successes := 0
+	for err := range errs {
+		if err == nil {
+			successes++
+		} else if !errors.Is(err, ErrUserAlreadyHasLockerOnSite) && !errors.Is(err, ErrLockerAlreadyTaken) {
+			t.Fatalf("unexpected ClaimLocker error: %v", err)
+		}
+	}
+	if successes != 1 {
+		t.Fatalf("expected exactly 1 successful concurrent claim, got %d", successes)
+	}
+
+	held, err := d.GetUserLockers(uID)
+	if err != nil {
+		t.Fatalf("GetUserLockers: %v", err)
+	}
+	if len(held) != 1 {
+		t.Fatalf("expected user to hold exactly 1 locker, got %d", len(held))
+	}
+}
+
+func TestReleaseLockersForUser_And_DeleteSiteCleansLockers(t *testing.T) {
+	d := newTestDB(t)
+	s1, _ := d.CreateSite(models.Site{Name: "Site1", CountryCode: "FR"})
+	s2, _ := d.CreateSite(models.Site{Name: "Site2", CountryCode: "FR"})
+	uID := seedUser(t, d, "rel@test.com")
+
+	l1, _ := d.CreateLocker(models.Locker{SiteID: s1, Number: "01", UserID: uID, Code: "9876"})
+	l2, _ := d.CreateLocker(models.Locker{SiteID: s2, Number: "02", UserID: uID, Code: "5432"})
+
+	// Release everything except s2
+	released, err := d.ReleaseLockersForUser(uID, s2)
+	if err != nil {
+		t.Fatalf("ReleaseLockersForUser: %v", err)
+	}
+	if len(released) != 1 || released[0].ID != l1 {
+		t.Fatalf("expected l1 released, got %+v", released)
+	}
+	got1, _ := d.GetLocker(l1)
+	if got1.UserID != 0 || got1.Code != "9876" {
+		t.Errorf("expected l1 released keeping code '9876', got %+v", got1)
+	}
+	got2, _ := d.GetLocker(l2)
+	if got2.UserID != uID {
+		t.Errorf("expected l2 still assigned to uID, got %+v", got2)
+	}
+
+	// DeleteSite cleans lockers
+	if err := d.DeleteSite(s2); err != nil {
+		t.Fatalf("DeleteSite: %v", err)
+	}
+	if _, err := d.GetLocker(l2); !errors.Is(err, ErrLockerNotFound) {
+		t.Errorf("expected ErrLockerNotFound after DeleteSite, got %v", err)
+	}
+}
+
+func TestListLockersFiltered_And_UserOptions(t *testing.T) {
+	d := newTestDB(t)
+	sID, _ := d.CreateSite(models.Site{Name: "FilterSite", CountryCode: "FR"})
+	uID := seedUser(t, d, "opt_alice@test.com")
+	_ = d.UpdateUserSite(uID, sID)
+	disabledID := seedUser(t, d, "opt_disabled@test.com")
+	_ = d.UpdateUserSite(disabledID, sID)
+	_ = d.SetUserDisabled(disabledID, true)
+
+	_, _ = d.CreateLocker(models.Locker{SiteID: sID, Number: "1", Zone: "Z1"})
+	_, _ = d.CreateLocker(models.Locker{SiteID: sID, Number: "2", Zone: "Z1", UserID: uID})
+	_, _ = d.CreateLocker(models.Locker{SiteID: sID, Number: "10", Zone: "Z2", Status: "maintenance"})
+
+	page1, total, stats, zones, err := d.ListLockersFiltered(sID, "", "", "", 1, 2)
+	if err != nil {
+		t.Fatalf("ListLockersFiltered: %v", err)
+	}
+	if total != 3 || len(page1) != 2 || stats.Total != 3 || stats.Free != 1 || stats.Assigned != 1 || stats.Maintenance != 1 {
+		t.Fatalf("unexpected filtered stats/page: len=%d total=%d stats=%+v", len(page1), total, stats)
+	}
+	if page1[0].Number != "1" || page1[1].Number != "2" || len(zones) != 2 {
+		t.Errorf("unexpected page1 sort or zones: page1=%+v zones=%+v", page1, zones)
+	}
+
+	opts, err := d.ListLockerUserOptions(sID, "alice", 20)
+	if err != nil {
+		t.Fatalf("ListLockerUserOptions: %v", err)
+	}
+	if len(opts) != 1 || opts[0].ID != uID {
+		t.Errorf("expected 1 option for alice, got %+v", opts)
+	}
+}
+
 

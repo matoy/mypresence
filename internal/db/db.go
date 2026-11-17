@@ -44,37 +44,32 @@ type DB struct {
 	countsCacheMu   sync.Mutex
 	countsCacheTime time.Time
 	countsCacheVal  DBCounts
-	sessionCache    sync.Map // map[tokenHash string]cachedSessionUser
+	lockerMu        sync.Mutex // serializes SQLite locker claims/auto-releases to prevent write-upgrade races
+	sessionCache    sync.Map   // map[tokenHash string]cachedSessionUser
 }
 
-// openSQLiteConn opens a single SQLite file with WAL mode and foreign keys.
+// openSQLiteConn opens a single SQLite file with WAL mode and foreign keys
+// configured in the DSN so every pooled connection inherits them.
 func openSQLiteConn(path string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite", path)
+	// Reject directories before sql.Open adds query pragmas
+	if info, statErr := os.Stat(path); statErr == nil && info.IsDir() {
+		return nil, fmt.Errorf("sqlite path %q is a directory", path)
+	}
+	sep := "?"
+	if strings.Contains(path, "?") {
+		sep = "&"
+	}
+	dsn := path + sep + "_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_pragma=cache_size(-64000)&_pragma=temp_store(MEMORY)&_pragma=mmap_size(268435456)"
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err
 	}
 	db.SetMaxOpenConns(10)
 	db.SetMaxIdleConns(5)
-	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
-		_ = db.Close()
-		return nil, err
-	}
-	if _, err := db.Exec("PRAGMA synchronous=NORMAL"); err != nil {
-		_ = db.Close()
-		return nil, err
-	}
 	if _, err := db.Exec("PRAGMA foreign_keys=ON"); err != nil {
 		_ = db.Close()
 		return nil, err
 	}
-	if _, err := db.Exec("PRAGMA busy_timeout=5000"); err != nil {
-		_ = db.Close()
-		return nil, err
-	}
-	// SQLite performance PRAGMAs (safe, purely in-memory/cache configuration)
-	_, _ = db.Exec("PRAGMA cache_size = -64000")   // 64MB RAM page cache
-	_, _ = db.Exec("PRAGMA temp_store = MEMORY")   // In-memory temp tables and sorting
-	_, _ = db.Exec("PRAGMA mmap_size = 268435456") // 256MB memory-mapped I/O
 	return db, nil
 }
 
@@ -875,6 +870,13 @@ FOREIGN KEY (floorplan_id) REFERENCES floorplans(id) ON DELETE CASCADE
 	_ = d.ensureIndex(d.floorplan, "idx_lockers_site_id", "lockers", "site_id")
 	_ = d.ensureIndex(d.floorplan, "idx_lockers_user_id", "lockers", "user_id")
 	_ = d.ensureIndex(d.floorplan, "idx_fp_locker_ranges_fp_id", "floorplan_locker_ranges", "floorplan_id")
+
+	// Enforce at most 1 assigned locker per user per site at DB level where partial unique indexes are supported.
+	if dl.isSQLite() || dl.isPostgres() {
+		_, _ = d.floorplan.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_lockers_site_user_unique ON lockers (site_id, user_id) WHERE user_id > 0")
+	} else if dl.isSQLServer() {
+		_, _ = d.floorplan.Exec("IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_lockers_site_user_unique' AND object_id = OBJECT_ID('lockers')) CREATE UNIQUE INDEX idx_lockers_site_user_unique ON lockers (site_id, user_id) WHERE user_id > 0")
+	}
 
 	return nil
 }
@@ -3572,9 +3574,10 @@ GROUP BY f.site_id
 }
 
 func (d *DB) DeleteSite(id int64) error {
-	// Detach floorplans and users first
+	// Detach floorplans and users first, and clean up site lockers explicitly
 	_, _ = d.core.Exec("UPDATE users SET site_id = 0 WHERE site_id = ?", id)
 	_, _ = d.floorplan.Exec("UPDATE floorplans SET site_id = 0 WHERE site_id = ?", id)
+	_, _ = d.floorplan.Exec("DELETE FROM lockers WHERE site_id = ?", id)
 	_, err := d.floorplan.Exec("DELETE FROM sites WHERE id = ?", id)
 	return err
 }

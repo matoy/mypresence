@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/pprof"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -138,9 +139,9 @@ func buildAppMux(cfg *config.Config, database *db.DB) http.Handler {
 	adminHandler := &handlers.AdminHandler{DB: database, Config: cfg, Render: renderPage, RemindersService: remindersService}
 	activityHandler := &handlers.ActivityHandler{DB: database, Render: renderPage, DisableProjects: cfg.DisableProjects}
 	holidaysHandler := &handlers.HolidaysHandler{DB: database, Render: renderPage}
-	usersAdminHandler := &handlers.UsersAdminHandler{DB: database, Render: renderPage}
-	floorplanHandler := &handlers.FloorplanHandler{DB: database, DataDir: cfg.DataDir, Render: renderPage}
-	settingsHandler := &handlers.SettingsHandler{DB: database, Render: renderPage}
+	usersAdminHandler := &handlers.UsersAdminHandler{DB: database, Config: cfg, Render: renderPage}
+	floorplanHandler := &handlers.FloorplanHandler{DB: database, Config: cfg, DataDir: cfg.DataDir, Render: renderPage}
+	settingsHandler := &handlers.SettingsHandler{DB: database, Config: cfg, Render: renderPage}
 	generalSettingsHandler := &handlers.GeneralSettingsHandler{DataDir: cfg.DataDir, Config: cfg, Render: renderPage}
 	resetPasswordHandler := &handlers.ResetPasswordHandler{DB: database, Config: cfg, Render: renderPage, RateLimiter: middleware.NewLoginRateLimiter()}
 	patHandler, projectsHandler := initOptionalHandlers(cfg, database, renderPage)
@@ -401,7 +402,24 @@ func buildAppMux(cfg *config.Config, database *db.DB) http.Handler {
 
 	mux.Handle("/", middleware.AuthWithOptions(database, !cfg.DisableAPI, authMux))
 
-	return middleware.Gzip(middleware.SecurityHeaders(middleware.LimitRequestBody(metrics.Instrument(middleware.AccessLog(mux)))))
+	trustedChecker := middleware.ParseTrustedProxies(cfg.TrustedProxies)
+	var allowedHosts []string
+	for _, rawURL := range []string{cfg.AppURL, cfg.SAMLRootURL} {
+		if rawURL != "" {
+			if u, err := url.Parse(rawURL); err == nil && u.Host != "" {
+				allowedHosts = append(allowedHosts, u.Host)
+			}
+		}
+	}
+
+	return middleware.Gzip(
+		middleware.SecurityHeadersWithTrustedProxies(
+			cfg.TrustedProxies,
+			middleware.ValidateSameOrigin(allowedHosts, trustedChecker, "/saml/acs")(
+				middleware.LimitRequestBody(metrics.Instrument(middleware.AccessLog(mux))),
+			),
+		),
+	)
 }
 
 // initOptionalHandlers creates handlers for API tokens and Projects if those features are enabled.
@@ -555,6 +573,7 @@ func registerOptionalAdminRoutes(mux, authMux *http.ServeMux, cfg *config.Config
 		fpAdminMux.HandleFunc("PUT /admin/lockers/{id}", floorplanHandler.UpdateLocker)
 		fpAdminMux.HandleFunc("DELETE /admin/lockers/{id}", floorplanHandler.DeleteLocker)
 		fpAdminMux.HandleFunc("GET /api/admin/lockers", floorplanHandler.AdminListLockersAPI)
+		fpAdminMux.HandleFunc("GET /api/admin/lockers/users", floorplanHandler.AdminListLockerUsersAPI)
 		fpAdminMux.HandleFunc("POST /api/admin/lockers", floorplanHandler.CreateLocker)
 		fpAdminMux.HandleFunc("POST /api/admin/lockers/bulk", floorplanHandler.BulkCreateLockers)
 		fpAdminMux.HandleFunc("PUT /api/admin/lockers/{id}", floorplanHandler.UpdateLocker)
@@ -584,7 +603,9 @@ func registerOptionalAdminRoutes(mux, authMux *http.ServeMux, cfg *config.Config
 		mux.Handle("/api/admin/seats/", middleware.Auth(database, middleware.RequireRole(models.RoleFloorplanManager)(fpAdminMux)))
 		mux.Handle("/api/admin/floorplans", middleware.Auth(database, middleware.RequireRole(models.RoleFloorplanManager)(fpAdminMux)))
 		mux.Handle("/api/admin/floorplans/", middleware.Auth(database, middleware.RequireRole(models.RoleFloorplanManager)(fpAdminMux)))
-		mux.Handle("/api/admin/", middleware.Auth(database, middleware.RequireRole(models.RoleFloorplanManager)(fpAdminMux)))
+		mux.Handle("/api/admin/sites-report", middleware.Auth(database, middleware.RequireRole(models.RoleFloorplanManager)(fpAdminMux)))
+		mux.Handle("/api/admin/sites", middleware.Auth(database, middleware.RequireRole(models.RoleFloorplanManager)(fpAdminMux)))
+		mux.Handle("/api/admin/sites/", middleware.Auth(database, middleware.RequireRole(models.RoleFloorplanManager)(fpAdminMux)))
 	}
 	if !cfg.DisableProjects {
 		authMux.HandleFunc("GET /projects", projectsHandler.ProjectsPage)

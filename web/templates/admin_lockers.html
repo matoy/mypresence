@@ -5,13 +5,16 @@
 <script id="lockers-sites-json-data" type="application/json">{{json .Sites}}</script>
 <script id="lockers-users-json-data" type="application/json">{{json .Users}}</script>
 <script id="lockers-fp-zones-json-data" type="application/json">{{json .FloorplanZones}}</script>
+<script id="lockers-stats-json-data" type="application/json">{{json .Stats}}</script>
+<script id="lockers-zones-json-data" type="application/json">{{json .Zones}}</script>
+<script id="lockers-meta-json-data" type="application/json">{"total":{{json .TotalLockers}},"pageSize":{{json .PageSize}}}</script>
 
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" x-data="lockersAdmin({{.SelectedSiteID}})">
     <!-- Header -->
     <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
         <h1 class="text-2xl font-bold text-gray-900">{{index $.T "lockers.admin_title"}}</h1>
         <div class="flex items-center gap-2">
-            <span class="text-sm text-gray-400 mr-2" x-text="filteredLockers.length + ' / ' + lockers.length"></span>
+            <span class="text-sm text-gray-400 mr-2" x-text="totalFiltered + ' / ' + stats.total"></span>
             <button @click="openBulkModal()"
                     type="button"
                     class="text-xs px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg transition font-medium">
@@ -29,19 +32,19 @@
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
             <p class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{index $.T "lockers.title"}}</p>
-            <p class="text-2xl font-bold text-gray-900 mt-1" x-text="scopedLockers.length"></p>
+            <p class="text-2xl font-bold text-gray-900 mt-1" x-text="stats.total"></p>
         </div>
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
             <p class="text-xs font-semibold uppercase tracking-wider text-emerald-600">{{index $.T "lockers.status_free"}}</p>
-            <p class="text-2xl font-bold text-emerald-600 mt-1" x-text="scopedLockers.filter(l => l.status === 'active' && !l.user_id).length"></p>
+            <p class="text-2xl font-bold text-emerald-600 mt-1" x-text="stats.free"></p>
         </div>
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
             <p class="text-xs font-semibold uppercase tracking-wider text-blue-600">{{index $.T "lockers.status_assigned"}}</p>
-            <p class="text-2xl font-bold text-blue-600 mt-1" x-text="scopedLockers.filter(l => l.user_id > 0).length"></p>
+            <p class="text-2xl font-bold text-blue-600 mt-1" x-text="stats.assigned"></p>
         </div>
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
             <p class="text-xs font-semibold uppercase tracking-wider text-amber-600">{{index $.T "lockers.status_maintenance"}} / ⚠️</p>
-            <p class="text-2xl font-bold text-amber-600 mt-1" x-text="scopedLockers.filter(l => l.status === 'maintenance' || (l.user_id > 0 && l.user_disabled)).length"></p>
+            <p class="text-2xl font-bold text-amber-600 mt-1" x-text="stats.maintenance + stats.disabled_user"></p>
         </div>
     </div>
 
@@ -50,7 +53,7 @@
         <div class="flex flex-wrap gap-3 items-end">
             <div>
                 <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "sites_report.site"}}</label>
-                <select x-model.number="filterSite" @change="filterZone = ''"
+                <select x-model.number="filterSite" @change="filterZone = ''; onFilterChange()"
                         class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm bg-white">
                     <option :value="0">{{index $.T "sites_report.all_sites"}}</option>
                     <template x-for="s in sites" :key="s.id">
@@ -60,7 +63,7 @@
             </div>
             <div>
                 <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "lockers.zone"}}</label>
-                <select x-model="filterZone"
+                <select x-model="filterZone" @change="onFilterChange()"
                         class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm bg-white">
                     <option value="">{{index $.T "lockers.filter_all_zones"}}</option>
                     <template x-for="z in availableZones" :key="z">
@@ -70,7 +73,7 @@
             </div>
             <div>
                 <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "lockers.status"}}</label>
-                <select x-model="filterStatus"
+                <select x-model="filterStatus" @change="onFilterChange()"
                         class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm bg-white">
                     <option value="all">{{index $.T "lockers.filter_all_statuses"}}</option>
                     <option value="free">{{index $.T "lockers.status_free"}}</option>
@@ -81,7 +84,8 @@
             </div>
             <div class="flex-1 min-w-[200px]">
                 <label class="block text-xs font-medium text-gray-500 mb-1">{{index $.T "admin.search"}}</label>
-                <input type="text" x-model="filterText" placeholder="{{index $.T "lockers.number"}}, {{index $.T "lockers.assigned_to"}}…"
+                <input type="text" x-model="filterText" @input="debouncedFilterChange()"
+                       placeholder="{{index $.T "lockers.number"}}, {{index $.T "lockers.assigned_to"}}…"
                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm">
             </div>
             <button @click="resetFilters()"
@@ -109,14 +113,14 @@
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100 bg-white">
-                    <template x-if="filteredLockers.length === 0">
+                    <template x-if="displayedLockers.length === 0">
                         <tr>
                             <td colspan="8" class="px-4 py-8 text-center text-gray-400 text-sm">
                                 {{index $.T "lockers.no_available"}}
                             </td>
                         </tr>
                     </template>
-                    <template x-for="l in filteredLockers" :key="l.id">
+                    <template x-for="l in displayedLockers" :key="l.id">
                         <tr class="hover:bg-gray-50/70 transition">
                             <td class="px-4 py-3 whitespace-nowrap">
                                 <span class="inline-flex items-center gap-1.5 font-mono font-bold text-sm text-gray-900">
@@ -175,6 +179,7 @@
                                         <button type="button"
                                                 @click="revealedIds[l.id] = !revealedIds[l.id]"
                                                 class="text-xs text-gray-400 hover:text-gray-700 transition"
+                                                :aria-label="revealedIds[l.id] ? '{{index $.T "lockers.hide_code"}}' : '{{index $.T "lockers.show_code"}}'"
                                                 :title="revealedIds[l.id] ? '{{index $.T "lockers.hide_code"}}' : '{{index $.T "lockers.show_code"}}'">
                                             <span x-text="revealedIds[l.id] ? '🙈' : '👁️'"></span>
                                         </button>
@@ -189,12 +194,15 @@
                                 <div class="inline-flex items-center gap-1">
                                     <button type="button" @click="openEditModal(l)"
                                             class="p-1.5 text-gray-500 hover:text-primary rounded-lg hover:bg-gray-100 transition"
-                                            title="Edit">✏️</button>
+                                            aria-label="{{index $.T "admin.edit"}}"
+                                            title="{{index $.T "admin.edit"}}">✏️</button>
                                     <button type="button" x-show="l.user_id > 0" @click="releaseLocker(l)"
                                             class="p-1.5 text-amber-600 hover:text-amber-800 rounded-lg hover:bg-amber-50 transition text-xs font-medium"
+                                            aria-label="{{index $.T "lockers.release"}}"
                                             title="{{index $.T "lockers.release"}}">↩</button>
                                     <button type="button" @click="deleteLocker(l)"
                                             class="p-1.5 text-red-500 hover:text-red-700 rounded-lg hover:bg-red-50 transition"
+                                            aria-label="{{index $.T "admin.delete"}}"
                                             title="{{index $.T "admin.delete"}}">🗑️</button>
                                 </div>
                             </td>
@@ -203,19 +211,38 @@
                 </tbody>
             </table>
         </div>
+
+        <!-- Pagination -->
+        <div x-show="totalPages > 1" x-cloak
+             class="flex items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-100 text-xs text-gray-600">
+            <span x-text="(_t['lockers.page_of'] || 'Page %d / %d').replace('%d', page).replace('%d', totalPages)"></span>
+            <div class="flex items-center gap-2">
+                <button type="button" @click="goToPage(page - 1)" :disabled="page <= 1 || loading"
+                        class="px-3 py-1.5 bg-white border border-gray-200 rounded-lg hover:bg-gray-100 disabled:opacity-40 transition font-medium">
+                    {{index $.T "lockers.prev_page"}}
+                </button>
+                <button type="button" @click="goToPage(page + 1)" :disabled="page >= totalPages || loading"
+                        class="px-3 py-1.5 bg-white border border-gray-200 rounded-lg hover:bg-gray-100 disabled:opacity-40 transition font-medium">
+                    {{index $.T "lockers.next_page"}}
+                </button>
+            </div>
+        </div>
     </div>
 
     <!-- Create / Edit Modal -->
     <div x-show="formModal.show" x-cloak
+         role="dialog" aria-modal="true"
          class="fixed inset-0 z-50 overflow-y-auto"
-         @keydown.escape.window="formModal.show = false">
+         @keydown.escape.window="if (!confirmModal.show) formModal.show = false">
         <div class="flex min-h-screen items-center justify-center p-4">
             <div class="fixed inset-0 bg-black/50 transition-opacity" @click="formModal.show = false"></div>
             <div class="relative bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
                 <div class="flex items-center justify-between">
                     <h3 class="text-lg font-bold text-gray-900"
                         x-text="formModal.id ? ('🔐 ' + formModal.number) : '{{index $.T "lockers.create"}}'"></h3>
-                    <button type="button" @click="formModal.show = false" class="text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
+                    <button type="button" @click="formModal.show = false"
+                            aria-label="{{index $.T "admin.cancel"}}"
+                            class="text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
                 </div>
 
                 <template x-if="formError">
@@ -277,14 +304,15 @@
                         <div class="relative">
                             <input type="text" x-model="userSearch"
                                    autocomplete="off"
-                                   @focus="showUserList = true"
-                                   @input="if (userSearch !== getUserDisplay(formModal.user_id)) { formModal.user_id = 0; } showUserList = true"
+                                   @focus="showUserList = true; fetchModalUsers()"
+                                   @input="if (userSearch !== getUserDisplay(formModal.user_id)) { formModal.user_id = 0; } showUserList = true; debouncedFetchModalUsers()"
                                    @blur="setTimeout(() => { showUserList = false; if (!formModal.user_id && userSearch) userSearch = ''; else if (formModal.user_id) userSearch = getUserDisplay(formModal.user_id); }, 200)"
-                                   placeholder="{{index $.T "lockers.unassigned"}} ({{index $.T "admin.search"}}…)"
+                                   placeholder="{{index $.T "lockers.search_users_ph"}}"
                                    class="w-full px-3 py-2 pr-8 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-primary/50 focus:border-primary transition">
                             <button type="button" x-show="formModal.user_id > 0 || userSearch"
                                     @mousedown.prevent="formModal.user_id = 0; userSearch = ''; showUserList = false"
                                     class="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm font-bold leading-none"
+                                    aria-label="{{index $.T "lockers.unassigned"}}"
                                     title="{{index $.T "lockers.unassigned"}}">&times;</button>
                         </div>
                         <div x-show="showUserList" x-cloak
@@ -338,6 +366,7 @@
 
     <!-- Bulk Create Modal -->
     <div x-show="bulkModal.show" x-cloak
+         role="dialog" aria-modal="true"
          class="fixed inset-0 z-50 overflow-y-auto"
          @keydown.escape.window="bulkModal.show = false">
         <div class="flex min-h-screen items-center justify-center p-4">
@@ -345,7 +374,9 @@
             <div class="relative bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
                 <div class="flex items-center justify-between">
                     <h3 class="text-lg font-bold text-gray-900">{{index $.T "lockers.bulk_create"}}</h3>
-                    <button type="button" @click="bulkModal.show = false" class="text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
+                    <button type="button" @click="bulkModal.show = false"
+                            aria-label="{{index $.T "admin.cancel"}}"
+                            class="text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
                 </div>
 
                 <template x-if="bulkError">
@@ -430,6 +461,28 @@
         </div>
     </div>
 
+    <!-- Confirmation Modal -->
+    <div x-show="confirmModal.show" x-cloak
+         role="dialog" aria-modal="true"
+         class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
+         @keydown.escape.window="confirmModal.show = false"
+         @click.self="confirmModal.show = false">
+        <div class="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4">
+            <h3 class="text-base font-bold text-gray-900 mb-2" x-text="confirmModal.title"></h3>
+            <p class="text-xs text-gray-500 mb-5" x-text="confirmModal.message"></p>
+            <div class="flex justify-end gap-2">
+                <button type="button" @click="confirmModal.show = false"
+                        class="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-medium">
+                    {{index $.T "admin.cancel"}}
+                </button>
+                <button type="button" @click="runConfirmAction()"
+                        :class="confirmModal.danger ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-amber-600 hover:bg-amber-700 text-white'"
+                        class="px-4 py-2 rounded-lg text-xs font-medium transition"
+                        x-text="confirmModal.confirmLabel"></button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast -->
     <div x-show="toast.show" x-cloak
          :class="toast.error ? 'bg-red-600' : 'bg-green-600'"
@@ -443,26 +496,45 @@ function lockersAdmin(initialSiteID) {
     let allSites = [];
     let allUsers = [];
     let fpZones = {};
+    let initialStats = null;
+    let initialZones = null;
+    let meta = { total: null, pageSize: null };
     try { initialLockers = JSON.parse(document.getElementById('lockers-json-data')?.textContent || '[]') || []; } catch {}
     try { allSites = JSON.parse(document.getElementById('lockers-sites-json-data')?.textContent || '[]') || []; } catch {}
     try { allUsers = JSON.parse(document.getElementById('lockers-users-json-data')?.textContent || '[]') || []; } catch {}
     try { fpZones = JSON.parse(document.getElementById('lockers-fp-zones-json-data')?.textContent || '{}') || {}; } catch {}
+    try { initialStats = JSON.parse(document.getElementById('lockers-stats-json-data')?.textContent || 'null'); } catch {}
+    try { initialZones = JSON.parse(document.getElementById('lockers-zones-json-data')?.textContent || 'null'); } catch {}
+    try { meta = JSON.parse(document.getElementById('lockers-meta-json-data')?.textContent || '{}') || {}; } catch {}
+
+    const serverPaginated = !!(meta && meta.pageSize > 0);
+    const pageSize = serverPaginated ? meta.pageSize : 50;
 
     return {
         lockers: initialLockers,
         sites: allSites,
         users: allUsers,
         fpZones,
+        serverPaginated,
+        pageSize,
+        page: 1,
+        serverTotal: (meta && typeof meta.total === 'number') ? meta.total : initialLockers.length,
+        serverStats: initialStats,
+        serverZones: initialZones,
+        loading: false,
         filterSite: initialSiteID || 0,
         filterZone: '',
         filterStatus: 'all',
         filterText: '',
+        _filterTimer: null,
+        _userSearchTimer: null,
         revealedIds: {},
         userSearch: '',
         showUserList: false,
         formError: '',
         bulkError: '',
         toast: { show: false, message: '', error: false },
+        confirmModal: { show: false, title: '', message: '', confirmLabel: '', danger: false, onConfirm: null },
         formModal: { show: false, id: 0, site_id: 0, number: '', zone: '', status: 'active', user_id: 0, code: '', notes: '' },
         bulkModal: { show: false, site_id: 0, prefix: '', start_num: 1, end_num: 20, pad_width: 3, zone: '' },
 
@@ -471,14 +543,23 @@ function lockersAdmin(initialSiteID) {
             setTimeout(() => { this.toast.show = false; }, 3000);
         },
 
-        get scopedLockers() {
-            if (!this.filterSite) return this.lockers;
-            return this.lockers.filter(l => l.site_id === this.filterSite);
+        get stats() {
+            if (this.serverPaginated && this.serverStats) return this.serverStats;
+            const list = this.filterSite ? this.lockers.filter(l => l.site_id === this.filterSite) : this.lockers;
+            return {
+                total: list.length,
+                free: list.filter(l => l.status === 'active' && !l.user_id).length,
+                assigned: list.filter(l => l.user_id > 0).length,
+                maintenance: list.filter(l => l.status === 'maintenance').length,
+                disabled_user: list.filter(l => l.user_id > 0 && l.user_disabled).length
+            };
         },
 
         get availableZones() {
+            if (this.serverPaginated && Array.isArray(this.serverZones)) return this.serverZones;
             const set = new Set();
-            for (const l of this.scopedLockers) {
+            const list = this.filterSite ? this.lockers.filter(l => l.site_id === this.filterSite) : this.lockers;
+            for (const l of list) {
                 if (l.zone && l.zone.trim()) set.add(l.zone.trim());
             }
             if (this.filterSite && this.fpZones[this.filterSite]) {
@@ -504,9 +585,10 @@ function lockersAdmin(initialSiteID) {
             return Array.from(set).sort();
         },
 
-        get filteredLockers() {
+        get localFilteredLockers() {
             const q = this.filterText.trim().toLowerCase();
-            return this.scopedLockers.filter(l => {
+            return this.lockers.filter(l => {
+                if (this.filterSite && l.site_id !== this.filterSite) return false;
                 if (this.filterZone && (l.zone || '').trim() !== this.filterZone) return false;
                 if (this.filterStatus === 'free' && (l.status !== 'active' || l.user_id > 0)) return false;
                 if (this.filterStatus === 'assigned' && !(l.user_id > 0)) return false;
@@ -520,6 +602,36 @@ function lockersAdmin(initialSiteID) {
             });
         },
 
+        get totalFiltered() {
+            return this.serverPaginated ? this.serverTotal : this.localFilteredLockers.length;
+        },
+
+        get totalPages() {
+            return Math.max(1, Math.ceil(this.totalFiltered / this.pageSize));
+        },
+
+        get displayedLockers() {
+            if (this.serverPaginated) return this.lockers;
+            const start = (this.page - 1) * this.pageSize;
+            return this.localFilteredLockers.slice(start, start + this.pageSize);
+        },
+
+        onFilterChange() {
+            this.page = 1;
+            if (this.serverPaginated) this.reloadLockers();
+        },
+
+        debouncedFilterChange() {
+            clearTimeout(this._filterTimer);
+            this._filterTimer = setTimeout(() => this.onFilterChange(), 220);
+        },
+
+        goToPage(p) {
+            if (p < 1 || p > this.totalPages) return;
+            this.page = p;
+            if (this.serverPaginated) this.reloadLockers();
+        },
+
         getUserDisplay(userId) {
             if (!userId) return '';
             const u = this.users.find(x => x.id === userId);
@@ -528,8 +640,37 @@ function lockersAdmin(initialSiteID) {
 
         selectModalUser(u) {
             this.formModal.user_id = u.id;
-            this.userSearch = this.getUserDisplay(u.id);
+            this.userSearch = `${u.name} (${u.email})`;
             this.showUserList = false;
+        },
+
+        async fetchModalUsers() {
+            if (!this.serverPaginated) return;
+            const raw = this.userSearch.trim();
+            const currentDisplay = this.getUserDisplay(this.formModal.user_id);
+            const q = (raw && raw !== currentDisplay) ? raw : '';
+            const params = new URLSearchParams();
+            if (this.formModal.site_id) params.set('site_id', String(this.formModal.site_id));
+            if (q) params.set('q', q);
+            params.set('limit', '50');
+            try {
+                const resp = await fetch(`/api/admin/lockers/users?${params.toString()}`);
+                if (resp.ok) {
+                    const list = (await resp.json()) || [];
+                    const map = new Map();
+                    for (const u of list) map.set(u.id, u);
+                    if (this.formModal.user_id && !map.has(this.formModal.user_id)) {
+                        const cur = this.users.find(x => x.id === this.formModal.user_id);
+                        if (cur) map.set(cur.id, cur);
+                    }
+                    this.users = Array.from(map.values());
+                }
+            } catch {}
+        },
+
+        debouncedFetchModalUsers() {
+            clearTimeout(this._userSearchTimer);
+            this._userSearchTimer = setTimeout(() => this.fetchModalUsers(), 180);
         },
 
         onModalSiteChange() {
@@ -541,6 +682,7 @@ function lockersAdmin(initialSiteID) {
                     this.userSearch = '';
                 }
             }
+            if (this.serverPaginated) this.fetchModalUsers();
         },
 
         get filteredModalUsers() {
@@ -569,12 +711,40 @@ function lockersAdmin(initialSiteID) {
             this.filterZone = '';
             this.filterStatus = 'all';
             this.filterText = '';
+            this.onFilterChange();
         },
 
         async reloadLockers() {
-            const resp = await fetch('/api/admin/lockers');
-            if (resp.ok) {
-                this.lockers = (await resp.json()) || [];
+            this.loading = true;
+            try {
+                if (this.serverPaginated) {
+                    const params = new URLSearchParams();
+                    if (this.filterSite) params.set('site_id', String(this.filterSite));
+                    if (this.filterZone) params.set('zone', this.filterZone);
+                    if (this.filterStatus && this.filterStatus !== 'all') params.set('status', this.filterStatus);
+                    if (this.filterText.trim()) params.set('q', this.filterText.trim());
+                    params.set('page', String(this.page));
+                    params.set('limit', String(this.pageSize));
+                    const resp = await fetch(`/api/admin/lockers?${params.toString()}`);
+                    if (resp.ok) {
+                        const data = await resp.json();
+                        this.lockers = data.items || [];
+                        this.serverTotal = data.total || 0;
+                        this.serverStats = data.stats || null;
+                        this.serverZones = data.zones || [];
+                        if (this.lockers.length === 0 && this.page > 1 && this.serverTotal > 0) {
+                            this.page = Math.max(1, data.total_pages || 1);
+                            await this.reloadLockers();
+                        }
+                    }
+                } else {
+                    const resp = await fetch('/api/admin/lockers');
+                    if (resp.ok) {
+                        this.lockers = (await resp.json()) || [];
+                    }
+                }
+            } finally {
+                this.loading = false;
             }
         },
 
@@ -584,6 +754,7 @@ function lockersAdmin(initialSiteID) {
             this.showUserList = false;
             this.formError = '';
             this.formModal = { show: true, id: 0, site_id: defaultSite, number: '', zone: '', status: 'active', user_id: 0, code: '', notes: '' };
+            if (this.serverPaginated) this.fetchModalUsers();
         },
 
         openEditModal(l) {
@@ -600,7 +771,11 @@ function lockersAdmin(initialSiteID) {
                 code: l.code || '',
                 notes: l.notes || ''
             };
+            if (l.user_id > 0 && !this.users.find(x => x.id === l.user_id)) {
+                this.users = [{ id: l.user_id, name: l.user_name || ('#' + l.user_id), email: l.user_email || '', site_id: l.site_id, disabled: !!l.user_disabled }, ...this.users];
+            }
             this.userSearch = this.getUserDisplay(this.formModal.user_id) || (l.user_name ? `${l.user_name} (${l.user_email || ''})` : '');
+            if (this.serverPaginated) this.fetchModalUsers();
         },
 
         openBulkModal() {
@@ -633,7 +808,7 @@ function lockersAdmin(initialSiteID) {
                 this.showToast(_t['admin.save'] || 'OK');
             } else {
                 const d = await resp.json().catch(() => ({}));
-                this.formError = _t[d.error] || d.error || 'Error';
+                this.formError = _t[d.error] || d.error || (_t['lockers.error_server'] || 'Error');
             }
         },
 
@@ -651,42 +826,65 @@ function lockersAdmin(initialSiteID) {
                 this.showToast(`+${d.created || 0}`);
             } else {
                 const d = await resp.json().catch(() => ({}));
-                this.bulkError = _t[d.error] || d.error || 'Error';
+                this.bulkError = _t[d.error] || d.error || (_t['lockers.error_server'] || 'Error');
             }
         },
 
-        async releaseLocker(l) {
+        releaseLocker(l) {
             const tpl = _t['lockers.release_confirm'] || 'Release #%s?';
-            if (!confirm(tpl.replace('%s', l.number))) return;
-            const resp = await fetch(`/api/admin/lockers/${l.id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    number: l.number,
-                    zone: l.zone || '',
-                    status: l.status || 'active',
-                    user_id: 0,
-                    code: l.code || '',
-                    notes: l.notes || ''
-                })
-            });
-            if (resp.ok) {
-                await this.reloadLockers();
-                this.showToast(_t['lockers.release'] || 'OK');
-            }
+            this.confirmModal = {
+                show: true,
+                title: (_t['lockers.release'] || 'Release') + ' #' + l.number,
+                message: tpl.replace('%s', l.number),
+                confirmLabel: _t['lockers.release'] || 'Release',
+                danger: false,
+                onConfirm: async () => {
+                    const resp = await fetch(`/api/admin/lockers/${l.id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            number: l.number,
+                            zone: l.zone || '',
+                            status: l.status || 'active',
+                            user_id: 0,
+                            code: l.code || '',
+                            notes: l.notes || ''
+                        })
+                    });
+                    if (resp.ok) {
+                        await this.reloadLockers();
+                        this.showToast(_t['lockers.release'] || 'OK');
+                    }
+                }
+            };
         },
 
-        async deleteLocker(l) {
-            if (!confirm(`${_t['admin.delete'] || 'Delete'} ${l.number} ?`)) return;
-            const resp = await fetch(`/api/admin/lockers/${l.id}`, { method: 'DELETE' });
-            if (resp.ok) {
-                await this.reloadLockers();
-                this.showToast(_t['admin.delete'] || 'OK');
-            }
+        deleteLocker(l) {
+            const tpl = _t['lockers.confirm_delete'] || 'Delete locker #%s?';
+            this.confirmModal = {
+                show: true,
+                title: (_t['admin.delete'] || 'Delete') + ' #' + l.number,
+                message: tpl.replace('%s', l.number),
+                confirmLabel: _t['admin.delete'] || 'Delete',
+                danger: true,
+                onConfirm: async () => {
+                    const resp = await fetch(`/api/admin/lockers/${l.id}`, { method: 'DELETE' });
+                    if (resp.ok) {
+                        await this.reloadLockers();
+                        this.showToast(_t['admin.delete'] || 'OK');
+                    }
+                }
+            };
+        },
+
+        async runConfirmAction() {
+            const fn = this.confirmModal.onConfirm;
+            this.confirmModal.show = false;
+            this.confirmModal.onConfirm = null;
+            if (fn) await fn();
         }
     };
 }
 </script>
 {{end}}
 {{end}}
-

@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/matoy/mypresence/internal/config"
 	"github.com/matoy/mypresence/internal/db"
 	"github.com/matoy/mypresence/internal/middleware"
 	"github.com/matoy/mypresence/internal/models"
@@ -14,6 +15,7 @@ import (
 // SettingsHandler handles personal user settings pages.
 type SettingsHandler struct {
 	DB     *db.DB
+	Config *config.Config
 	Render func(w http.ResponseWriter, r *http.Request, page string, data interface{})
 }
 
@@ -176,7 +178,7 @@ func (h *SettingsHandler) ImpersonatePost(w http.ResponseWriter, r *http.Request
 		http.Error(w, "Erreur session", http.StatusInternalServerError)
 		return
 	}
-	secure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+	secure := requestIsHTTPS(r, h.Config)
 	http.SetCookie(w, &http.Cookie{
 		Name:     "real_session",
 		Value:    adminCookie.Value,
@@ -223,7 +225,7 @@ func (h *SettingsHandler) ImpersonateExitPost(w http.ResponseWriter, r *http.Req
 		return
 	}
 	_ = h.DB.DeleteSession(realCookie.Value)
-	secure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+	secure := requestIsHTTPS(r, h.Config)
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session",
 		Value:    newAdminToken,

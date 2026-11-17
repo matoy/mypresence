@@ -86,7 +86,7 @@
 
             <!-- Recherche rapide texte -->
             <div class="relative max-w-xs w-full">
-                <input type="text" x-model="search" placeholder="{{index $.T " cal.filter_name_placeholder"}}"
+                <input type="text" x-model="search" placeholder="{{index $.T "cal.filter_name_placeholder"}}"
                     class="w-full text-xs border border-gray-200 rounded-lg pl-8 pr-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-primary/40">
                 <svg class="h-3.5 w-3.5 text-gray-400 absolute left-2.5 top-2.5 pointer-events-none" fill="none"
                     stroke="currentColor" viewBox="0 0 24 24">
@@ -149,18 +149,12 @@
             <table class="w-full border-collapse">
                 <thead>
                     <tr class="bg-gray-50 border-b border-gray-200">
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T
-                            "logs.date"}}</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T
-                            "logs.team_member"}}</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T
-                            "logs.declared_day"}}</th>
-                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">{{index $.T
-                            "logs.action"}}</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T
-                            "logs.status"}}</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T
-                            "logs.modified_by"}}</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T "logs.date"}}</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T "logs.team_member"}}</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T "logs.declared_day"}}</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">{{index $.T "logs.action"}}</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T "logs.status"}}</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{{index $.T "logs.modified_by"}}</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
@@ -176,7 +170,7 @@
                         <td class="px-4 py-3 text-sm whitespace-nowrap">
                             <a href="/admin/teams/members/{{.UserID}}/logs?from=team_{{$team.ID}}"
                                 class="inline-flex items-center gap-2 group text-gray-900 hover:text-primary transition"
-                                title="{{index $.T " teams.view_member_logs"}}">
+                                title="{{index $.T "teams.view_member_logs"}}">
                                 <div
                                     class="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary group-hover:bg-primary group-hover:text-white transition shrink-0">
                                     {{if .UserName}}{{slice .UserName 0 1}}{{else}}?{{end}}

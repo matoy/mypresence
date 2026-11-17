@@ -218,6 +218,7 @@ All options are set via environment variables in `docker-compose.yml`.
 | `PORT` | `8080` | HTTP listening port |
 | `DATA_DIR` | `/data` | Directory for the SQLite database and uploaded files |
 | `SECRET_KEY` | `change-me-...` | Session cookie signing key (32 characters recommended) |
+| `TRUSTED_PROXIES` | *(empty)* | Comma-separated reverse-proxy IPs/CIDRs allowed to supply `X-Forwarded-*` headers (set `"none"` to ignore forwarded headers) |
 
 ### Branding
 

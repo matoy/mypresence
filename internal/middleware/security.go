@@ -3,9 +3,98 @@ package middleware
 import (
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
+
+// TrustedProxyChecker determines whether reverse-proxy forwarding headers
+// (X-Forwarded-Proto, X-Forwarded-For, X-Forwarded-Host) should be trusted
+// based on the direct peer's remote IP.
+type TrustedProxyChecker struct {
+	configured bool
+	allowAll   bool
+	ips        []net.IP
+	nets       []*net.IPNet
+}
+
+// ParseTrustedProxies builds a TrustedProxyChecker from a comma-separated list of IPs/CIDRs,
+// "*" (trust all), "none" (trust none), or "" (legacy permissive default when unconfigured).
+func ParseTrustedProxies(spec string) *TrustedProxyChecker {
+	s := strings.TrimSpace(spec)
+	if s == "" {
+		return &TrustedProxyChecker{configured: false, allowAll: true}
+	}
+	if strings.EqualFold(s, "none") {
+		return &TrustedProxyChecker{configured: true, allowAll: false}
+	}
+	if s == "*" {
+		return &TrustedProxyChecker{configured: true, allowAll: true}
+	}
+	c := &TrustedProxyChecker{configured: true}
+	for _, part := range strings.Split(s, ",") {
+		p := strings.TrimSpace(part)
+		if p == "" {
+			continue
+		}
+		if strings.Contains(p, "/") {
+			if _, ipNet, err := net.ParseCIDR(p); err == nil {
+				c.nets = append(c.nets, ipNet)
+			}
+		} else if ip := net.ParseIP(p); ip != nil {
+			c.ips = append(c.ips, ip)
+		}
+	}
+	return c
+}
+
+// TrustForwardedHeaders reports whether proxy headers from r.RemoteAddr may be trusted.
+func (c *TrustedProxyChecker) TrustForwardedHeaders(r *http.Request) bool {
+	if c == nil || !c.configured || c.allowAll {
+		return true
+	}
+	if r == nil {
+		return false
+	}
+	host := r.RemoteAddr
+	if h, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		host = h
+	}
+	ip := net.ParseIP(strings.TrimSpace(host))
+	if ip == nil {
+		return false
+	}
+	for _, allowed := range c.ips {
+		if allowed.Equal(ip) {
+			return true
+		}
+	}
+	for _, n := range c.nets {
+		if n.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// IsHTTPS reports whether the incoming request arrived over HTTPS, optionally checking
+// X-Forwarded-Proto only when the peer matches TrustedProxyChecker.
+func IsHTTPS(r *http.Request, trusted ...*TrustedProxyChecker) bool {
+	if r == nil {
+		return false
+	}
+	if r.TLS != nil {
+		return true
+	}
+	var checker *TrustedProxyChecker
+	if len(trusted) > 0 {
+		checker = trusted[0]
+	}
+	if !checker.TrustForwardedHeaders(r) {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")), "https")
+}
 
 // LimitRequestBody caps request bodies at 10 MB to prevent resource exhaustion.
 // This matches the maximum file upload size already enforced by the floorplan handler.
@@ -18,16 +107,21 @@ func LimitRequestBody(next http.Handler) http.Handler {
 }
 
 // SecurityHeaders adds defensive HTTP response headers to every response.
-// CSP blocks everything not explicitly allowed; scripts are self-hosted.
-// Google Fonts is allowed for optional custom font configuration.
 func SecurityHeaders(next http.Handler) http.Handler {
+	return SecurityHeadersWithTrustedProxies("", next)
+}
+
+// SecurityHeadersWithTrustedProxies adds defensive HTTP response headers, validating
+// X-Forwarded-Proto against trustedProxiesSpec when set.
+func SecurityHeadersWithTrustedProxies(trustedProxiesSpec string, next http.Handler) http.Handler {
+	checker := ParseTrustedProxies(trustedProxiesSpec)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
-		if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+		if IsHTTPS(r, checker) {
 			h.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		}
 		h.Set("Content-Security-Policy",
@@ -173,20 +267,20 @@ func (l *LoginRateLimiter) cleanupLoop() {
 	}
 }
 
-// clientIP extracts the real client IP, checking X-Forwarded-For first.
-func clientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		// Take the first (leftmost) address — the original client
-		if idx := len(xff); idx > 0 {
-			for i := 0; i < len(xff); i++ {
-				if xff[i] == ',' {
-					xff = xff[:i]
-					break
-				}
+// ClientIP extracts the real client IP, honouring X-Forwarded-For only when trusted.
+func ClientIP(r *http.Request, trusted ...*TrustedProxyChecker) string {
+	var checker *TrustedProxyChecker
+	if len(trusted) > 0 {
+		checker = trusted[0]
+	}
+	if checker.TrustForwardedHeaders(r) {
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			if idx := strings.IndexByte(xff, ','); idx >= 0 {
+				xff = xff[:idx]
 			}
-		}
-		if ip := net.ParseIP(trimSpace(xff)); ip != nil {
-			return ip.String()
+			if ip := net.ParseIP(trimSpace(xff)); ip != nil {
+				return ip.String()
+			}
 		}
 	}
 	ip, _, err := net.SplitHostPort(r.RemoteAddr)
@@ -194,6 +288,11 @@ func clientIP(r *http.Request) string {
 		return r.RemoteAddr
 	}
 	return ip
+}
+
+// clientIP extracts the real client IP, checking X-Forwarded-For first.
+func clientIP(r *http.Request) string {
+	return ClientIP(r)
 }
 
 func trimSpace(s string) string {
