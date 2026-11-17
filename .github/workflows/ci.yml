@@ -53,3 +53,118 @@ jobs:
 
       - name: Build
         run: go build -ldflags="-s -w" ./...
+
+  recette-postgres:
+    name: Functional Recette (PostgreSQL 16)
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: mypresence
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Run full black-box acceptance suite against PostgreSQL 16
+        env:
+          TEST_DB_DRIVER: postgres
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_NAME: mypresence
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          DB_SSL_MODE: disable
+        run: go test -v -race -run TestRecette_FullReleaseAcceptance .
+
+  recette-e2e:
+    name: Docker + Playwright E2E (PostgreSQL 16)
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: mypresence
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Install Playwright & OS test dependencies
+        run: |
+          cd e2e && npm ci && npx playwright install chromium --with-deps
+          sudo apt-get update && sudo apt-get install -y python3-httpx postgresql-client
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build candidate Docker image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          load: true
+          tags: mypresence:recette
+          cache-from: type=gha
+
+      - name: Run Docker + Playwright E2E + MCP Smoke suite
+        env:
+          IMAGE_TAG: mypresence:recette
+          TEST_UPGRADE: '0'
+          DB_HOST: 127.0.0.1
+          DB_PORT: '5432'
+          DB_NAME: mypresence
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+        run: bash scripts/docker-recette.sh
+
+      - name: Upload Playwright diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: ci-e2e-diagnostics
+          path: |
+            e2e/playwright-report/
+            e2e/test-results/
+            recette-logs/
+          retention-days: 7

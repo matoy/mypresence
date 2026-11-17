@@ -1,17 +1,5 @@
-# Data directory (Docker volume)
-data/
-*.db
-
-# Go build artifacts
-/presence
-/presence.exe
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
+.git
+e2e
+recette-logs
+mypresence-data
+coverage.out

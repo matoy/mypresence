@@ -118,6 +118,8 @@ func buildAppMux(cfg *config.Config, database *db.DB) http.Handler {
 			DefaultTimezone: cfg.O365DefaultTimezone,
 			AMHours:         cfg.O365AMHours,
 			PMHours:         cfg.O365PMHours,
+			GraphBaseURL:    cfg.O365GraphBaseURL,
+			LoginBaseURL:    cfg.O365LoginBaseURL,
 		}
 		if o365Cfg.RedirectURL == "" && cfg.AppURL != "" {
 			o365Cfg.RedirectURL = strings.TrimRight(cfg.AppURL, "/") + "/auth/o365/callback"

@@ -702,22 +702,22 @@ function usersRolesAdmin() {
     let allRoles = [];
     const rolesEl = document.getElementById('admin-users-roles-data');
     if (rolesEl && rolesEl.textContent) {
-        try { allRoles = JSON.parse(rolesEl.textContent); } catch (e) {}
+        try { allRoles = JSON.parse(rolesEl.textContent) || []; } catch (e) {}
     }
     let allSites = [];
     const sitesEl = document.getElementById('admin-users-sites-data');
     if (sitesEl && sitesEl.textContent) {
-        try { allSites = JSON.parse(sitesEl.textContent); } catch (e) {}
+        try { allSites = JSON.parse(sitesEl.textContent) || []; } catch (e) {}
     }
     let allTeams = [];
     const teamsEl = document.getElementById('admin-users-teams-data');
     if (teamsEl && teamsEl.textContent) {
-        try { allTeams = JSON.parse(teamsEl.textContent); } catch (e) {}
+        try { allTeams = JSON.parse(teamsEl.textContent) || []; } catch (e) {}
     }
     let usersData = [];
     const usersEl = document.getElementById('admin-users-data');
     if (usersEl && usersEl.textContent) {
-        try { usersData = JSON.parse(usersEl.textContent); } catch (e) {}
+        try { usersData = JSON.parse(usersEl.textContent) || []; } catch (e) {}
     }
     let currentUserId = 0;
     const currentIdEl = document.getElementById('admin-users-current-id');

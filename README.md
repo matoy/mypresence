@@ -831,6 +831,30 @@ docker compose down && docker compose up -d --build
 
 ---
 
+## Functional Release Acceptance ("Recette")
+
+Every release tag (`v*`, `[0-9]*`) runs automated black-box and browser acceptance gates before publishing to GitHub Releases or Docker Hub (`.github/workflows/release.yml`):
+
+1. **Go Black-Box Acceptance (`functional_recette_test.go`)**: Exercises the real `buildAppMux` router, embedded HTML templates, and all integrations against SQLite (default) or PostgreSQL (`TEST_DB_DRIVER=postgres`).
+2. **Mock Integration Server (`cmd/testmocks`)**: Local test double providing a SAML 2.0 IdP with Entra group claims, O365 OAuth2 + Microsoft Graph Calendar (`/v1.0/me/calendar/events`), Jira Cloud REST API v3 (`/rest/api/3/search/jql`), and a capture SMTP server for password reset tests.
+   - Override O365 endpoints for testing via `O365_LOGIN_BASE_URL` and `O365_GRAPH_BASE_URL`.
+3. **Playwright E2E Suite (`e2e/`)**: Full desktop (`1440×900`) and mobile (`Pixel 7`) browser journeys with strict assertions failing on any `pageerror`, `console.error`, failed static asset, or `>= 500` response.
+4. **Docker + N-1 → N Upgrade Gate (`scripts/docker-recette.sh`)**: Builds the candidate container image, verifies PostgreSQL 16 schema upgrade & data preservation from `matoy/mypresence:latest`, runs Playwright E2E and `mcp-server/smoke_tests.py` against the running container, and blocks publishing with full HTML reports, traces, screenshots, videos, and container logs on any failure.
+
+Run locally on Windows:
+
+```powershell
+pwsh -File scripts/recette.ps1
+```
+
+Run against Docker & PostgreSQL on Linux / WSL:
+
+```bash
+TEST_UPGRADE=1 bash scripts/docker-recette.sh
+```
+
+---
+
 ## Screenshots
 
 ### Login

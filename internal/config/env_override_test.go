@@ -157,7 +157,7 @@ func TestIsLiveEditable(t *testing.T) {
 		}
 	}
 
-	notEditable := []string{"PORT", "DATA_DIR", "SECRET_KEY", "DB_DRIVER", "DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD", "DB_SSL_MODE", "PATH", "UNKNOWN_VAR"}
+	notEditable := []string{"PORT", "DATA_DIR", "SECRET_KEY", "DB_DRIVER", "DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD", "DB_SSL_MODE", "O365_GRAPH_BASE_URL", "O365_LOGIN_BASE_URL", "PATH", "UNKNOWN_VAR"}
 	for _, k := range notEditable {
 		if IsLiveEditable(k) {
 			t.Errorf("expected %s to NOT be live-editable", k)
@@ -317,5 +317,17 @@ func TestApplyEnvOverride_SAMLAutoLogin(t *testing.T) {
 	}
 	if !c.SAMLAutoLogin {
 		t.Error("SAMLAutoLogin: want true after override")
+	}
+}
+
+func TestLoad_O365BaseURLOverrides(t *testing.T) {
+	t.Setenv("O365_GRAPH_BASE_URL", "http://127.0.0.1:19080/v1.0")
+	t.Setenv("O365_LOGIN_BASE_URL", "http://127.0.0.1:19080")
+	c := Load()
+	if c.O365GraphBaseURL != "http://127.0.0.1:19080/v1.0" {
+		t.Errorf("O365GraphBaseURL = %q, want http://127.0.0.1:19080/v1.0", c.O365GraphBaseURL)
+	}
+	if c.O365LoginBaseURL != "http://127.0.0.1:19080" {
+		t.Errorf("O365LoginBaseURL = %q, want http://127.0.0.1:19080", c.O365LoginBaseURL)
 	}
 }

@@ -100,7 +100,7 @@
                             <span class="text-xs bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full font-medium">🏢 {{index $.T "sites.not_corporate"}}</span>
                             {{end}}
                             <span class="text-xs bg-indigo-50 text-indigo-700 px-2.5 py-0.5 rounded-full font-medium">🪑 {{.Seats}} {{index $.T "sites.seats"}}</span>
-                            <span class="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-medium" x-text="editFloorIds.length + ' {{index $.T "sites.floors_assigned"}}'"></span>
+                            <span class="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-medium" x-text="editFloorIds.length + ' ' + (_t['sites.floors_assigned'] || '')"></span>
                             <a href="/admin/lockers?site={{.ID}}" class="text-xs bg-amber-50 hover:bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full font-medium transition">🔐 {{.LockersCount}} {{index $.T "lockers.count_badge"}}</a>
                         </div>
                         {{if .Floorplans}}
@@ -186,7 +186,7 @@
                             </div>
                             <p class="mt-1 text-xs text-gray-400" x-show="editFloorIds.length === 0">{{index $.T "sites.floors_empty"}}</p>
                             <p class="mt-1 text-xs text-gray-600 font-medium" x-show="editFloorIds.length > 0"
-                               x-text="editFloorIds.length + ' {{index $.T "sites.floors_assigned"}}'"></p>
+                               x-text="editFloorIds.length + ' ' + (_t['sites.floors_assigned'] || '')"></p>
                         </div>
                         <div class="flex gap-2 mt-2">
                             <button @click="saveSiteDetails({{.ID}}, editNameValue, editCountryCode, editNotCorporate, editSeats, editFloorIds); editSite = false"
@@ -310,7 +310,7 @@
                         </div>
                         <p class="mt-1 text-xs text-gray-400" x-show="newSiteFloorplanIds.length === 0">{{index $.T "sites.floors_empty"}}</p>
                         <p class="mt-1 text-xs text-gray-600 font-medium" x-show="newSiteFloorplanIds.length > 0"
-                           x-text="newSiteFloorplanIds.length + ' {{index $.T "sites.floors_assigned"}}'"></p>
+                           x-text="newSiteFloorplanIds.length + ' ' + (_t['sites.floors_assigned'] || '')"></p>
                     </div>
                 </div>
                 <div class="flex justify-end gap-2 pt-2">

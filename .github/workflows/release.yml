@@ -7,8 +7,8 @@ on:
       - 'v*'
 
 jobs:
-  test:
-    name: Test
+  quality:
+    name: Vet, Vulncheck, Lint & Unit Tests
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -31,12 +31,156 @@ jobs:
       - name: Vulnerability check
         run: go run ./.github/scripts/govulncheck
 
-      - name: Test
+      - name: Lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+
+      - name: Run unit & SQLite functional tests
         run: go test -v -race ./...
+
+      - name: Build verification
+        run: go build -o /dev/null . && go build -o /dev/null ./cmd/testmocks
+
+  recette-postgres:
+    name: Functional Recette (PostgreSQL 16)
+    needs: quality
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: mypresence
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Run full black-box acceptance suite against PostgreSQL 16
+        env:
+          TEST_DB_DRIVER: postgres
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_NAME: mypresence
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          DB_SSL_MODE: disable
+        run: go test -v -race -run TestRecette_FullReleaseAcceptance .
+
+  recette-docker-e2e:
+    name: Docker Upgrade & Playwright E2E Recette (PostgreSQL 16 + SAML/O365/Jira/SMTP)
+    needs: quality
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: mypresence
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Install Playwright & OS test dependencies
+        run: |
+          cd e2e && npm ci && npx playwright install chromium --with-deps
+          sudo apt-get update && sudo apt-get install -y python3-httpx postgresql-client
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build candidate Docker image (local load only, not pushed)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          load: true
+          tags: mypresence:recette
+          cache-from: type=gha
+
+      - name: Run full Docker + Upgrade + Playwright + MCP Smoke Recette
+        env:
+          IMAGE_TAG: mypresence:recette
+          TEST_UPGRADE: '1'
+          PREVIOUS_IMAGE: matoy/mypresence:latest
+          DB_HOST: 127.0.0.1
+          DB_PORT: '5432'
+          DB_NAME: mypresence
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+        run: bash scripts/docker-recette.sh
+
+      - name: Upload Playwright report, traces, screenshots, videos & container logs
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: recette-diagnostics-${{ github.ref_name }}
+          path: |
+            e2e/playwright-report/
+            e2e/test-results/
+            recette-logs/
+          retention-days: 14
+
+      - name: Summarize failure diagnostics before blocking publish
+        if: failure()
+        run: |
+          {
+            echo "## ❌ La recette de release a échoué — publication bloquée"
+            echo ""
+            echo "La création de la GitHub Release et le push Docker Hub ont été bloqués automatiquement."
+            echo "Téléchargez l'artefact **recette-diagnostics-${{ github.ref_name }}** pour consulter :"
+            echo "- \`e2e/playwright-report/\` (rapport HTML interactif Playwright)"
+            echo "- \`e2e/test-results/\` (traces \`trace.zip\`, vidéos et captures d'écran sur échec)"
+            echo "- \`recette-logs/\` (logs du conteneur \`mypresence\` et de \`cmd/testmocks\`)"
+            if [ -f e2e/test-results/junit.xml ]; then
+              echo ""
+              echo "### Résumé JUnit Playwright"
+              grep -E "<testsuite|<failure|<error" e2e/test-results/junit.xml || true
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
   release:
     name: Create GitHub Release
-    needs: test
+    needs: [quality, recette-postgres, recette-docker-e2e]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -53,7 +197,7 @@ jobs:
 
   docker:
     name: Build & Push Docker image
-    needs: test
+    needs: [quality, recette-postgres, recette-docker-e2e]
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout

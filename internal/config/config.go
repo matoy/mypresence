@@ -114,6 +114,8 @@ type Config struct {
 	O365DefaultTimezone string `env:"O365_DEFAULT_TIMEZONE" live:"true"`
 	O365AMHours         string `env:"O365_AM_HOURS" live:"true"`
 	O365PMHours         string `env:"O365_PM_HOURS" live:"true"`
+	O365GraphBaseURL    string `env:"O365_GRAPH_BASE_URL"`
+	O365LoginBaseURL    string `env:"O365_LOGIN_BASE_URL"`
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -195,6 +197,8 @@ func Load() *Config {
 		O365DefaultTimezone: getEnv("O365_DEFAULT_TIMEZONE", "Europe/Paris"),
 		O365AMHours:         getEnv("O365_AM_HOURS", "08:30-12:30"),
 		O365PMHours:         getEnv("O365_PM_HOURS", "13:30-17:30"),
+		O365GraphBaseURL:    getEnv("O365_GRAPH_BASE_URL", ""),
+		O365LoginBaseURL:    getEnv("O365_LOGIN_BASE_URL", ""),
 	}
 	c.SAMLEnabled = c.SAMLIDPMetadataURL != "" && c.SAMLEntityID != ""
 	c.JiraEnabled = (c.JiraCloudID != "" && c.JiraToken != "") || (c.JiraBaseURL != "" && c.JiraEmail != "" && c.JiraToken != "")

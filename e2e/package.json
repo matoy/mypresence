@@ -1,0 +1,16 @@
+{
+  "name": "mypresence-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Playwright end-to-end release acceptance tests for mypresence",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.8.2"
+  }
+}
