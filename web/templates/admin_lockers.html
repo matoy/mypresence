@@ -225,9 +225,9 @@
                 <form @submit.prevent="saveLocker()" class="space-y-3">
                     <div>
                         <label class="block text-xs font-medium text-gray-600 mb-1">{{index $.T "sites.name"}} *</label>
-                        <select x-model.number="formModal.site_id" :disabled="!!formModal.id" required
+                        <select x-model.number="formModal.site_id" required
                                 @change="onModalSiteChange()"
-                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-100">
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
                             <option :value="0" disabled>—</option>
                             <template x-for="s in sites" :key="s.id">
                                 <option :value="s.id" x-text="s.name"></option>
@@ -533,6 +533,7 @@ function lockersAdmin(initialSiteID) {
         },
 
         onModalSiteChange() {
+            this.showUserList = false;
             if (this.formModal.user_id) {
                 const u = this.users.find(x => x.id === this.formModal.user_id);
                 if (!u || u.site_id !== this.formModal.site_id) {

@@ -164,6 +164,76 @@ func TestAdminLockerHandlers_CRUDAndNotifications(t *testing.T) {
 		if updatedKeep.UserID != 0 || updatedKeep.Code != "should-be-kept" {
 			t.Errorf("expected unassigned locker keeping explicit code 'should-be-kept', got user=%d code=%q", updatedKeep.UserID, updatedKeep.Code)
 		}
+
+		// Changing site_id to nonexistent site fails with 404
+		bodyMissingSite, _ := json.Marshal(map[string]interface{}{
+			"site_id": 999999,
+			"number":  "A-01",
+			"status":  "active",
+		})
+		recMissing := httptest.NewRecorder()
+		reqMissing := reqWithUser(d, adminUser, http.MethodPut, "/api/admin/lockers/"+strconv.FormatInt(targetID, 10), bytes.NewReader(bodyMissingSite))
+		reqMissing.SetPathValue("id", strconv.FormatInt(targetID, 10))
+		h.UpdateLocker(recMissing, reqMissing)
+		if recMissing.Code != http.StatusNotFound {
+			t.Fatalf("expected 404 for nonexistent target site, got %d", recMissing.Code)
+		}
+
+		// Changing site_id while assigning a user from the old site fails with 400
+		bodyWrongUser, _ := json.Marshal(map[string]interface{}{
+			"site_id": otherSiteID,
+			"number":  "A-01",
+			"status":  "active",
+			"user_id": userID,
+		})
+		recWrongUser := httptest.NewRecorder()
+		reqWrongUser := reqWithUser(d, adminUser, http.MethodPut, "/api/admin/lockers/"+strconv.FormatInt(targetID, 10), bytes.NewReader(bodyWrongUser))
+		reqWrongUser.SetPathValue("id", strconv.FormatInt(targetID, 10))
+		h.UpdateLocker(recWrongUser, reqWrongUser)
+		if recWrongUser.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 when assigning old-site user after moving site, got %d", recWrongUser.Code)
+		}
+
+		// Moving to otherSiteID with matching user succeeds and preserves code
+		bodyMove, _ := json.Marshal(map[string]interface{}{
+			"site_id": otherSiteID,
+			"number":  "LY-01",
+			"zone":    "Sud",
+			"status":  "active",
+			"user_id": otherUserID,
+		})
+		recMove := httptest.NewRecorder()
+		reqMove := reqWithUser(d, adminUser, http.MethodPut, "/api/admin/lockers/"+strconv.FormatInt(targetID, 10), bytes.NewReader(bodyMove))
+		reqMove.SetPathValue("id", strconv.FormatInt(targetID, 10))
+		h.UpdateLocker(recMove, reqMove)
+		if recMove.Code != http.StatusOK {
+			t.Fatalf("expected 200 when moving locker to otherSiteID, got %d: %s", recMove.Code, recMove.Body.String())
+		}
+		moved, _ := d.GetLocker(targetID)
+		if moved.SiteID != otherSiteID || moved.Number != "LY-01" || moved.UserID != otherUserID || moved.Code != "should-be-kept" {
+			t.Errorf("unexpected moved locker state: %+v", moved)
+		}
+
+		// Moving another locker from siteID to otherSiteID with duplicate number LY-01 fails with 409
+		var secondID int64
+		for _, l := range lockers {
+			if l.ID != targetID {
+				secondID = l.ID
+				break
+			}
+		}
+		bodyConflict, _ := json.Marshal(map[string]interface{}{
+			"site_id": otherSiteID,
+			"number":  "ly-01",
+			"status":  "active",
+		})
+		recConflict := httptest.NewRecorder()
+		reqConflict := reqWithUser(d, adminUser, http.MethodPut, "/api/admin/lockers/"+strconv.FormatInt(secondID, 10), bytes.NewReader(bodyConflict))
+		reqConflict.SetPathValue("id", strconv.FormatInt(secondID, 10))
+		h.UpdateLocker(recConflict, reqConflict)
+		if recConflict.Code != http.StatusConflict {
+			t.Fatalf("expected 409 for duplicate number on target site, got %d", recConflict.Code)
+		}
 	}
 
 	// 5. Floorplan locker range CRUD

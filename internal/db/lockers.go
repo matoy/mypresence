@@ -531,10 +531,17 @@ func (d *DB) UpdateLocker(l models.Locker) error {
 		}
 	}
 	code := strings.TrimSpace(l.Code)
-	res, err := d.floorplan.Exec(
-		"UPDATE lockers SET number = ?, zone = ?, status = ?, user_id = ?, code = ?, notes = ?, assigned_at = ? WHERE id = ?",
-		strings.TrimSpace(l.Number), strings.TrimSpace(l.Zone), status, l.UserID, code, strings.TrimSpace(l.Notes), assignedAt, l.ID,
-	)
+	query := "UPDATE lockers SET number = ?, zone = ?, status = ?, user_id = ?, code = ?, notes = ?, assigned_at = ?"
+	args := []interface{}{
+		strings.TrimSpace(l.Number), strings.TrimSpace(l.Zone), status, l.UserID, code, strings.TrimSpace(l.Notes), assignedAt,
+	}
+	if l.SiteID > 0 {
+		query += ", site_id = ?"
+		args = append(args, l.SiteID)
+	}
+	query += " WHERE id = ?"
+	args = append(args, l.ID)
+	res, err := d.floorplan.Exec(query, args...)
 	if err != nil {
 		return err
 	}

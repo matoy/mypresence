@@ -214,6 +214,7 @@ func (h *FloorplanHandler) UpdateLocker(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var req struct {
+		SiteID int64  `json:"site_id"`
 		Number string `json:"number"`
 		Zone   string `json:"zone"`
 		Status string `json:"status"`
@@ -237,11 +238,33 @@ func (h *FloorplanHandler) UpdateLocker(w http.ResponseWriter, r *http.Request) 
 		req.Code = req.Code[:32]
 	}
 
+	targetSiteID := existing.SiteID
+	targetSiteName := existing.SiteName
+	if req.SiteID > 0 && req.SiteID != existing.SiteID {
+		site, sErr := h.DB.GetSite(req.SiteID)
+		if sErr != nil {
+			jsonError(w, "Site introuvable", http.StatusNotFound)
+			return
+		}
+		targetSiteID = req.SiteID
+		targetSiteName = site.Name
+	}
+
 	if req.UserID > 0 {
 		targetUser, uErr := h.DB.GetUserByID(req.UserID)
-		if uErr != nil || targetUser == nil || targetUser.SiteID != existing.SiteID {
+		if uErr != nil || targetUser == nil || targetUser.SiteID != targetSiteID {
 			jsonError(w, "lockers.error_wrong_site", http.StatusBadRequest)
 			return
+		}
+	}
+
+	// Check duplicate number on target site
+	if siteLockers, lErr := h.DB.ListLockers(targetSiteID); lErr == nil {
+		for _, l := range siteLockers {
+			if l.ID != id && strings.EqualFold(strings.TrimSpace(l.Number), req.Number) {
+				jsonError(w, "lockers.error_exists", http.StatusConflict)
+				return
+			}
 		}
 	}
 
@@ -258,7 +281,7 @@ func (h *FloorplanHandler) UpdateLocker(w http.ResponseWriter, r *http.Request) 
 
 	err = h.DB.UpdateLocker(models.Locker{
 		ID:         id,
-		SiteID:     existing.SiteID,
+		SiteID:     targetSiteID,
 		Number:     req.Number,
 		Zone:       req.Zone,
 		Status:     req.Status,
@@ -285,13 +308,13 @@ func (h *FloorplanHandler) UpdateLocker(w http.ResponseWriter, r *http.Request) 
 		if actor.Name != "" {
 			actorName = actor.Name
 		}
-		h.DB.LogAdminAction(actor.ID, "locker", id, "update", fmt.Sprintf("%s #%s", existing.SiteName, req.Number))
-		slog.Info("admin.locker.update", "actor", actor.Email, "locker_id", id, "number", req.Number, "user_id", req.UserID)
+		h.DB.LogAdminAction(actor.ID, "locker", id, "update", fmt.Sprintf("%s #%s", targetSiteName, req.Number))
+		slog.Info("admin.locker.update", "actor", actor.Email, "locker_id", id, "site_id", targetSiteID, "number", req.Number, "user_id", req.UserID)
 	}
 
 	if reassigned && req.UserID != actorID {
-		link := fmt.Sprintf("#%s (%s)", req.Number, existing.SiteName)
-		if existing.SiteName == "" {
+		link := fmt.Sprintf("#%s (%s)", req.Number, targetSiteName)
+		if targetSiteName == "" {
 			link = "#" + req.Number
 		}
 		notifTitle := "Casier attribué"
