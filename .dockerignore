@@ -1,5 +1,24 @@
-.git
-e2e
-recette-logs
-mypresence-data
+# Data directory (Docker volume)
+data/
+mypresence-data/
+*.db
+
+# Go build & test artifacts
+/presence
+/presence.exe
 coverage.out
+recette-logs/
+
+# Browser E2E workspace (not needed in runtime binary build)
+.git/
+e2e/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

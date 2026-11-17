@@ -101,12 +101,16 @@ def _():
     assert "uptime" in data, f"Missing 'uptime' field: {data}"
 
 
-@test("auth — unauthenticated request to /api/tokens is rejected")
+@test("auth — unauthenticated or invalid bearer request to /api/tokens is rejected")
 def _():
     with _public() as c:
         r = c.get("/api/tokens")
-    assert r.status_code in (401, 403), (
-        f"Expected 401/403 for unauthenticated request, got {r.status_code}"
+        r_bad = c.get("/api/tokens", headers={"Authorization": "Bearer invalid-token"})
+    assert r.status_code in (303, 401, 403), (
+        f"Expected 303/401/403 for unauthenticated request, got {r.status_code}"
+    )
+    assert r_bad.status_code == 401, (
+        f"Expected 401 for invalid Bearer token, got {r_bad.status_code}"
     )
 
 

@@ -89,7 +89,7 @@ func TestMockServer_O365_Jira_SMTP_And_SAML(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GET SSO: %v", err)
 	}
-	defer ssoResp.Body.Close()
+	defer ssoResp.Body.Close() //nolint:errcheck
 	if ssoResp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 HTML form from SSO, got %d", ssoResp.StatusCode)
 	}
@@ -152,7 +152,7 @@ func TestMockServer_O365_Jira_SMTP_And_SAML(t *testing.T) {
 	if err != nil {
 		t.Fatalf("listen smtp: %v", err)
 	}
-	defer ln.Close()
+	defer ln.Close() //nolint:errcheck
 	go serveSMTP(ln, state)
 
 	msg := "From: noreply@presence.local\r\nTo: alice@example.com\r\nSubject: Password reset\r\n\r\nReset here: http://127.0.0.1:8080/reset-password?token=abc123\r\n"
@@ -164,7 +164,7 @@ func TestMockServer_O365_Jira_SMTP_And_SAML(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GET /__mock/state: %v", err)
 	}
-	defer stateResp.Body.Close()
+	defer stateResp.Body.Close() //nolint:errcheck
 	var snap map[string]interface{}
 	_ = json.NewDecoder(stateResp.Body).Decode(&snap)
 	emails, _ := snap["emails"].([]interface{})

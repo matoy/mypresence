@@ -45,7 +45,12 @@ cleanup() {
     docker logs "${APP_CONTAINER}" > "${LOG_DIR}/app-container.log" 2>&1 || true
     docker rm -f "${APP_CONTAINER}" >/dev/null 2>&1 || true
   fi
-  docker rm -f "${UPGRADE_CONTAINER_OLD}" "${UPGRADE_CONTAINER_NEW}" >/dev/null 2>&1 || true
+  for uc in "${UPGRADE_CONTAINER_OLD}" "${UPGRADE_CONTAINER_NEW}"; do
+    if docker ps -a --format '{{.Names}}' | grep -qx "${uc}"; then
+      docker logs "${uc}" > "${LOG_DIR}/${uc}.log" 2>&1 || true
+      docker rm -f "${uc}" >/dev/null 2>&1 || true
+    fi
+  done
   if [[ -n "${PG_CONTAINER}" ]]; then
     docker logs "${PG_CONTAINER}" > "${LOG_DIR}/postgres.log" 2>&1 || true
     docker rm -f "${PG_CONTAINER}" >/dev/null 2>&1 || true
@@ -152,7 +157,8 @@ if [[ "${TEST_UPGRADE}" == "1" ]]; then
     curl -sf -c "${WORK_DIR}/upg2.cookies" -X POST http://127.0.0.1:18081/login \
       --data-urlencode "username=${ADMIN_USER}" \
       --data-urlencode "password=${ADMIN_PASSWORD}" >/dev/null
-    if ! curl -sf -b "${WORK_DIR}/upg2.cookies" http://127.0.0.1:18081/api/users | grep -q "upgrade.user@example.com"; then
+    upg_users="$(curl -sf -b "${WORK_DIR}/upg2.cookies" http://127.0.0.1:18081/api/users)"
+    if ! grep -q "upgrade.user@example.com" <<< "${upg_users}"; then
       echo "ERROR: Pre-existing user lost after N-1 -> Candidate DB upgrade!" >&2
       docker logs "${UPGRADE_CONTAINER_NEW}" > "${LOG_DIR}/upgrade-candidate.log" 2>&1 || true
       exit 1
@@ -215,7 +221,8 @@ if [[ "${unauth_code}" != "401" ]]; then
   echo "ERROR: Expected /metrics without token to return 401, got ${unauth_code}" >&2
   exit 1
 fi
-curl -sf -H "Authorization: Bearer ${METRICS_TOKEN}" "${APP_BASE}/metrics" | grep -q "mypresence_"
+metrics_out="$(curl -sf -H "Authorization: Bearer ${METRICS_TOKEN}" "${APP_BASE}/metrics")"
+grep -q "mypresence_" <<< "${metrics_out}"
 
 BASE_URL="${APP_BASE}" MOCK_URL="${MOCK_BASE}" ADMIN_USER="${ADMIN_USER}" ADMIN_PASSWORD="${ADMIN_PASSWORD}" \
   npx --prefix e2e playwright test

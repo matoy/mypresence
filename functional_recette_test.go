@@ -200,7 +200,7 @@ func resetPostgresSchema(t *testing.T, cfg *config.Config) {
 	if err != nil {
 		t.Fatalf("postgres connect for reset: %v", err)
 	}
-	defer sqlDB.Close()
+	defer sqlDB.Close() //nolint:errcheck
 	if _, err := sqlDB.Exec("DROP SCHEMA public CASCADE; CREATE SCHEMA public;"); err != nil {
 		t.Fatalf("postgres reset schema: %v", err)
 	}
@@ -452,7 +452,7 @@ func (c *browserClient) doJSON(method, path string, body interface{}) (int, []by
 	if err != nil {
 		c.t.Fatalf("%s %s: %v", method, path, err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 	raw, _ := io.ReadAll(resp.Body)
 	return resp.StatusCode, raw
 }
@@ -488,7 +488,7 @@ func (c *browserClient) mustGet(path string) (int, string, http.Header) {
 	if err != nil {
 		c.t.Fatalf("GET %s: %v", path, err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 	raw, _ := io.ReadAll(resp.Body)
 	return resp.StatusCode, string(raw), resp.Header
 }
