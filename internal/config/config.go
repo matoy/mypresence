@@ -7,7 +7,7 @@ import (
 )
 
 // Version is the application version, updated manually for each release (format: YYYYMMDD-X).
-const Version = "20261117-2"
+const Version = "20261117-3"
 
 // Config holds all application configuration loaded from environment variables.
 //
@@ -21,9 +21,10 @@ const Version = "20261117-2"
 // or would break active sessions.
 type Config struct {
 	// Server
-	Port      string
-	DataDir   string
-	SecretKey string
+	Port           string
+	DataDir        string
+	SecretKey      string
+	TrustedProxies string // comma-separated IPs/CIDRs or "*" (empty = legacy default, "none" = disable forwarded headers)
 
 	// Database backend
 	DBDriver   string // sqlite (default), postgres, mysql, sqlserver
@@ -118,9 +119,10 @@ type Config struct {
 // Load reads configuration from environment variables with sensible defaults.
 func Load() *Config {
 	c := &Config{
-		Port:      getEnv("PORT", "8080"),
-		DataDir:   getEnv("DATA_DIR", "/data"),
-		SecretKey: getEnv("SECRET_KEY", "change-me-in-production-use-random-32-chars"),
+		Port:           getEnv("PORT", "8080"),
+		DataDir:        getEnv("DATA_DIR", "/data"),
+		SecretKey:      getEnv("SECRET_KEY", "change-me-in-production-use-random-32-chars"),
+		TrustedProxies: getEnv("TRUSTED_PROXIES", ""),
 
 		DBDriver:   getEnv("DB_DRIVER", "sqlite"),
 		DBHost:     getEnv("DB_HOST", "localhost"),
