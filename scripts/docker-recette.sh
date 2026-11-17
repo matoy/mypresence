@@ -224,8 +224,11 @@ fi
 metrics_out="$(curl -sf -H "Authorization: Bearer ${METRICS_TOKEN}" "${APP_BASE}/metrics")"
 grep -q "mypresence_" <<< "${metrics_out}"
 
-BASE_URL="${APP_BASE}" MOCK_URL="${MOCK_BASE}" ADMIN_USER="${ADMIN_USER}" ADMIN_PASSWORD="${ADMIN_PASSWORD}" \
-  npx --prefix e2e playwright test
+(
+  cd "${REPO_ROOT}/e2e"
+  BASE_URL="${APP_BASE}" MOCK_URL="${MOCK_BASE}" ADMIN_USER="${ADMIN_USER}" ADMIN_PASSWORD="${ADMIN_PASSWORD}" \
+    npx playwright test
+)
 
 echo "==> [6/6] Running MCP Python API smoke_tests.py against container PAT..."
 if command -v python3 >/dev/null 2>&1 && python3 -c "import httpx" >/dev/null 2>&1; then
