@@ -26,4 +26,4 @@ jobs:
           cache: false
 
       - name: Run govulncheck
-        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+        run: go run ./.github/scripts/govulncheck
