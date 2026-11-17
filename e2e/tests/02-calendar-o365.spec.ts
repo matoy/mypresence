@@ -85,6 +85,8 @@ test.describe('02 - Calendar Drag-Paint, Context Menu, Dark Mode, Locale & O365 
       page.waitForResponse((r) => r.url().includes('/api/o365/sync') && r.status() === 200),
       o365Btn.click(),
     ]);
+    await expect(page.locator('div[x-data*="syncNow"]')).toContainText('2');
+    await page.reload();
     await expect(page.locator('div[x-data*="syncNow"]')).toContainText('o365.user@office.example.com');
 
     await expect
@@ -111,7 +113,7 @@ test.describe('02 - Calendar Drag-Paint, Context Menu, Dark Mode, Locale & O365 
     expect(stResp).toBe(200);
 
     await page.reload();
-    const certBtn = page.locator('button[x-text="_t[\'cert.certify_confirm_button\']"]').locator('..');
+    const certBtn = page.locator('div[x-show="declarable > 0 && declared >= declarable && !certified"] button').first();
     await expect(certBtn).toBeVisible();
     await certBtn.click();
     const certConfirmModal = page.locator('div[x-show="confirmShow"]');
