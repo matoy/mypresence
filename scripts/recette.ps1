@@ -80,6 +80,9 @@ try {
         "SMTP_URL"                      = "smtp://127.0.0.1:$MockSmtpPort"
         "SMTP_FROM"                     = "noreply@presence.local"
         "METRICS_TOKEN"                 = "e2e-metrics-token"
+        "ENABLE_PASSKEYS"               = "true"
+        "PASSKEY_RP_ID"                 = "localhost"
+        "PASSKEY_RP_ORIGIN"             = "http://localhost:$AppPort"
     }
     if ($PostgresDSN -ne "") {
         $envMap["DB_DRIVER"] = "postgres"
@@ -121,6 +124,7 @@ try {
     $env:MOCK_URL = $mockBaseUrl
     $env:ADMIN_USER = "admin"
     $env:ADMIN_PASSWORD = "AdminRecette#2026!"
+    $env:EXPECT_PASSKEYS = "1"
 
     Push-Location (Join-Path $RepoRoot "e2e")
     try {

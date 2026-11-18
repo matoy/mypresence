@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/matoy/mypresence/internal/metrics"
 	"github.com/matoy/mypresence/internal/middleware"
@@ -107,7 +108,9 @@ func (h *AuthHandler) PasskeyRegisterBegin(w http.ResponseWriter, r *http.Reques
 	}
 
 	wUser := newWebAuthnUser(user, creds)
-	options, sessionData, err := h.WebAuthn.BeginRegistration(wUser)
+	options, sessionData, err := h.WebAuthn.BeginRegistration(wUser,
+		webauthn.WithResidentKeyRequirement(protocol.ResidentKeyRequirementRequired),
+	)
 	if err != nil {
 		slog.Error("passkey.register.begin", "error", err)
 		http.Error(w, "Registration failed", http.StatusInternalServerError)

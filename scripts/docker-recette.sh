@@ -207,6 +207,9 @@ docker run -d --name "${APP_CONTAINER}" --network host \
   -e SMTP_URL="smtp://127.0.0.1:${MOCK_SMTP_PORT}" \
   -e SMTP_FROM="noreply@presence.local" \
   -e METRICS_TOKEN="${METRICS_TOKEN}" \
+  -e ENABLE_PASSKEYS=true \
+  -e PASSKEY_RP_ID=localhost \
+  -e PASSKEY_RP_ORIGIN="http://localhost:${APP_PORT}" \
   "${IMAGE_TAG}" >/dev/null
 
 if ! wait_http "${APP_BASE}/health" "candidate container" 60; then
@@ -226,7 +229,7 @@ grep -q "mypresence_" <<< "${metrics_out}"
 
 (
   cd "${REPO_ROOT}/e2e"
-  BASE_URL="${APP_BASE}" MOCK_URL="${MOCK_BASE}" ADMIN_USER="${ADMIN_USER}" ADMIN_PASSWORD="${ADMIN_PASSWORD}" \
+  BASE_URL="${APP_BASE}" MOCK_URL="${MOCK_BASE}" ADMIN_USER="${ADMIN_USER}" ADMIN_PASSWORD="${ADMIN_PASSWORD}" EXPECT_PASSKEYS=1 \
     npx playwright test
 )
 

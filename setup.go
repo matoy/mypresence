@@ -217,6 +217,8 @@ func checkLogoExists(dataDir, logoFile string) bool {
 
 var (
 	activeNewsMu   sync.RWMutex
+	activeNewsDB   *db.DB
+	activeNewsGen  uint64
 	activeNewsTime time.Time
 	activeNewsVal  []models.NewsMessage
 )
@@ -225,8 +227,9 @@ func getCachedActiveNews(database *db.DB) []models.NewsMessage {
 	if database == nil {
 		return nil
 	}
+	gen := database.NewsVersion()
 	activeNewsMu.RLock()
-	if time.Since(activeNewsTime) < 30*time.Second {
+	if activeNewsDB == database && activeNewsGen == gen && time.Since(activeNewsTime) < 30*time.Second {
 		res := activeNewsVal
 		activeNewsMu.RUnlock()
 		return res
@@ -235,14 +238,21 @@ func getCachedActiveNews(database *db.DB) []models.NewsMessage {
 
 	activeNewsMu.Lock()
 	defer activeNewsMu.Unlock()
-	if time.Since(activeNewsTime) < 30*time.Second {
+	if activeNewsDB == database && activeNewsGen == gen && time.Since(activeNewsTime) < 30*time.Second {
 		return activeNewsVal
 	}
 	if activeNews, err := database.GetActiveNewsMessages(); err == nil {
 		activeNewsVal = activeNews
+		activeNewsDB = database
+		activeNewsGen = gen
 		activeNewsTime = time.Now()
 	}
 	return activeNewsVal
+}
+
+type userRolesKey struct {
+	database *db.DB
+	userID   int64
 }
 
 type userRenderRoles struct {
@@ -254,15 +264,16 @@ type userRenderRoles struct {
 
 var (
 	userRolesMu    sync.RWMutex
-	userRolesCache = make(map[int64]userRenderRoles)
+	userRolesCache = make(map[userRolesKey]userRenderRoles)
 )
 
 func getCachedUserRenderRoles(database *db.DB, userID int64) (userTasksMode, isDomainManager, isTeamLeader bool) {
 	if database == nil || userID <= 0 {
 		return false, false, false
 	}
+	key := userRolesKey{database: database, userID: userID}
 	userRolesMu.RLock()
-	if entry, ok := userRolesCache[userID]; ok && time.Since(entry.cachedAt) < 30*time.Second {
+	if entry, ok := userRolesCache[key]; ok && time.Since(entry.cachedAt) < 30*time.Second {
 		userRolesMu.RUnlock()
 		return entry.userTasksMode, entry.isDomainManager, entry.isTeamLeader
 	}
@@ -270,7 +281,7 @@ func getCachedUserRenderRoles(database *db.DB, userID int64) (userTasksMode, isD
 
 	userRolesMu.Lock()
 	defer userRolesMu.Unlock()
-	if entry, ok := userRolesCache[userID]; ok && time.Since(entry.cachedAt) < 30*time.Second {
+	if entry, ok := userRolesCache[key]; ok && time.Since(entry.cachedAt) < 30*time.Second {
 		return entry.userTasksMode, entry.isDomainManager, entry.isTeamLeader
 	}
 
@@ -285,7 +296,7 @@ func getCachedUserRenderRoles(database *db.DB, userID int64) (userTasksMode, isD
 	isDomainManager, _ = database.IsDomainManager(userID)
 	isTeamLeader, _ = database.IsTeamLeader(userID)
 
-	userRolesCache[userID] = userRenderRoles{
+	userRolesCache[key] = userRenderRoles{
 		userTasksMode:   userTasksMode,
 		isDomainManager: isDomainManager,
 		isTeamLeader:    isTeamLeader,

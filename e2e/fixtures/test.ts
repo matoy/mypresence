@@ -1,8 +1,41 @@
-import { test as base, expect, Page, APIRequestContext } from '@playwright/test';
+import * as fs from 'node:fs';
+import { test as base, expect, Page, APIRequestContext, Locator } from '@playwright/test';
 
 export const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 export const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'AdminRecette#2026!';
 export const MOCK_URL = (process.env.MOCK_URL || 'http://127.0.0.1:19080').replace(/\/+$/, '');
+
+// Valid 1x1 transparent PNG
+export const TINY_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+  'base64',
+);
+
+export function firstWeekdaysOf(year: number, month: number, count: number): string[] {
+  const res: string[] = [];
+  for (let d = 1; d <= 31 && res.length < count; d++) {
+    const dt = new Date(Date.UTC(year, month - 1, d));
+    if (dt.getUTCMonth() + 1 !== month) break;
+    const dow = dt.getUTCDay();
+    if (dow !== 0 && dow !== 6) {
+      res.push(dt.toISOString().slice(0, 10));
+    }
+  }
+  return res;
+}
+
+export async function expectXlsxDownload(page: Page, trigger: Locator): Promise<string> {
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    trigger.click(),
+  ]);
+  const name = download.suggestedFilename();
+  expect(name).toMatch(/\.xlsx$/i);
+  const savedPath = await download.path();
+  expect(savedPath, 'Expected Playwright to save downloaded .xlsx file').toBeTruthy();
+  expect(fs.statSync(savedPath!).size).toBeGreaterThan(100);
+  return name;
+}
 
 type HealthGuard = {
   allowExpected4xx: boolean;
@@ -66,6 +99,10 @@ export async function loginLocal(page: Page, username: string, password: string)
 }
 
 export async function logout(page: Page): Promise<void> {
+  if ((await page.locator('nav').count()) === 0) {
+    await page.goto('/');
+    if (page.url().includes('/login')) return;
+  }
   const userMenuToggle = page.locator('nav div[x-data*="userMenuOpen"] > button').first();
   if (await userMenuToggle.isVisible()) {
     await userMenuToggle.click();

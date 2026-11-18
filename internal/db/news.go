@@ -137,6 +137,9 @@ func (d *DB) CreateNewsMessage(title, content, startDate, endDate, bgColor strin
 INSERT INTO news_messages (title, content, start_date, end_date, bg_color, bg_opacity, text_color, recurring)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id`), title, content, startDate, endDate, bgColor, bgOpacity, textColor, rec).Scan(&id)
+		if err == nil {
+			d.newsVersion.Add(1)
+		}
 		return id, err
 	}
 	res, err := d.core.Exec(dl.rebind(`
@@ -145,7 +148,13 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?)`), title, content, startDate, endDate, bgColor, 
 	if err != nil {
 		return 0, err
 	}
+	d.newsVersion.Add(1)
 	return res.LastInsertId()
+}
+
+// NewsVersion returns a counter incremented whenever news messages are created, updated, or deleted.
+func (d *DB) NewsVersion() uint64 {
+	return d.newsVersion.Load()
 }
 
 // UpdateNewsMessage updates an existing news message.
@@ -164,12 +173,18 @@ func (d *DB) UpdateNewsMessage(id int64, title, content, startDate, endDate, bgC
 UPDATE news_messages
 SET title = ?, content = ?, start_date = ?, end_date = ?, bg_color = ?, bg_opacity = ?, text_color = ?, recurring = ?
 WHERE id = ?`), title, content, startDate, endDate, bgColor, bgOpacity, textColor, rec, id)
+	if err == nil {
+		d.newsVersion.Add(1)
+	}
 	return err
 }
 
 // DeleteNewsMessage removes a news message by ID.
 func (d *DB) DeleteNewsMessage(id int64) error {
 	_, err := d.core.Exec(d.dialect.rebind(`DELETE FROM news_messages WHERE id = ?`), id)
+	if err == nil {
+		d.newsVersion.Add(1)
+	}
 	return err
 }
 

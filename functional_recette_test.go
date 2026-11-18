@@ -445,6 +445,7 @@ func (c *browserClient) doJSON(method, path string, body interface{}) (int, []by
 	}
 	req.Header.Set("Origin", c.baseURL)
 	req.Header.Set("Sec-Fetch-Site", "same-origin")
+	req.Header.Set("Accept", "application/json")
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -991,6 +992,388 @@ func TestRecette_FullReleaseAcceptance(t *testing.T) {
 		if !strings.Contains(string(mBody), "mypresence_") {
 			t.Fatalf("expected mypresence_ metrics in output (got %d bytes, snippet=%q)", len(mBody), string(mBody[:min(len(mBody), 200)]))
 		}
+	})
+
+	t.Run("06_Domains_Holidays_Statuses_Users_RBAC", func(t *testing.T) {
+		// Create dedicated domain manager (no global/viewer role) and attach to domain + teamID
+		st, raw := admin.doJSON(http.MethodPost, "/admin/users", map[string]string{
+			"email": "dom.mgr@example.com", "name": "Domain Manager", "password": "DomPass#2026!",
+		})
+		if st != http.StatusOK {
+			t.Fatalf("create dom.mgr: %d %s", st, string(raw))
+		}
+		var dmRes struct{ ID int64 `json:"id"` }
+		_ = json.Unmarshal(raw, &dmRes)
+
+		st, raw = admin.doJSON(http.MethodPost, "/admin/domains", map[string]interface{}{
+			"name":        "Core Engineering Domain",
+			"manager_ids": []int64{dmRes.ID},
+			"team_ids":    []int64{teamID},
+		})
+		if st != http.StatusOK {
+			t.Fatalf("create domain: %d %s", st, string(raw))
+		}
+		var dRes struct{ ID int64 `json:"id"` }
+		_ = json.Unmarshal(raw, &dRes)
+
+		domMgr := newBrowserClient(t, env.appSrv.URL)
+		domMgr.loginLocal("dom.mgr@example.com", "DomPass#2026!")
+		if sc, _, _ := domMgr.mustGet("/admin/activity"); sc != http.StatusOK {
+			t.Fatalf("domain manager should access /admin/activity, got %d", sc)
+		}
+		if sc, _, _ := domMgr.mustGet("/admin/projects-report"); sc != http.StatusOK {
+			t.Fatalf("domain manager should access /admin/projects-report, got %d", sc)
+		}
+		if sc, _, _ := domMgr.mustGet("/admin/domains"); sc != http.StatusForbidden {
+			t.Fatalf("domain manager must be denied /admin/domains, got %d", sc)
+		}
+
+		// Rename & remove manager -> loses access; re-add -> regains; delete -> team preserved & access revoked
+		if st, r := admin.doJSON(http.MethodPut, fmt.Sprintf("/admin/domains/%d", dRes.ID), map[string]interface{}{
+			"name":        "Renamed Domain",
+			"manager_ids": []int64{},
+			"team_ids":    []int64{teamID},
+		}); st != http.StatusOK {
+			t.Fatalf("update domain: %d %s", st, string(r))
+		}
+		if sc, _, _ := domMgr.mustGet("/admin/activity"); sc != http.StatusForbidden {
+			t.Fatalf("removed domain manager should lose /admin/activity access, got %d", sc)
+		}
+		if st, _ := admin.doJSON(http.MethodPut, fmt.Sprintf("/admin/domains/%d", dRes.ID), map[string]interface{}{
+			"name":        "Renamed Domain",
+			"manager_ids": []int64{dmRes.ID},
+			"team_ids":    []int64{teamID},
+		}); st != http.StatusOK {
+			t.Fatalf("re-assign domain manager failed: %d", st)
+		}
+		if sc, _, _ := domMgr.mustGet("/admin/activity"); sc != http.StatusOK {
+			t.Fatalf("re-assigned domain manager should regain /admin/activity, got %d", sc)
+		}
+		if st, _ := admin.doJSON(http.MethodDelete, fmt.Sprintf("/admin/domains/%d", dRes.ID), nil); st != http.StatusOK {
+			t.Fatalf("delete domain failed: %d", st)
+		}
+		if sc, _, _ := domMgr.mustGet("/admin/activity"); sc != http.StatusForbidden {
+			t.Fatalf("after domain deletion, manager should get 403, got %d", sc)
+		}
+		if sc, tRaw, _ := admin.mustGet("/api/teams"); sc != http.StatusOK || !strings.Contains(tRaw, "Engineering Recette") {
+			t.Fatalf("detached team must survive domain deletion: sc=%d body=%s", sc, tRaw)
+		}
+
+		// Holidays CRUD + country_code + allow_imputed
+		st, hRaw := admin.doJSON(http.MethodPost, "/admin/holidays", map[string]interface{}{
+			"date": "2027-01-05", "name": "Recette Holiday FR", "allow_imputed": false, "country_code": "FR",
+		})
+		if st != http.StatusOK {
+			t.Fatalf("create holiday: %d %s", st, string(hRaw))
+		}
+		var hRes struct{ ID int64 `json:"id"` }
+		_ = json.Unmarshal(hRaw, &hRes)
+		if st, _ := admin.doJSON(http.MethodPut, fmt.Sprintf("/admin/holidays/%d", hRes.ID), map[string]interface{}{
+			"date": "2027-01-05", "name": "Recette Holiday Updated", "allow_imputed": true, "country_code": "FR,BE",
+		}); st != http.StatusOK {
+			t.Fatalf("update holiday: %d", st)
+		}
+		if st, _ := admin.doJSON(http.MethodDelete, fmt.Sprintf("/admin/holidays/%d", hRes.ID), nil); st != http.StatusOK {
+			t.Fatalf("delete holiday: %d", st)
+		}
+
+		// Statuses CRUD + disable toggle + delete-in-use guard
+		st, sRaw := admin.doJSON(http.MethodPost, "/admin/statuses", map[string]interface{}{
+			"name": "Recette Custom Status", "color": "#10b981", "billable": true, "on_site": false, "sort_order": 50, "show_as": "workingElsewhere",
+		})
+		if st != http.StatusOK {
+			t.Fatalf("create status: %d %s", st, string(sRaw))
+		}
+		var stRes struct{ ID int64 `json:"id"` }
+		_ = json.Unmarshal(sRaw, &stRes)
+		if st, _ := admin.doJSON(http.MethodPut, fmt.Sprintf("/admin/statuses/%d", stRes.ID), map[string]interface{}{
+			"name": "Recette Custom Updated", "color": "#059669", "billable": true, "on_site": true, "sort_order": 55, "show_as": "busy",
+		}); st != http.StatusOK {
+			t.Fatalf("update status: %d", st)
+		}
+		if st, _ := admin.doJSON(http.MethodPatch, fmt.Sprintf("/admin/statuses/%d/disabled", stRes.ID), map[string]bool{"disabled": true}); st != http.StatusOK {
+			t.Fatalf("disable status: %d", st)
+		}
+		if st, _ := admin.doJSON(http.MethodDelete, fmt.Sprintf("/admin/statuses/%d", onsiteID), nil); st != http.StatusConflict {
+			t.Fatalf("expected 409 deleting in-use status %d, got %d", onsiteID, st)
+		}
+		if st, _ := admin.doJSON(http.MethodDelete, fmt.Sprintf("/admin/statuses/%d", stRes.ID), nil); st != http.StatusOK {
+			t.Fatalf("delete unused custom status: %d", st)
+		}
+
+		// Users lifecycle: single/batch preprovision, edit, password, roles, disable (+ locker auto-release), delete
+		if st, r := admin.doJSON(http.MethodPost, "/api/admin/users/preprovision", map[string]interface{}{
+			"email": "pending.sso@example.com", "name": "Pending SSO", "site_id": lyonID, "team_ids": []int64{teamID},
+		}); st != http.StatusOK || !strings.Contains(string(r), "pending.sso@example.com") {
+			t.Fatalf("single preprovision failed: %d %s", st, string(r))
+		}
+		if st, r := admin.doJSON(http.MethodPost, "/api/admin/users/batch-preprovision", map[string]interface{}{
+			"text": "batch.one@example.com,Batch One\nalice@example.com,Duplicate Alice", "default_site_id": parisID, "default_team_id": teamID,
+		}); st != http.StatusOK || !strings.Contains(string(r), `"created":1`) || !strings.Contains(string(r), `"skipped":1`) {
+			t.Fatalf("batch preprovision failed: %d %s", st, string(r))
+		}
+
+		st, tempRaw := admin.doJSON(http.MethodPost, "/admin/users", map[string]string{
+			"email": "temp.user@example.com", "name": "Temp User", "password": "TempUser#123",
+		})
+		if st != http.StatusOK {
+			t.Fatalf("create temp user: %d %s", st, string(tempRaw))
+		}
+		var tempRes struct{ ID int64 `json:"id"` }
+		_ = json.Unmarshal(tempRaw, &tempRes)
+
+		if st, _ := admin.doJSON(http.MethodPut, fmt.Sprintf("/api/admin/users/%d/site", tempRes.ID), map[string]int64{"site_id": lyonID}); st != http.StatusOK {
+			t.Fatalf("assign temp user to lyon: %d", st)
+		}
+		if st, _ := admin.doJSON(http.MethodPut, fmt.Sprintf("/admin/users/%d", tempRes.ID), map[string]string{"email": "temp.renamed@example.com", "name": "Temp Renamed"}); st != http.StatusOK {
+			t.Fatalf("update user: %d", st)
+		}
+		if st, _ := admin.doJSON(http.MethodPut, fmt.Sprintf("/admin/users/%d/password", tempRes.ID), map[string]string{"password": "TempUserUpdated#123"}); st != http.StatusOK {
+			t.Fatalf("admin set password: %d", st)
+		}
+		if st, _ := admin.doJSON(http.MethodPut, fmt.Sprintf("/api/users/%d/roles", tempRes.ID), map[string][]string{"roles": {"team_manager"}}); st != http.StatusOK {
+			t.Fatalf("update user roles: %d", st)
+		}
+
+		tempClient := newBrowserClient(t, env.appSrv.URL)
+		tempClient.loginLocal("temp.renamed@example.com", "TempUserUpdated#123")
+		if st, r := tempClient.doJSON(http.MethodPost, fmt.Sprintf("/api/lockers/%d/claim", lyonLkID), map[string]string{"code": "7777"}); st != http.StatusOK {
+			t.Fatalf("temp user claim lyon locker: %d %s", st, string(r))
+		}
+
+		// Disabling user must auto-release locker & reject login
+		if st, _ := admin.doJSON(http.MethodPut, fmt.Sprintf("/admin/users/%d/disabled", tempRes.ID), map[string]bool{"disabled": true}); st != http.StatusOK {
+			t.Fatalf("disable user: %d", st)
+		}
+		lkAfterDis, err := env.db.GetLocker(lyonLkID)
+		if err != nil || lkAfterDis.UserID != 0 {
+			t.Fatalf("expected disabled user's locker auto-released, got %+v err=%v", lkAfterDis, err)
+		}
+		disLoginResp := newBrowserClient(t, env.appSrv.URL).doForm("/login", url.Values{
+			"username": {"temp.renamed@example.com"}, "password": {"TempUserUpdated#123"},
+		})
+		_ = disLoginResp.Body.Close()
+		if !strings.Contains(disLoginResp.Header.Get("Location"), "disabled") {
+			t.Fatalf("expected disabled login redirect error, got %q", disLoginResp.Header.Get("Location"))
+		}
+
+		if st, _ := admin.doJSON(http.MethodDelete, "/admin/users/1", nil); st != http.StatusBadRequest {
+			t.Fatalf("expected 400 blocking self-delete, got %d", st)
+		}
+		if st, _ := admin.doJSON(http.MethodDelete, fmt.Sprintf("/admin/users/%d", tempRes.ID), nil); st != http.StatusOK {
+			t.Fatalf("delete temp user: %d", st)
+		}
+	})
+
+	t.Run("07_Notifications_News_ClassicProjects_Decertify_Settings_Reminders", func(t *testing.T) {
+		alice := newBrowserClient(t, env.appSrv.URL)
+		alice.loginLocal("alice@example.com", "AliceNewPass#2026!")
+
+		// Admin sends notifications in user/team/site/all modes; Alice acknowledges; Admin deletes
+		for _, payload := range []map[string]interface{}{
+			{"user_ids": []int64{aliceID}, "type": "info", "title": "Recette Direct Notif", "message": "Hello Alice", "link": "/calendar"},
+			{"team_ids": []int64{teamID}, "type": "warning", "title": "Recette Team Notif", "message": "Team Ping"},
+			{"site_ids": []int64{lyonID}, "type": "success", "title": "Recette Site Notif", "message": "Lyon Ping"},
+			{"recipient": "all", "type": "alert", "title": "Recette All Notif", "message": "Global Broadcast"},
+		} {
+			if st, r := admin.doJSON(http.MethodPost, "/api/admin/notifications", payload); st != http.StatusOK {
+				t.Fatalf("send notification %v failed: %d %s", payload["title"], st, string(r))
+			}
+		}
+
+		_, unreadRaw, _ := alice.mustGet("/api/notifications/unread")
+		var unread []struct {
+			ID    int64  `json:"id"`
+			Title string `json:"title"`
+		}
+		_ = json.Unmarshal([]byte(unreadRaw), &unread)
+		var directID int64
+		for _, n := range unread {
+			if n.Title == "Recette Direct Notif" {
+				directID = n.ID
+				break
+			}
+		}
+		if directID == 0 {
+			t.Fatalf("expected Recette Direct Notif in unread list: %s", unreadRaw)
+		}
+		if st, _ := alice.doJSON(http.MethodPost, fmt.Sprintf("/api/notifications/%d/ack", directID), nil); st != http.StatusOK {
+			t.Fatalf("ack notification failed: %d", st)
+		}
+		if st, _ := admin.doJSON(http.MethodDelete, fmt.Sprintf("/api/admin/notifications/%d", directID), nil); st != http.StatusOK {
+			t.Fatalf("admin delete notification failed: %d", st)
+		}
+
+		// News CRUD + active banner verification on /
+		today := time.Now().Format("2006-01-02")
+		st, newsRaw := admin.doJSON(http.MethodPost, "/admin/news", map[string]interface{}{
+			"title": "Recette Banner", "content": "Urgent Recette Maintenance Notice",
+			"start_date": today, "end_date": today, "bg_color": "#dc2626", "bg_opacity": 100, "text_color": "#ffffff", "recurring": false,
+		})
+		if st != http.StatusOK {
+			t.Fatalf("create news: %d %s", st, string(newsRaw))
+		}
+		var newsRes struct{ ID int64 `json:"id"` }
+		_ = json.Unmarshal(newsRaw, &newsRes)
+		if sc, homeHTML, _ := alice.mustGet("/"); sc != http.StatusOK || !strings.Contains(homeHTML, "Urgent Recette Maintenance Notice") {
+			t.Fatalf("expected active news banner on /, code=%d", sc)
+		}
+		if st, _ := admin.doJSON(http.MethodPut, fmt.Sprintf("/admin/news/%d", newsRes.ID), map[string]interface{}{
+			"title": "Recette Banner v2", "content": "Updated Recette Notice",
+			"start_date": today, "end_date": today, "bg_color": "#2563eb", "bg_opacity": 90, "text_color": "#ffffff", "recurring": false,
+		}); st != http.StatusOK {
+			t.Fatalf("update news: %d", st)
+		}
+		if st, _ := admin.doJSON(http.MethodDelete, fmt.Sprintf("/admin/news/%d", newsRes.ID), nil); st != http.StatusOK {
+			t.Fatalf("delete news: %d", st)
+		}
+		if _, homeAfter, _ := alice.mustGet("/"); strings.Contains(homeAfter, "Updated Recette Notice") {
+			t.Fatal("expected deleted news banner to disappear from /")
+		}
+
+		// Classic projects team + project + member + favorite + entry + certify + decertify + trigger-reminders
+		st, ctRaw := admin.doJSON(http.MethodPost, "/admin/teams", map[string]interface{}{
+			"name":                        "Classic Recette Team",
+			"timesheets_managed_manually": false,
+			"remind_presence":             true,
+			"presence_reminder_days":      5,
+			"remind_activity":             false,
+			"activity_reminder_days":      0,
+		})
+		if st != http.StatusOK {
+			t.Fatalf("create classic team: %d %s", st, string(ctRaw))
+		}
+		var ctRes struct{ ID int64 `json:"id"` }
+		_ = json.Unmarshal(ctRaw, &ctRes)
+
+		st, cuRaw := admin.doJSON(http.MethodPost, "/admin/users", map[string]string{
+			"email": "classic@example.com", "name": "Classic User", "password": "ClassicPass#2026!",
+		})
+		if st != http.StatusOK {
+			t.Fatalf("create classic user: %d %s", st, string(cuRaw))
+		}
+		var cuRes struct{ ID int64 `json:"id"` }
+		_ = json.Unmarshal(cuRaw, &cuRes)
+		if st, _ := admin.doJSON(http.MethodPost, fmt.Sprintf("/admin/teams/%d/members", ctRes.ID), map[string]int64{"user_id": cuRes.ID}); st != http.StatusOK {
+			t.Fatalf("add classic user to team: %d", st)
+		}
+
+		// Trigger reminders while classicUser has no upcoming presences declared
+		if st, rRaw := admin.doJSON(http.MethodPost, fmt.Sprintf("/api/admin/teams/%d/trigger-reminders", ctRes.ID), nil); st != http.StatusOK || !strings.Contains(string(rRaw), `"presence_sent":1`) {
+			t.Fatalf("expected trigger-reminders presence_sent=1, got %d %s", st, string(rRaw))
+		}
+
+		st, prRaw := admin.doJSON(http.MethodPost, "/admin/projects", map[string]interface{}{
+			"name": "Recette Classic Project", "code": "RCP-01", "team_id": ctRes.ID,
+			"active": true, "mini_project": false, "start_date": "2026-01-01", "end_date": "2027-12-31",
+		})
+		if st != http.StatusOK {
+			t.Fatalf("create classic project: %d %s", st, string(prRaw))
+		}
+		var prRes struct{ ID int64 `json:"id"` }
+		_ = json.Unmarshal(prRaw, &prRes)
+		if st, _ := admin.doJSON(http.MethodPut, fmt.Sprintf("/api/admin/projects/%d/members", prRes.ID), map[string][]int64{"user_ids": {cuRes.ID}}); st != http.StatusOK {
+			t.Fatalf("assign project members: %d", st)
+		}
+
+		classic := newBrowserClient(t, env.appSrv.URL)
+		classic.loginLocal("classic@example.com", "ClassicPass#2026!")
+		if st, _ := classic.doJSON(http.MethodPost, fmt.Sprintf("/api/project-favorite/%d", prRes.ID), nil); st != http.StatusOK {
+			t.Fatalf("toggle project favorite: %d", st)
+		}
+		decWeekdays := allWeekdaysOf(2026, 12)
+		if st, r := classic.doJSON(http.MethodPost, "/api/presences", map[string]interface{}{
+			"user_id": cuRes.ID, "dates": decWeekdays, "status_id": onsiteID, "half": "full",
+		}); st != http.StatusOK {
+			t.Fatalf("classic set dec presences: %d %s", st, string(r))
+		}
+		if st, r := classic.doJSON(http.MethodPost, "/api/project-time", map[string]interface{}{
+			"project_id": prRes.ID, "year": 2026, "month": 12, "days": float64(len(decWeekdays)),
+		}); st != http.StatusOK {
+			t.Fatalf("set project time: %d %s", st, string(r))
+		}
+		if st, r := classic.doJSON(http.MethodPost, "/api/certify", map[string]int{"year": 2026, "month": 12}); st != http.StatusOK {
+			t.Fatalf("classic certify presence: %d %s", st, string(r))
+		}
+		if st, r := classic.doJSON(http.MethodPost, "/api/certify-project", map[string]int{"year": 2026, "month": 12}); st != http.StatusOK {
+			t.Fatalf("classic certify project: %d %s", st, string(r))
+		}
+		if st, _ := classic.doJSON(http.MethodPost, "/api/project-time", map[string]interface{}{
+			"project_id": prRes.ID, "year": 2026, "month": 12, "days": 1,
+		}); st != http.StatusLocked {
+			t.Fatalf("expected 423 editing certified project time, got %d", st)
+		}
+
+		// Admin decertifies both presence & project -> editing unlocked again
+		if st, _ := admin.doJSON(http.MethodPost, "/api/decertify-project", map[string]interface{}{"user_id": cuRes.ID, "year": 2026, "month": 12}); st != http.StatusOK {
+			t.Fatalf("decertify project: %d", st)
+		}
+		if st, _ := admin.doJSON(http.MethodPost, "/api/decertify", map[string]interface{}{"user_id": cuRes.ID, "year": 2026, "month": 12}); st != http.StatusOK {
+			t.Fatalf("decertify presence: %d", st)
+		}
+		if st, r := classic.doJSON(http.MethodPost, "/api/project-time", map[string]interface{}{
+			"project_id": prRes.ID, "year": 2026, "month": 12, "days": 2,
+		}); st != http.StatusOK {
+			t.Fatalf("expected 200 editing project time after decertify, got %d %s", st, string(r))
+		}
+
+		// Admin live settings (/admin/settings/env + CSRF logo upload/delete)
+		if st, _ := admin.doJSON(http.MethodPost, "/admin/settings/env", map[string]string{"key": "APP_NAME", "value": "Presence Live Override"}); st != http.StatusOK {
+			t.Fatalf("live env update failed: %d", st)
+		}
+		if _, hBody, _ := admin.mustGet("/"); !strings.Contains(hBody, "Presence Live Override") {
+			t.Fatal("expected updated APP_NAME in rendered HTML")
+		}
+		_, _ = admin.doJSON(http.MethodPost, "/admin/settings/env", map[string]string{"key": "APP_NAME", "value": "Presence Recette"})
+
+		_, gsHTML, _ := admin.mustGet("/admin/settings")
+		gsCSRF := extractCSRFFromHTML(gsHTML)
+		if gsCSRF == "" {
+			t.Fatal("missing csrf_token on /admin/settings")
+		}
+		var lbuf bytes.Buffer
+		lw := multipart.NewWriter(&lbuf)
+		_ = lw.WriteField("csrf_token", gsCSRF)
+		lfw, _ := lw.CreateFormFile("logo", "logo.png")
+		_, _ = lfw.Write([]byte{
+			0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+			0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+			0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00,
+			0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
+			0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49,
+			0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+		})
+		_ = lw.Close()
+		lReq, _ := http.NewRequest(http.MethodPost, env.appSrv.URL+"/admin/settings/logo", &lbuf)
+		lReq.Header.Set("Content-Type", lw.FormDataContentType())
+		lReq.Header.Set("Origin", env.appSrv.URL)
+		lReq.Header.Set("Sec-Fetch-Site", "same-origin")
+		lResp, err := admin.http.Do(lReq)
+		if err != nil {
+			t.Fatalf("upload logo: %v", err)
+		}
+		_ = lResp.Body.Close()
+		if sc, _, ctHdr := admin.mustGet("/data/logo.png"); sc != http.StatusOK || !strings.HasPrefix(ctHdr.Get("Content-Type"), "image/png") {
+			t.Fatalf("expected /data/logo.png PNG 200, got %d %q", sc, ctHdr.Get("Content-Type"))
+		}
+		if st, _ := admin.doJSON(http.MethodDelete, "/admin/settings/logo", nil); st != http.StatusOK {
+			t.Fatalf("delete logo: %d", st)
+		}
+
+		// User self-service change-password (CSRF protected)
+		_, cpHTML, _ := classic.mustGet("/settings/change-password")
+		cpCSRF := extractCSRFFromHTML(cpHTML)
+		cpResp := classic.doForm("/settings/change-password", url.Values{
+			"csrf_token":       {cpCSRF},
+			"current_password": {"ClassicPass#2026!"},
+			"new_password":     {"ClassicUpdated#2026!"},
+			"confirm_password": {"ClassicUpdated#2026!"},
+		})
+		_ = cpResp.Body.Close()
+		if cpResp.StatusCode != http.StatusSeeOther || !strings.Contains(cpResp.Header.Get("Location"), "success=") {
+			t.Fatalf("change password failed: %d %q", cpResp.StatusCode, cpResp.Header.Get("Location"))
+		}
+		newBrowserClient(t, env.appSrv.URL).loginLocal("classic@example.com", "ClassicUpdated#2026!")
 	})
 }
 

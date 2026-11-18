@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -44,8 +45,9 @@ type DB struct {
 	countsCacheMu   sync.Mutex
 	countsCacheTime time.Time
 	countsCacheVal  DBCounts
-	lockerMu        sync.Mutex // serializes SQLite locker claims/auto-releases to prevent write-upgrade races
-	sessionCache    sync.Map   // map[tokenHash string]cachedSessionUser
+	lockerMu        sync.Mutex    // serializes SQLite locker claims/auto-releases to prevent write-upgrade races
+	sessionCache    sync.Map      // map[tokenHash string]cachedSessionUser
+	newsVersion     atomic.Uint64 // bumped on news mutations so render cache invalidates immediately
 }
 
 // openSQLiteConn opens a single SQLite file with WAL mode and foreign keys

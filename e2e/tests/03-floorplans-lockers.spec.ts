@@ -169,6 +169,11 @@ test.describe('03 - Sites, Floorplans, Seats, Lockers Pagination & Auto-Release 
     await expect(toastContainer).toBeVisible();
     await expect(toastContainer).toContainText('🔓');
     await expect(toastContainer).toContainText('K-01');
+    const k01Toast = toastContainer.locator('div.pointer-events-auto', { hasText: 'K-01' }).first();
+    await Promise.all([
+      page.waitForResponse((r) => r.url().includes('/ack') && r.status() === 200),
+      k01Toast.locator('button[type="button"]').click(),
+    ]);
 
     // Verify locker K-01 is now free in /admin/lockers and code 4829 is preserved
     const lkCheck = await page.request.get(`/api/admin/lockers?site_id=${parisSite.id}&q=K-01&page=1&limit=10`);
