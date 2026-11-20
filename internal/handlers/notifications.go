@@ -81,7 +81,7 @@ func (h *NotificationsHandler) AdminNotificationsPage(w http.ResponseWriter, r *
 		return
 	}
 
-	users, err := h.DB.ListUsers()
+	users, err := h.DB.ListUsersBasic()
 	if err != nil {
 		http.Error(w, "Failed to list users", http.StatusInternalServerError)
 		return
@@ -333,7 +333,7 @@ func (h *NotificationsHandler) AdminSendNotification(w http.ResponseWriter, r *h
 	}
 
 	if isAll {
-		users, err := h.DB.ListUsers()
+		users, err := h.DB.ListUsersBasic()
 		if err != nil {
 			if isJSON {
 				jsonError(w, "Failed to load users", http.StatusInternalServerError)

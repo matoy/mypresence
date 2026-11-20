@@ -108,6 +108,41 @@ func (d *DB) ListSitesWithLockers() ([]*models.Site, error) {
 	return res, nil
 }
 
+// GetSiteWithLockers returns site metadata and locker counts for siteID if it has at least one configured locker.
+func (d *DB) GetSiteWithLockers(siteID int64) (*models.Site, error) {
+	if siteID <= 0 {
+		return nil, nil
+	}
+	var s models.Site
+	err := d.floorplan.QueryRow(
+		"SELECT id, name, country_code, not_corporate_site, seats FROM sites WHERE id = ?",
+		siteID,
+	).Scan(&s.ID, &s.Name, &s.CountryCode, &s.NotCorporateSite, &s.Seats)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	var total, avail int
+	err = d.floorplan.QueryRow(
+		"SELECT COUNT(*), COALESCE(SUM(CASE WHEN status = 'active' AND user_id = 0 THEN 1 ELSE 0 END), 0) FROM lockers WHERE site_id = ?",
+		siteID,
+	).Scan(&total, &avail)
+	if err != nil {
+		return nil, err
+	}
+	if total == 0 {
+		return nil, nil
+	}
+	s.Floorplans = []*models.Floorplan{}
+	s.FloorplanIDs = []int64{}
+	s.LockersCount = total
+	s.AvailableLockersCount = avail
+	return &s, nil
+}
+
 // hydrateLockerUsers enriches UserName, UserEmail, UserDisabled on lockers from core.db.
 func (d *DB) hydrateLockerUsers(lockers []models.Locker) {
 	idSet := make(map[int64]struct{})

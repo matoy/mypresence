@@ -35,7 +35,7 @@ type AdminHandler struct {
 func (h *AdminHandler) TeamsPage(w http.ResponseWriter, r *http.Request) {
 	currentUser := middleware.GetUser(r)
 	teams, _ := h.DB.ListTeams()
-	users, _ := h.DB.ListUsers()
+	users, _ := h.DB.ListUsersBasic()
 	sites, _ := h.DB.ListSites()
 	domains, _ := h.DB.ListDomains()
 

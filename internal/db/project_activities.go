@@ -3,7 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
-	"strings"
+	"sort"
 	"time"
 
 	"github.com/matoy/mypresence/internal/models"
@@ -55,50 +55,50 @@ WHERE p.user_id = ? AND p.date >= ? AND p.date <= ? AND s.billable = ?`), userID
 // for all specified users and dates in [startDate, endDate] that have a billable presence status.
 func (d *DB) GetUsersBillableDatesForRange(userIDs []int64, startDate, endDate string) (map[int64]map[string]float64, error) {
 	result := make(map[int64]map[string]float64)
-	if len(userIDs) == 0 {
+	uniqueIDs := dedupeInt64s(userIDs)
+	if len(uniqueIDs) == 0 {
 		return result, nil
 	}
-	for _, uid := range userIDs {
+	for _, uid := range uniqueIDs {
 		result[uid] = make(map[string]float64)
 	}
 
-	placeholders := make([]string, len(userIDs))
-	args := make([]interface{}, 0, len(userIDs)+3)
-	for i, id := range userIDs {
-		placeholders[i] = "?"
-		args = append(args, id)
-	}
-	args = append(args, startDate, endDate, true)
-
-	query := fmt.Sprintf(`
+	err := forEachInt64Chunk(uniqueIDs, idBatchSize, func(_ []int64, placeholders string, args []interface{}) error {
+		args = append(args, startDate, endDate, true)
+		query := fmt.Sprintf(`
 SELECT p.user_id, p.date, p.half
 FROM presences p
 JOIN statuses s ON p.status_id = s.id
 WHERE p.user_id IN (%s) AND p.date >= ? AND p.date <= ? AND s.billable = ?
-ORDER BY p.user_id, p.date`, strings.Join(placeholders, ","))
+ORDER BY p.user_id, p.date`, placeholders)
 
-	rows, err := d.presence.Query(d.dialect.rebind(query), args...)
+		rows, err := d.presence.Query(d.dialect.rebind(query), args...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close() //nolint:errcheck
+
+		for rows.Next() {
+			var uid int64
+			var date, half string
+			if err := rows.Scan(&uid, &date, &half); err != nil {
+				return err
+			}
+			weight := 1.0
+			if half == "AM" || half == "PM" {
+				weight = 0.5
+			}
+			if result[uid] == nil {
+				result[uid] = make(map[string]float64)
+			}
+			result[uid][date] += weight
+		}
+		return rows.Err()
+	})
 	if err != nil {
 		return result, err
 	}
-	defer rows.Close() //nolint:errcheck
-
-	for rows.Next() {
-		var uid int64
-		var date, half string
-		if err := rows.Scan(&uid, &date, &half); err != nil {
-			return result, err
-		}
-		weight := 1.0
-		if half == "AM" || half == "PM" {
-			weight = 0.5
-		}
-		if result[uid] == nil {
-			result[uid] = make(map[string]float64)
-		}
-		result[uid][date] += weight
-	}
-	return result, rows.Err()
+	return result, nil
 }
 
 // GetUserBillableDatesForMonth returns the billable weight (1.0 for a full day,
@@ -163,57 +163,76 @@ func (d *DB) ListUserActivitiesForMonth(userID int64, year, month int) ([]models
 // GetActivitiesForUsersMonth returns all project activities declared by any of
 // the given users for the given month, ordered by user then date.
 func (d *DB) GetActivitiesForUsersMonth(userIDs []int64, year, month int) ([]models.ProjectActivity, error) {
-	if len(userIDs) == 0 {
+	uniqueIDs := dedupeInt64s(userIDs)
+	if len(uniqueIDs) == 0 {
 		return nil, nil
 	}
 	datePrefix := fmt.Sprintf("%04d-%02d-%%", year, month)
-	placeholders := make([]string, len(userIDs))
-	args := make([]interface{}, 0, len(userIDs)+1)
-	for i, id := range userIDs {
-		placeholders[i] = "?"
-		args = append(args, id)
-	}
-	args = append(args, datePrefix)
-	rows, err := d.projects.Query(
-		`SELECT id, user_id, date, activity_type, jira_key, jira_title, comment, percentage, created_at, updated_at
-         FROM project_activities
-         WHERE user_id IN (`+joinStrings(placeholders, ",")+`) AND date LIKE ?
-         ORDER BY user_id, date, id`, args...)
+	var all []models.ProjectActivity
+	err := forEachInt64Chunk(uniqueIDs, idBatchSize, func(_ []int64, placeholders string, args []interface{}) error {
+		args = append(args, datePrefix)
+		rows, err := d.projects.Query(
+			`SELECT id, user_id, date, activity_type, jira_key, jira_title, comment, percentage, created_at, updated_at
+             FROM project_activities
+             WHERE user_id IN (`+placeholders+`) AND date LIKE ?
+             ORDER BY user_id, date, id`, args...)
+		if err != nil {
+			return err
+		}
+		chunkActs, err := scanProjectActivities(rows)
+		if err != nil {
+			return err
+		}
+		all = append(all, chunkActs...)
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	return scanProjectActivities(rows)
+	if len(uniqueIDs) > idBatchSize && len(all) > 1 {
+		sort.Slice(all, func(i, j int) bool {
+			if all[i].UserID != all[j].UserID {
+				return all[i].UserID < all[j].UserID
+			}
+			if all[i].Date != all[j].Date {
+				return all[i].Date < all[j].Date
+			}
+			return all[i].ID < all[j].ID
+		})
+	}
+	return all, nil
 }
 
 // GetActivitiesForUsersRange returns all project activities declared by any of
 // the given users for the range [startDate, endDate], grouped by user_id.
 func (d *DB) GetActivitiesForUsersRange(userIDs []int64, startDate, endDate string) (map[int64][]models.ProjectActivity, error) {
 	result := make(map[int64][]models.ProjectActivity)
-	if len(userIDs) == 0 {
+	uniqueIDs := dedupeInt64s(userIDs)
+	if len(uniqueIDs) == 0 {
 		return result, nil
 	}
-	placeholders := make([]string, len(userIDs))
-	args := make([]interface{}, 0, len(userIDs)+2)
-	for i, id := range userIDs {
-		placeholders[i] = "?"
-		args = append(args, id)
-	}
-	args = append(args, startDate, endDate)
 
-	rows, err := d.projects.Query(
-		`SELECT id, user_id, date, activity_type, jira_key, jira_title, comment, percentage, created_at, updated_at
-         FROM project_activities
-         WHERE user_id IN (`+joinStrings(placeholders, ",")+`) AND date >= ? AND date <= ?
-         ORDER BY user_id, date, id`, args...)
+	err := forEachInt64Chunk(uniqueIDs, idBatchSize, func(_ []int64, placeholders string, args []interface{}) error {
+		args = append(args, startDate, endDate)
+		rows, err := d.projects.Query(
+			`SELECT id, user_id, date, activity_type, jira_key, jira_title, comment, percentage, created_at, updated_at
+             FROM project_activities
+             WHERE user_id IN (`+placeholders+`) AND date >= ? AND date <= ?
+             ORDER BY user_id, date, id`, args...)
+		if err != nil {
+			return err
+		}
+		activities, err := scanProjectActivities(rows)
+		if err != nil {
+			return err
+		}
+		for _, a := range activities {
+			result[a.UserID] = append(result[a.UserID], a)
+		}
+		return nil
+	})
 	if err != nil {
 		return result, err
-	}
-	activities, err := scanProjectActivities(rows)
-	if err != nil {
-		return result, err
-	}
-	for _, a := range activities {
-		result[a.UserID] = append(result[a.UserID], a)
 	}
 	return result, nil
 }

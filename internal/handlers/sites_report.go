@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/matoy/mypresence/internal/db"
@@ -116,13 +117,16 @@ func (h *FloorplanHandler) buildSitesReportData(r *http.Request) (*SitesReportPa
 		}
 	}
 
-	// Active users mapped to site
-	activeUsersBySite, _ := h.DB.GetActiveUsersBySite()
-	allUsers, _ := h.DB.ListUsers()
+	// Active users mapped to site (single lightweight scan, reusing the same user list)
+	allUsers, _ := h.DB.ListUsersBasic()
+	activeUsersBySite := make(map[int64][]models.User)
 	userToSite := make(map[int64]int64, len(allUsers))
 	for _, u := range allUsers {
 		if u.SiteID > 0 {
 			userToSite[u.ID] = u.SiteID
+			if !u.Disabled {
+				activeUsersBySite[u.SiteID] = append(activeUsersBySite[u.SiteID], u)
+			}
 		}
 	}
 
@@ -310,19 +314,31 @@ func (h *FloorplanHandler) buildSitesReportData(r *http.Request) (*SitesReportPa
 		sitesToProcess = []*models.Site{selectedSite}
 	}
 
-	for _, s := range sitesToProcess {
-		siteHols := make(map[string]models.Holiday)
-		for _, hol := range allHolidays {
-			if models.UserMatchesHoliday(s.CountryCode, hol) {
-				siteHols[hol.Date] = hol
-			}
-		}
+	type countryHolidayInfo struct {
+		hols        map[string]models.Holiday
+		workingDays int
+	}
+	countryCache := make(map[string]countryHolidayInfo)
 
-		workingDaysCount, holidayCount := computeWorkingDaysFromMap(year, month, siteHols)
-		siteWorkingDays := workingDaysCount - holidayCount
-		if siteWorkingDays < 0 {
-			siteWorkingDays = 0
+	for _, s := range sitesToProcess {
+		ckey := strings.ToUpper(strings.TrimSpace(s.CountryCode))
+		chi, ok := countryCache[ckey]
+		if !ok {
+			chi.hols = make(map[string]models.Holiday)
+			for _, hol := range allHolidays {
+				if models.UserMatchesHoliday(s.CountryCode, hol) {
+					chi.hols[hol.Date] = hol
+				}
+			}
+			workingDaysCount, holidayCount := computeWorkingDaysFromMap(year, month, chi.hols)
+			chi.workingDays = workingDaysCount - holidayCount
+			if chi.workingDays < 0 {
+				chi.workingDays = 0
+			}
+			countryCache[ckey] = chi
 		}
+		siteHols := chi.hols
+		siteWorkingDays := chi.workingDays
 
 		siteReservableSeats := reservableSeatsBySite[s.ID]
 

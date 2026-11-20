@@ -24,7 +24,7 @@ type DomainWithDetails struct {
 func (h *AdminHandler) DomainsPage(w http.ResponseWriter, r *http.Request) {
 	domains, _ := h.DB.ListDomains()
 	allTeams, _ := h.DB.ListTeams()
-	users, _ := h.DB.ListUsers()
+	users, _ := h.DB.ListUsersBasic()
 	allManagers, _ := h.DB.GetAllDomainsManagers()
 
 	var domainsList []DomainWithDetails

@@ -765,6 +765,7 @@ FOREIGN KEY (status_id) REFERENCES statuses(id)
 
 	// Secondary indexes for presence lookups and logs
 	_ = d.ensureIndex(d.presence, "idx_presences_date", "presences", "date")
+	_ = d.ensureIndex(d.presence, "idx_presences_date_status", "presences", "date, status_id, user_id, half")
 	_ = d.ensureIndex(d.presence, "idx_presences_user_date_half_status", "presences", "user_id, date, half, status_id")
 	_ = d.ensureIndex(d.presence, "idx_presence_logs_user_date", "presence_logs", "user_id, date")
 	_ = d.ensureIndex(d.presence, "idx_calendar_sync_user_date", "calendar_sync_events", "user_id, date")
@@ -1143,6 +1144,12 @@ WHERE s.id = ? AND s.expires_at > `+d.dialect.now()+` AND u.disabled = `+d.diale
 		return nil, err
 	}
 	u.IsLocal = u.PasswordHash != ""
+	if u.SiteID > 0 {
+		if s, ok, sErr := d.getSiteSummary(u.SiteID); sErr == nil && ok {
+			u.SiteName = s.Name
+			u.SiteCountryCode = s.CountryCode
+		}
+	}
 	d.sessionCache.Store(tokenHash, cachedSessionUser{user: u, cachedAt: time.Now()})
 	return &u, nil
 }
@@ -1408,7 +1415,7 @@ func (d *DB) GetUserByEmail(email string) (*models.User, error) {
 	}
 	u.IsLocal = u.PasswordHash != ""
 	if u.SiteID > 0 {
-		if s, sErr := d.GetSite(u.SiteID); sErr == nil && s != nil {
+		if s, ok, sErr := d.getSiteSummary(u.SiteID); sErr == nil && ok {
 			u.SiteName = s.Name
 			u.SiteCountryCode = s.CountryCode
 		}
@@ -1431,7 +1438,7 @@ func (d *DB) GetUserByID(id int64) (*models.User, error) {
 	}
 	u.IsLocal = u.PasswordHash != ""
 	if u.SiteID > 0 {
-		if s, sErr := d.GetSite(u.SiteID); sErr == nil && s != nil {
+		if s, ok, sErr := d.getSiteSummary(u.SiteID); sErr == nil && ok {
 			u.SiteName = s.Name
 			u.SiteCountryCode = s.CountryCode
 		}
@@ -1457,6 +1464,15 @@ func (d *DB) UpsertUser(email, name string) (*models.User, error) {
 }
 
 func (d *DB) ListUsers() ([]models.User, error) {
+	return d.listUsers(true)
+}
+
+// ListUsersBasic returns all users with site metadata populated, skipping user_teams hydration.
+func (d *DB) ListUsersBasic() ([]models.User, error) {
+	return d.listUsers(false)
+}
+
+func (d *DB) listUsers(includeTeams bool) ([]models.User, error) {
 	rows, err := d.core.Query("SELECT id, email, name, role, COALESCE(password_hash,''), disabled, created_at, COALESCE(site_id, 0), COALESCE(language, ''), last_login_at FROM users ORDER BY name")
 	if err != nil {
 		return nil, err
@@ -1480,7 +1496,10 @@ func (d *DB) ListUsers() ([]models.User, error) {
 		return nil, err
 	}
 	users = d.HydrateUsersSites(users)
-	return d.HydrateUsersTeams(users), nil
+	if includeTeams {
+		users = d.HydrateUsersTeams(users)
+	}
+	return users, nil
 }
 
 // UpdateUserSite updates a user's assigned site.
@@ -1532,6 +1551,29 @@ func (d *DB) GetUsersBySite(siteID int64) ([]models.User, error) {
 
 const idBatchSize = 500
 
+func dedupeInt64s(ids []int64) []int64 {
+	if len(ids) <= 1 {
+		return ids
+	}
+	seen := make(map[int64]struct{}, len(ids))
+	out := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		if _, ok := seen[id]; !ok {
+			seen[id] = struct{}{}
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+func setKeysToInt64Slice(ids map[int64]struct{}) []int64 {
+	out := make([]int64, 0, len(ids))
+	for id := range ids {
+		out = append(out, id)
+	}
+	return out
+}
+
 // forEachInt64Chunk splits ids into batches of at most chunkSize and invokes fn with
 // SQL placeholder list ("?,?,...") and corresponding []interface{} slice.
 func forEachInt64Chunk(ids []int64, chunkSize int, fn func(chunk []int64, placeholders string, args []interface{}) error) error {
@@ -1563,6 +1605,24 @@ func forEachInt64Chunk(ids []int64, chunkSize int, fn func(chunk []int64, placeh
 type siteSummary struct {
 	Name        string
 	CountryCode string
+}
+
+// getSiteSummary fetches a single site's name and country_code without scanning floorplans or lockers.
+func (d *DB) getSiteSummary(siteID int64) (siteSummary, bool, error) {
+	if siteID <= 0 {
+		return siteSummary{}, false, nil
+	}
+	var s siteSummary
+	err := d.floorplan.QueryRow(
+		"SELECT name, COALESCE(country_code, '') FROM sites WHERE id = ?", siteID,
+	).Scan(&s.Name, &s.CountryCode)
+	if err == sql.ErrNoRows {
+		return siteSummary{}, false, nil
+	}
+	if err != nil {
+		return siteSummary{}, false, err
+	}
+	return s, true, nil
 }
 
 // listSiteSummaries returns a lightweight id -> (name, country_code) map without querying floorplans or lockers.
@@ -1978,6 +2038,53 @@ ORDER BY CASE WHEN ut.left_at IS NULL THEN 0 ELSE 1 END, u.name
 	return d.HydrateTeamMembersSites(members), nil
 }
 
+// GetAllTeamMembersByTeams returns deduplicated team members (active and departed)
+// across all given team IDs, active members first.
+func (d *DB) GetAllTeamMembersByTeams(teamIDs []int64) ([]models.TeamMember, error) {
+	uniqueTeamIDs := dedupeInt64s(teamIDs)
+	if len(uniqueTeamIDs) == 0 {
+		return nil, nil
+	}
+
+	seen := make(map[int64]int) // userID -> index in members
+	var members []models.TeamMember
+
+	err := forEachInt64Chunk(uniqueTeamIDs, idBatchSize, func(_ []int64, placeholders string, args []interface{}) error {
+		rows, err := d.core.Query(fmt.Sprintf(`
+SELECT u.id, u.email, u.name, u.role, COALESCE(u.password_hash,''), u.disabled, u.created_at, COALESCE(u.site_id, 0), COALESCE(u.language, ''), ut.left_at
+FROM users u
+JOIN user_teams ut ON u.id = ut.user_id
+WHERE ut.team_id IN (%s)
+ORDER BY CASE WHEN ut.left_at IS NULL THEN 0 ELSE 1 END, u.name, u.id
+`, placeholders), args...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close() //nolint:errcheck
+
+		for rows.Next() {
+			var m models.TeamMember
+			if err := rows.Scan(&m.ID, &m.Email, &m.Name, &m.Roles, &m.PasswordHash, &m.Disabled, &m.CreatedAt, &m.SiteID, &m.Language, &m.LeftAt); err != nil {
+				return err
+			}
+			m.IsLocal = m.PasswordHash != ""
+			if idx, ok := seen[m.ID]; ok {
+				if members[idx].LeftAt != nil && m.LeftAt == nil {
+					members[idx] = m
+				}
+				continue
+			}
+			seen[m.ID] = len(members)
+			members = append(members, m)
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return nil, err
+	}
+	return d.HydrateTeamMembersSites(members), nil
+}
+
 // GetAllTeamsMembers returns all members of all teams, grouped by team ID (active first).
 func (d *DB) GetAllTeamsMembers() (map[int64][]models.TeamMember, error) {
 	rows, err := d.core.Query(`
@@ -2226,11 +2333,7 @@ ORDER BY tl.team_id, u.name
 	}
 	defer rows.Close() //nolint:errcheck
 
-	sites, _ := d.ListSites()
-	siteMap := make(map[int64]*models.Site, len(sites))
-	for _, s := range sites {
-		siteMap[s.ID] = s
-	}
+	siteMap, _ := d.listSiteSummaries()
 
 	leadersMap := make(map[int64][]models.User)
 	leaderIDsMap := make(map[int64][]int64)
@@ -2242,7 +2345,7 @@ ORDER BY tl.team_id, u.name
 			return nil, nil, err
 		}
 		u.IsLocal = u.PasswordHash != ""
-		if s, ok := siteMap[u.SiteID]; ok && s != nil {
+		if s, ok := siteMap[u.SiteID]; ok {
 			u.SiteName = s.Name
 			u.SiteCountryCode = s.CountryCode
 		}
@@ -2765,21 +2868,40 @@ func (d *DB) GetHolidayMap(startDate, endDate string) (map[string]models.Holiday
 	return result, nil
 }
 
+func buildHolidayMapForCountry(allHolidays []models.Holiday, country string) map[string]models.Holiday {
+	result := make(map[string]models.Holiday)
+	for _, h := range allHolidays {
+		if models.UserMatchesHoliday(country, h) {
+			if _, ok := result[h.Date]; !ok || !h.AllowImputed {
+				result[h.Date] = h
+			}
+		}
+	}
+	return result
+}
+
+// GetHolidayMapForCountry returns the map of holidays applicable to countryCode without querying users or sites.
+func (d *DB) GetHolidayMapForCountry(countryCode, startDate, endDate string) (map[string]models.Holiday, error) {
+	allHolidays, err := d.GetHolidaysInRange(startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+	return buildHolidayMapForCountry(allHolidays, strings.TrimSpace(countryCode)), nil
+}
+
 // GetUserHolidayMap returns the map of holidays applicable to a given user based on their assigned site's country.
 // Global holidays (CountryCode == "") apply to all users.
 // A country-specific holiday applies if the user is assigned to a site located in one of the holiday's countries.
 func (d *DB) GetUserHolidayMap(userID int64, startDate, endDate string) (map[string]models.Holiday, error) {
-	user, err := d.GetUserByID(userID)
+	var siteID int64
+	err := d.core.QueryRow("SELECT COALESCE(site_id, 0) FROM users WHERE id = ?", userID).Scan(&siteID)
 	if err != nil {
 		return nil, err
 	}
 	var userCountry string
-	if user.SiteID > 0 {
-		siteMap, err := d.listSiteSummaries()
-		if err == nil {
-			if site, ok := siteMap[user.SiteID]; ok {
-				userCountry = strings.TrimSpace(site.CountryCode)
-			}
+	if siteID > 0 {
+		if s, ok, sErr := d.getSiteSummary(siteID); sErr == nil && ok {
+			userCountry = strings.TrimSpace(s.CountryCode)
 		}
 	}
 
@@ -2787,16 +2909,7 @@ func (d *DB) GetUserHolidayMap(userID int64, startDate, endDate string) (map[str
 	if err != nil {
 		return nil, err
 	}
-
-	result := make(map[string]models.Holiday)
-	for _, h := range allHolidays {
-		if models.UserMatchesHoliday(userCountry, h) {
-			if _, ok := result[h.Date]; !ok || !h.AllowImputed {
-				result[h.Date] = h
-			}
-		}
-	}
-	return result, nil
+	return buildHolidayMapForCountry(allHolidays, userCountry), nil
 }
 
 // GetUsersHolidayMaps returns holiday maps for multiple users in a batch, avoiding N+1 queries.
@@ -2846,14 +2959,7 @@ func (d *DB) GetUsersHolidayMaps(userIDs []int64, startDate, endDate string) (ma
 		key := strings.ToUpper(country)
 		uMap, cached := byCountry[key]
 		if !cached {
-			uMap = make(map[string]models.Holiday)
-			for _, h := range allHolidays {
-				if models.UserMatchesHoliday(country, h) {
-					if _, ok := uMap[h.Date]; !ok || !h.AllowImputed {
-						uMap[h.Date] = h
-					}
-				}
-			}
+			uMap = buildHolidayMapForCountry(allHolidays, country)
 			byCountry[key] = uMap
 		}
 		result[uid] = uMap
@@ -3118,29 +3224,10 @@ WHERE pl.user_id IN (%s)`, strings.Join(placeholders, ","))
 // If a user subsequently self-declared on that date, it is not considered an override.
 func (d *DB) GetPresenceOverrides(userIDs []int64, startDate, endDate string) (map[int64]map[string]models.PresenceOverride, error) {
 	result := make(map[int64]map[string]models.PresenceOverride)
-	if len(userIDs) == 0 {
+	uniqueIDs := dedupeInt64s(userIDs)
+	if len(uniqueIDs) == 0 {
 		return result, nil
 	}
-
-	placeholders := make([]string, len(userIDs))
-	args := make([]interface{}, 0, len(userIDs)+2)
-	for i, id := range userIDs {
-		placeholders[i] = "?"
-		args = append(args, id)
-	}
-	args = append(args, startDate, endDate)
-
-	// Fetch logs in ascending chronological order so that the last entry per (user_id, date) is the final state.
-	query := fmt.Sprintf(
-		"SELECT id, user_id, actor_id, action, date, half, created_at FROM presence_logs WHERE user_id IN (%s) AND date >= ? AND date <= ? ORDER BY created_at ASC, id ASC",
-		strings.Join(placeholders, ","),
-	)
-
-	rows, err := d.presence.Query(query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close() //nolint:errcheck
 
 	type logEntry struct {
 		actorID int64
@@ -3150,23 +3237,39 @@ func (d *DB) GetPresenceOverrides(userIDs []int64, startDate, endDate string) (m
 	latestPerUserDate := make(map[int64]map[string]logEntry)
 	actorIDs := make(map[int64]struct{})
 
-	for rows.Next() {
-		var id, userID, actorID int64
-		var action, date, half string
-		var createdAt time.Time
-		if err := rows.Scan(&id, &userID, &actorID, &action, &date, &half, &createdAt); err != nil {
-			return nil, err
+	// Fetch logs in ascending chronological order per user so that the last entry per (user_id, date) is the final state.
+	err := forEachInt64Chunk(uniqueIDs, idBatchSize, func(_ []int64, placeholders string, args []interface{}) error {
+		args = append(args, startDate, endDate)
+		query := fmt.Sprintf(
+			"SELECT id, user_id, actor_id, action, date, half, created_at FROM presence_logs WHERE user_id IN (%s) AND date >= ? AND date <= ? ORDER BY created_at ASC, id ASC",
+			placeholders,
+		)
+
+		rows, err := d.presence.Query(query, args...)
+		if err != nil {
+			return err
 		}
-		if latestPerUserDate[userID] == nil {
-			latestPerUserDate[userID] = make(map[string]logEntry)
+		defer rows.Close() //nolint:errcheck
+
+		for rows.Next() {
+			var id, userID, actorID int64
+			var action, date, half string
+			var createdAt time.Time
+			if err := rows.Scan(&id, &userID, &actorID, &action, &date, &half, &createdAt); err != nil {
+				return err
+			}
+			if latestPerUserDate[userID] == nil {
+				latestPerUserDate[userID] = make(map[string]logEntry)
+			}
+			latestPerUserDate[userID][date] = logEntry{
+				actorID: actorID,
+				action:  action,
+				half:    half,
+			}
 		}
-		latestPerUserDate[userID][date] = logEntry{
-			actorID: actorID,
-			action:  action,
-			half:    half,
-		}
-	}
-	if err := rows.Err(); err != nil {
+		return rows.Err()
+	})
+	if err != nil {
 		return nil, err
 	}
 
@@ -3223,91 +3326,42 @@ func (d *DB) GetHolidayName(id int64) string {
 	return name
 }
 
-// fetchUserNames batch-fetches user names from core.db.
-func (d *DB) fetchUserNames(ids map[int64]struct{}) map[int64]string {
+// fetchNamesByIDs batch-fetches id -> name mappings across chunks of IDs.
+func fetchNamesByIDs(conn *rebindDB, queryPrefix string, ids map[int64]struct{}) map[int64]string {
 	if len(ids) == 0 {
 		return nil
 	}
-	placeholders := make([]string, 0, len(ids))
-	args := make([]interface{}, 0, len(ids))
-	for id := range ids {
-		placeholders = append(placeholders, "?")
-		args = append(args, id)
-	}
-	rows, err := d.core.Query(
-		"SELECT id, name FROM users WHERE id IN ("+strings.Join(placeholders, ",")+")",
-		args...,
-	)
-	if err != nil {
-		return nil
-	}
-	defer rows.Close() //nolint:errcheck
-	names := make(map[int64]string)
-	for rows.Next() {
-		var id int64
-		var name string
-		rows.Scan(&id, &name) //nolint:errcheck
-		names[id] = name
-	}
+	names := make(map[int64]string, len(ids))
+	_ = forEachInt64Chunk(setKeysToInt64Slice(ids), idBatchSize, func(_ []int64, placeholders string, args []interface{}) error {
+		rows, err := conn.Query(queryPrefix+placeholders+")", args...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close() //nolint:errcheck
+		for rows.Next() {
+			var id int64
+			var name string
+			rows.Scan(&id, &name) //nolint:errcheck
+			names[id] = name
+		}
+		return rows.Err()
+	})
 	return names
+}
+
+// fetchUserNames batch-fetches user names from core.db.
+func (d *DB) fetchUserNames(ids map[int64]struct{}) map[int64]string {
+	return fetchNamesByIDs(d.core, "SELECT id, name FROM users WHERE id IN (", ids)
 }
 
 // fetchTeamNames batch-fetches team names from core.db.
 func (d *DB) fetchTeamNames(ids map[int64]struct{}) map[int64]string {
-	if len(ids) == 0 {
-		return nil
-	}
-	placeholders := make([]string, 0, len(ids))
-	args := make([]interface{}, 0, len(ids))
-	for id := range ids {
-		placeholders = append(placeholders, "?")
-		args = append(args, id)
-	}
-	rows, err := d.core.Query(
-		"SELECT id, name FROM teams WHERE id IN ("+strings.Join(placeholders, ",")+")",
-		args...,
-	)
-	if err != nil {
-		return nil
-	}
-	defer rows.Close() //nolint:errcheck
-	names := make(map[int64]string)
-	for rows.Next() {
-		var id int64
-		var name string
-		rows.Scan(&id, &name) //nolint:errcheck
-		names[id] = name
-	}
-	return names
+	return fetchNamesByIDs(d.core, "SELECT id, name FROM teams WHERE id IN (", ids)
 }
 
 // fetchStatusNames batch-fetches status names from presence.db.
 func (d *DB) fetchStatusNames(ids map[int64]struct{}) map[int64]string {
-	if len(ids) == 0 {
-		return nil
-	}
-	placeholders := make([]string, 0, len(ids))
-	args := make([]interface{}, 0, len(ids))
-	for id := range ids {
-		placeholders = append(placeholders, "?")
-		args = append(args, id)
-	}
-	rows, err := d.presence.Query(
-		"SELECT id, name FROM statuses WHERE id IN ("+strings.Join(placeholders, ",")+")",
-		args...,
-	)
-	if err != nil {
-		return nil
-	}
-	defer rows.Close() //nolint:errcheck
-	names := make(map[int64]string)
-	for rows.Next() {
-		var id int64
-		var name string
-		rows.Scan(&id, &name) //nolint:errcheck
-		names[id] = name
-	}
-	return names
+	return fetchNamesByIDs(d.presence, "SELECT id, name FROM statuses WHERE id IN (", ids)
 }
 
 // fetchHolidayNames batch-fetches holiday names from presence.db.
@@ -3528,6 +3582,7 @@ func (d *DB) UpdateSite(s models.Site) error {
 	if err != nil {
 		return err
 	}
+	d.ClearSessionCache()
 	if s.FloorplanIDs != nil {
 		return d.SetSiteFloorplans(s.ID, s.FloorplanIDs)
 	}
@@ -3536,7 +3591,7 @@ func (d *DB) UpdateSite(s models.Site) error {
 
 // GetActiveUsersBySite returns a map of site_id -> list of active (non-disabled) users attached to that site.
 func (d *DB) GetActiveUsersBySite() (map[int64][]models.User, error) {
-	users, err := d.ListUsers()
+	users, err := d.ListUsersBasic()
 	if err != nil {
 		return nil, err
 	}
@@ -3646,6 +3701,9 @@ func (d *DB) DeleteSite(id int64) error {
 	_, _ = d.floorplan.Exec("UPDATE floorplans SET site_id = 0 WHERE site_id = ?", id)
 	_, _ = d.floorplan.Exec("DELETE FROM lockers WHERE site_id = ?", id)
 	_, err := d.floorplan.Exec("DELETE FROM sites WHERE id = ?", id)
+	if err == nil {
+		d.ClearSessionCache()
+	}
 	return err
 }
 
@@ -4099,43 +4157,44 @@ func (d *DB) GetUserReservationDates(userID int64, startDate, endDate string) (m
 	return m, rows.Err()
 }
 
-// GetUsersReservationDates returns a map of userID -> date -> bool for desk reservations in a single batch query.
+// GetUsersReservationDates returns a map of userID -> date -> bool for desk reservations in batched queries.
 func (d *DB) GetUsersReservationDates(userIDs []int64, startDate, endDate string) (map[int64]map[string]bool, error) {
-	result := make(map[int64]map[string]bool, len(userIDs))
-	if len(userIDs) == 0 {
+	uniqueIDs := dedupeInt64s(userIDs)
+	result := make(map[int64]map[string]bool, len(uniqueIDs))
+	if len(uniqueIDs) == 0 {
 		return result, nil
 	}
-	for _, uid := range userIDs {
+	for _, uid := range uniqueIDs {
 		result[uid] = make(map[string]bool)
 	}
-	placeholders := make([]string, len(userIDs))
-	args := make([]interface{}, 0, len(userIDs)+2)
-	for i, uid := range userIDs {
-		placeholders[i] = "?"
-		args = append(args, uid)
-	}
-	args = append(args, startDate, endDate)
-	query := fmt.Sprintf(
-		`SELECT DISTINCT user_id, date FROM seat_reservations WHERE user_id IN (%s) AND (guest_name IS NULL OR guest_name = '') AND date >= ? AND date <= ?`,
-		strings.Join(placeholders, ","),
-	)
-	rows, err := d.floorplan.Query(d.dialect.rebind(query), args...)
+	err := forEachInt64Chunk(uniqueIDs, idBatchSize, func(_ []int64, placeholders string, args []interface{}) error {
+		args = append(args, startDate, endDate)
+		query := fmt.Sprintf(
+			`SELECT DISTINCT user_id, date FROM seat_reservations WHERE user_id IN (%s) AND (guest_name IS NULL OR guest_name = '') AND date >= ? AND date <= ?`,
+			placeholders,
+		)
+		rows, err := d.floorplan.Query(d.dialect.rebind(query), args...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close() //nolint:errcheck
+		for rows.Next() {
+			var uid int64
+			var date string
+			if err := rows.Scan(&uid, &date); err != nil {
+				return err
+			}
+			if result[uid] == nil {
+				result[uid] = make(map[string]bool)
+			}
+			result[uid][date] = true
+		}
+		return rows.Err()
+	})
 	if err != nil {
 		return result, err
 	}
-	defer rows.Close() //nolint:errcheck
-	for rows.Next() {
-		var uid int64
-		var date string
-		if err := rows.Scan(&uid, &date); err != nil {
-			return result, err
-		}
-		if result[uid] == nil {
-			result[uid] = make(map[string]bool)
-		}
-		result[uid][date] = true
-	}
-	return result, rows.Err()
+	return result, nil
 }
 
 // GetUserReservationDetails returns detailed reservations (self and guests) for a user in the date range.

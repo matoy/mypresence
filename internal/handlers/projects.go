@@ -246,7 +246,7 @@ func (h *ProjectsHandler) SetProjectTime(w http.ResponseWriter, r *http.Request)
 func (h *ProjectsHandler) AdminProjectsPage(w http.ResponseWriter, r *http.Request) {
 	projects, _ := h.DB.ListProjects()
 	teams, _ := h.DB.ListTeams()
-	allUsers, _ := h.DB.ListUsers()
+	allUsers, _ := h.DB.ListUsersBasic()
 
 	query := r.URL.Query()
 	filterText := query.Get("q")
@@ -459,7 +459,11 @@ func buildMonthKeysFromRange(dateFrom, dateTo string) []string {
 	return keys
 }
 
-func getAccessibleReportTeamIDs(database *db.DB, currentUser *models.User) []int64 {
+func resolveAccessibleReportTeams(database *db.DB, currentUser *models.User) ([]int64, []models.Team) {
+	allTeams, _ := database.ListTeams()
+	if currentUser.HasAnyRole(models.RoleProjectsManager, models.RoleProjectsViewer, models.RoleGlobal) {
+		return nil, allTeams
+	}
 	ledIDs, _ := database.GetLedTeamIDs(currentUser.ID)
 	idMap := make(map[int64]bool, len(ledIDs))
 	for _, id := range ledIDs {
@@ -470,39 +474,31 @@ func getAccessibleReportTeamIDs(database *db.DB, currentUser *models.User) []int
 		for _, d := range userDomains {
 			domMap[d.ID] = true
 		}
-		if allTeams, err := database.ListTeams(); err == nil {
-			for _, t := range allTeams {
-				if domMap[t.DomainID] {
-					idMap[t.ID] = true
-				}
+		for _, t := range allTeams {
+			if domMap[t.DomainID] {
+				idMap[t.ID] = true
 			}
 		}
 	}
-	var res []int64
+	res := make([]int64, 0, len(idMap))
 	for id := range idMap {
 		res = append(res, id)
 	}
-	return res
+	return res, allTeams
 }
 
-// reportTabVisibility determines whether the "Projects view" and "Tasks view"
-// tabs should be shown on the projects report page for the given user.
-// projects_manager/projects_viewer always see both (global visibility); a
-// team leader only sees the tab(s) matching the type(s) of team(s) they lead
-// (manual-timesheet teams -> Tasks view, others -> Projects view).
-func (h *ProjectsHandler) reportTabVisibility(currentUser *models.User) (showProjects, showTasks bool) {
+// reportTabVisibilityFromTeams determines tab visibility from preloaded accessible team IDs and team metadata.
+func reportTabVisibilityFromTeams(currentUser *models.User, accessibleIDs []int64, allTeams []models.Team) (showProjects, showTasks bool) {
 	if currentUser.HasAnyRole(models.RoleProjectsManager, models.RoleProjectsViewer, models.RoleGlobal) {
 		return true, true
 	}
-	ids := getAccessibleReportTeamIDs(h.DB, currentUser)
-	if len(ids) == 0 {
+	if len(accessibleIDs) == 0 {
 		return true, true
 	}
-	myTeamIDs := make(map[int64]bool, len(ids))
-	for _, id := range ids {
+	myTeamIDs := make(map[int64]bool, len(accessibleIDs))
+	for _, id := range accessibleIDs {
 		myTeamIDs[id] = true
 	}
-	allTeams, _ := h.DB.ListTeams()
 	for _, t := range allTeams {
 		if !myTeamIDs[t.ID] {
 			continue
@@ -525,7 +521,18 @@ func (h *ProjectsHandler) ProjectsReportPage(w http.ResponseWriter, r *http.Requ
 	currentUser := middleware.GetUser(r)
 	now := time.Now()
 
-	showProjectsTab, showTasksTab := h.reportTabVisibility(currentUser)
+	var showProjectsTab, showTasksTab bool
+	var hasPreloadedScope bool
+	var teamIDFilter []int64
+	var preloadedTeams []models.Team
+
+	if currentUser.HasAnyRole(models.RoleProjectsManager, models.RoleProjectsViewer, models.RoleGlobal) {
+		showProjectsTab, showTasksTab = true, true
+	} else {
+		teamIDFilter, preloadedTeams = resolveAccessibleReportTeams(h.DB, currentUser)
+		showProjectsTab, showTasksTab = reportTabVisibilityFromTeams(currentUser, teamIDFilter, preloadedTeams)
+		hasPreloadedScope = true
+	}
 
 	view := r.URL.Query().Get("view")
 	if view == "activities" && !showTasksTab {
@@ -561,7 +568,10 @@ func (h *ProjectsHandler) ProjectsReportPage(w http.ResponseWriter, r *http.Requ
 		filterDateTo = ""
 	}
 
-	allProjects, allTeams := h.buildProjectReportRows(currentUser, monthKeys)
+	if !hasPreloadedScope {
+		teamIDFilter, preloadedTeams = resolveAccessibleReportTeams(h.DB, currentUser)
+	}
+	allProjects, allTeams := h.buildProjectReportRowsWithScope(teamIDFilter, preloadedTeams, monthKeys)
 
 	filterText := query.Get("q")
 	filterActive := query.Get("active") // "1", "0", or ""
@@ -735,13 +745,12 @@ func (h *ProjectsHandler) SetProjectMembersAPI(w http.ResponseWriter, r *http.Re
 // user's billable-days cap for the given year/month.
 func (h *ProjectsHandler) exceedsBillableCap(userID, projectID int64, year, month int, days float64) bool {
 	billable, _ := h.DB.GetUserBillableDaysForMonth(userID, year, month)
-	current, _ := h.DB.GetUserTotalDeclaredForMonth(userID, year, month)
 	entries, _ := h.DB.GetUserProjectEntriesForMonth(userID, year, month)
-	var existing float64
+	var current, existing float64
 	for _, e := range entries {
+		current += e.Days
 		if e.ProjectID == projectID {
 			existing = e.Days
-			break
 		}
 	}
 	return current-existing+days > billable+0.001 // small tolerance for float
@@ -750,22 +759,18 @@ func (h *ProjectsHandler) exceedsBillableCap(userID, projectID int64, year, mont
 // buildProjectReportRows loads and assembles the report rows for the given user
 // and set of month keys, restricting to the user's teams when they lack admin/viewer role.
 func (h *ProjectsHandler) buildProjectReportRows(currentUser *models.User, monthKeys []string) ([]models.ProjectReportRow, []models.Team) {
-	var teamIDFilter []int64
-	if !currentUser.HasAnyRole(models.RoleProjectsManager, models.RoleProjectsViewer, models.RoleGlobal) {
-		teamIDFilter = getAccessibleReportTeamIDs(h.DB, currentUser)
-	}
+	teamIDFilter, allTeams := resolveAccessibleReportTeams(h.DB, currentUser)
+	return h.buildProjectReportRowsWithScope(teamIDFilter, allTeams, monthKeys)
+}
+
+func (h *ProjectsHandler) buildProjectReportRowsWithScope(teamIDFilter []int64, allTeams []models.Team, monthKeys []string) ([]models.ProjectReportRow, []models.Team) {
 	allProjects, _ := h.DB.ListProjectsByTeams(teamIDFilter)
-	allTeams, _ := h.DB.ListTeams()
-	allUsers, _ := h.DB.ListUsers()
-	userMap := make(map[int64]models.User)
+	allUsers, _ := h.DB.ListUsersBasic()
+	userMap := make(map[int64]models.User, len(allUsers))
 	for _, u := range allUsers {
 		userMap[u.ID] = u
 	}
-	projectIDs := make([]int64, 0, len(allProjects))
-	for _, p := range allProjects {
-		projectIDs = append(projectIDs, p.ID)
-	}
-	reportRows, _ := h.DB.GetProjectsReport(projectIDs, monthKeys, userMap)
+	reportRows, _ := h.DB.BuildProjectsReport(allProjects, monthKeys, userMap)
 	enrichReportTotals(reportRows, monthKeys)
 	return reportRows, allTeams
 }

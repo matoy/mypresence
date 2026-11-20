@@ -2,6 +2,7 @@ package db
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -154,6 +155,50 @@ ORDER BY name`, true, firstDay)
 		}
 	}
 	return projects, rows.Err()
+}
+
+// GetProjectsByIDs loads the requested projects in batched queries and populates TeamName once.
+func (d *DB) GetProjectsByIDs(ids []int64) (map[int64]models.Project, error) {
+	uniqueIDs := dedupeInt64s(ids)
+	result := make(map[int64]models.Project, len(uniqueIDs))
+	if len(uniqueIDs) == 0 {
+		return result, nil
+	}
+
+	err := forEachInt64Chunk(uniqueIDs, idBatchSize, func(_ []int64, placeholders string, args []interface{}) error {
+		rows, err := d.projects.Query(
+			`SELECT id, name, code, team_id, active, mini_project, start_date, end_date, initial_end_date, created_at
+             FROM projects WHERE id IN (`+placeholders+`)`,
+			args...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close() //nolint:errcheck
+		for rows.Next() {
+			var p models.Project
+			var createdAt string
+			if err := rows.Scan(&p.ID, &p.Name, &p.Code, &p.TeamID, &p.Active, &p.MiniProject, &p.StartDate, &p.EndDate, &p.InitialEndDate, &createdAt); err != nil {
+				return err
+			}
+			p.CreatedAt, _ = time.Parse("2006-01-02T15:04:05Z", createdAt)
+			result[p.ID] = p
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if len(result) > 0 {
+		teamMap, _ := d.teamNameMap()
+		for id, p := range result {
+			if n, ok := teamMap[p.TeamID]; ok {
+				p.TeamName = n
+				result[id] = p
+			}
+		}
+	}
+	return result, nil
 }
 
 // GetProject returns a single project by ID.
@@ -394,10 +439,11 @@ WHERE user_id = ? AND year = ? AND month = ?`, userID, year, month).Scan(&total)
 // of total days declared across all projects for the specified users and monthKeys ("YYYY-MM").
 func (d *DB) GetUsersTotalDeclaredForMonths(userIDs []int64, monthKeys []string) (map[int64]map[string]float64, error) {
 	result := make(map[int64]map[string]float64)
-	if len(userIDs) == 0 || len(monthKeys) == 0 {
+	uniqueIDs := dedupeInt64s(userIDs)
+	if len(uniqueIDs) == 0 || len(monthKeys) == 0 {
 		return result, nil
 	}
-	for _, uid := range userIDs {
+	for _, uid := range uniqueIDs {
 		result[uid] = make(map[string]float64)
 	}
 
@@ -422,45 +468,47 @@ func (d *DB) GetUsersTotalDeclaredForMonths(userIDs []int64, monthKeys []string)
 		return result, nil
 	}
 
-	userPlaceholders := make([]string, len(userIDs))
-	args := make([]interface{}, 0, len(userIDs)+len(yms)*2)
-	for i, id := range userIDs {
-		userPlaceholders[i] = "?"
-		args = append(args, id)
-	}
-
 	monthConditions := make([]string, len(yms))
+	monthArgs := make([]interface{}, 0, len(yms)*2)
 	for i, ym := range yms {
 		monthConditions[i] = "(year = ? AND month = ?)"
-		args = append(args, ym.year, ym.month)
+		monthArgs = append(monthArgs, ym.year, ym.month)
 	}
+	monthClause := strings.Join(monthConditions, " OR ")
 
-	query := fmt.Sprintf(`
+	err := forEachInt64Chunk(uniqueIDs, idBatchSize, func(_ []int64, placeholders string, args []interface{}) error {
+		args = append(args, monthArgs...)
+		query := fmt.Sprintf(`
 SELECT user_id, year, month, COALESCE(SUM(days), 0)
 FROM project_time_entries
 WHERE user_id IN (%s) AND (%s)
-GROUP BY user_id, year, month`, strings.Join(userPlaceholders, ","), strings.Join(monthConditions, " OR "))
+GROUP BY user_id, year, month`, placeholders, monthClause)
 
-	rows, err := d.projects.Query(d.dialect.rebind(query), args...)
+		rows, err := d.projects.Query(d.dialect.rebind(query), args...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close() //nolint:errcheck
+
+		for rows.Next() {
+			var uid int64
+			var y, m int
+			var days float64
+			if err := rows.Scan(&uid, &y, &m, &days); err != nil {
+				return err
+			}
+			key := fmt.Sprintf("%04d-%02d", y, m)
+			if result[uid] == nil {
+				result[uid] = make(map[string]float64)
+			}
+			result[uid][key] = days
+		}
+		return rows.Err()
+	})
 	if err != nil {
 		return result, err
 	}
-	defer rows.Close() //nolint:errcheck
-
-	for rows.Next() {
-		var uid int64
-		var y, m int
-		var days float64
-		if err := rows.Scan(&uid, &y, &m, &days); err != nil {
-			return result, err
-		}
-		key := fmt.Sprintf("%04d-%02d", y, m)
-		if result[uid] == nil {
-			result[uid] = make(map[string]float64)
-		}
-		result[uid][key] = days
-	}
-	return result, rows.Err()
+	return result, nil
 }
 
 // SetProjectTimeEntry upserts a user's declared days for a project/month.
@@ -499,6 +547,72 @@ WHERE p.user_id = ? AND p.date LIKE ? AND s.billable = ?`, userID, datePrefix, t
 
 // ─── Report data ──────────────────────────────────────────────────────────────
 
+func (d *DB) loadProjectTimeEntries(projectIDs []int64) (map[int64]map[int64]map[string]float64, map[int64]map[int64]float64, error) {
+	entryMap := make(map[int64]map[int64]map[string]float64) // project -> user -> month -> days
+	allTime := make(map[int64]map[int64]float64)             // project -> user -> total
+	uniqueIDs := dedupeInt64s(projectIDs)
+	if len(uniqueIDs) == 0 {
+		return entryMap, allTime, nil
+	}
+
+	err := forEachInt64Chunk(uniqueIDs, idBatchSize, func(_ []int64, placeholders string, args []interface{}) error {
+		rows, err := d.projects.Query(
+			`SELECT project_id, user_id, year, month, days
+             FROM project_time_entries
+             WHERE project_id IN (`+placeholders+`)`,
+			args...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close() //nolint:errcheck
+
+		for rows.Next() {
+			var e models.ProjectTimeEntry
+			if err := rows.Scan(&e.ProjectID, &e.UserID, &e.Year, &e.Month, &e.Days); err != nil {
+				return err
+			}
+			if entryMap[e.ProjectID] == nil {
+				entryMap[e.ProjectID] = make(map[int64]map[string]float64)
+			}
+			if entryMap[e.ProjectID][e.UserID] == nil {
+				entryMap[e.ProjectID][e.UserID] = make(map[string]float64)
+			}
+			mk := fmt.Sprintf("%04d-%02d", e.Year, e.Month)
+			entryMap[e.ProjectID][e.UserID][mk] += e.Days
+
+			if allTime[e.ProjectID] == nil {
+				allTime[e.ProjectID] = make(map[int64]float64)
+			}
+			allTime[e.ProjectID][e.UserID] += e.Days
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return entryMap, allTime, nil
+}
+
+// BuildProjectsReport constructs report rows from already-loaded projects, avoiding redundant project and team lookups.
+func (d *DB) BuildProjectsReport(projects []models.Project, monthKeys []string, userMap map[int64]models.User) ([]models.ProjectReportRow, error) {
+	if len(projects) == 0 {
+		return nil, nil
+	}
+	projectIDs := make([]int64, len(projects))
+	for i, p := range projects {
+		projectIDs[i] = p.ID
+	}
+	entryMap, allTime, err := d.loadProjectTimeEntries(projectIDs)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]models.ProjectReportRow, 0, len(projects))
+	for _, proj := range projects {
+		result = append(result, buildProjectReportRow(proj, entryMap[proj.ID], allTime[proj.ID], monthKeys, userMap))
+	}
+	return result, nil
+}
+
 // GetProjectsReport returns report rows for a list of projects,
 // showing per-user breakdowns for the given month keys ("YYYY-MM").
 // userMap maps userID -> User (loaded from core.db by the caller).
@@ -507,62 +621,23 @@ func (d *DB) GetProjectsReport(projectIDs []int64, monthKeys []string, userMap m
 		return nil, nil
 	}
 
-	// Load all relevant time entries in one query.
-	placeholders := make([]string, len(projectIDs))
-	args := make([]interface{}, len(projectIDs))
-	for i, id := range projectIDs {
-		placeholders[i] = "?"
-		args[i] = id
-	}
-	rows, err := d.projects.Query(
-		`SELECT project_id, user_id, year, month, days
-         FROM project_time_entries
-         WHERE project_id IN (`+joinStrings(placeholders, ",")+`)`,
-		args...)
+	entryMap, allTime, err := d.loadProjectTimeEntries(projectIDs)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close() //nolint:errcheck
 
-	// Accumulate: projectID -> userID -> monthKey -> days
-	entryMap := make(map[int64]map[int64]map[string]float64) // project -> user -> month -> days
-	allTime := make(map[int64]map[int64]float64)             // project -> user -> total
-	for rows.Next() {
-		var e models.ProjectTimeEntry
-		if err := rows.Scan(&e.ProjectID, &e.UserID, &e.Year, &e.Month, &e.Days); err != nil {
-			return nil, err
-		}
-		if entryMap[e.ProjectID] == nil {
-			entryMap[e.ProjectID] = make(map[int64]map[string]float64)
-		}
-		if entryMap[e.ProjectID][e.UserID] == nil {
-			entryMap[e.ProjectID][e.UserID] = make(map[string]float64)
-		}
-		mk := fmt.Sprintf("%04d-%02d", e.Year, e.Month)
-		entryMap[e.ProjectID][e.UserID][mk] += e.Days
-
-		if allTime[e.ProjectID] == nil {
-			allTime[e.ProjectID] = make(map[int64]float64)
-		}
-		allTime[e.ProjectID][e.UserID] += e.Days
-	}
-	if err := rows.Err(); err != nil {
+	projMap, err := d.GetProjectsByIDs(projectIDs)
+	if err != nil {
 		return nil, err
 	}
 
-	// Load projects
-	teamMap, _ := d.teamNameMap()
 	var result []models.ProjectReportRow
 	for _, pid := range projectIDs {
-		proj, err := d.GetProject(pid)
-		if err != nil {
+		proj, ok := projMap[pid]
+		if !ok {
 			continue
 		}
-		if n, ok := teamMap[proj.TeamID]; ok {
-			proj.TeamName = n
-		}
-		row := buildProjectReportRow(proj, entryMap[pid], allTime[pid], monthKeys, userMap)
-		result = append(result, row)
+		result = append(result, buildProjectReportRow(proj, entryMap[pid], allTime[pid], monthKeys, userMap))
 	}
 	return result, nil
 }
@@ -611,38 +686,47 @@ func (d *DB) ListProjectsByTeams(teamIDs []int64) ([]models.Project, error) {
 	if teamIDs == nil {
 		return d.ListProjects()
 	}
-	if len(teamIDs) == 0 {
+	uniqueIDs := dedupeInt64s(teamIDs)
+	if len(uniqueIDs) == 0 {
 		return nil, nil
 	}
-	placeholders := make([]string, len(teamIDs))
-	args := make([]interface{}, len(teamIDs))
-	for i, id := range teamIDs {
-		placeholders[i] = "?"
-		args[i] = id
-	}
-	rows, err := d.projects.Query(
-		`SELECT id, name, code, team_id, active, mini_project, start_date, end_date, initial_end_date, created_at
-         FROM projects WHERE team_id IN (`+joinStrings(placeholders, ",")+`) ORDER BY name`,
-		args...)
+	teamMap, _ := d.teamNameMap()
+	var projects []models.Project
+	err := forEachInt64Chunk(uniqueIDs, idBatchSize, func(_ []int64, placeholders string, args []interface{}) error {
+		rows, err := d.projects.Query(
+			`SELECT id, name, code, team_id, active, mini_project, start_date, end_date, initial_end_date, created_at
+             FROM projects WHERE team_id IN (`+placeholders+`) ORDER BY name`,
+			args...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close() //nolint:errcheck
+		for rows.Next() {
+			var p models.Project
+			var createdAt string
+			if err := rows.Scan(&p.ID, &p.Name, &p.Code, &p.TeamID, &p.Active, &p.MiniProject, &p.StartDate, &p.EndDate, &p.InitialEndDate, &createdAt); err != nil {
+				return err
+			}
+			p.CreatedAt, _ = time.Parse("2006-01-02T15:04:05Z", createdAt)
+			if n, ok := teamMap[p.TeamID]; ok {
+				p.TeamName = n
+			}
+			projects = append(projects, p)
+		}
+		return rows.Err()
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close() //nolint:errcheck
-	var projects []models.Project
-	teamMap, _ := d.teamNameMap()
-	for rows.Next() {
-		var p models.Project
-		var createdAt string
-		if err := rows.Scan(&p.ID, &p.Name, &p.Code, &p.TeamID, &p.Active, &p.MiniProject, &p.StartDate, &p.EndDate, &p.InitialEndDate, &createdAt); err != nil {
-			return nil, err
-		}
-		p.CreatedAt, _ = time.Parse("2006-01-02T15:04:05Z", createdAt)
-		if n, ok := teamMap[p.TeamID]; ok {
-			p.TeamName = n
-		}
-		projects = append(projects, p)
+	if len(uniqueIDs) > idBatchSize && len(projects) > 1 {
+		sort.Slice(projects, func(i, j int) bool {
+			if projects[i].Name != projects[j].Name {
+				return projects[i].Name < projects[j].Name
+			}
+			return projects[i].ID < projects[j].ID
+		})
 	}
-	return projects, rows.Err()
+	return projects, nil
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

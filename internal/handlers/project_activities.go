@@ -439,13 +439,7 @@ func (h *ProjectsHandler) ListJiraTicketsAPI(w http.ResponseWriter, r *http.Requ
 	jsonOK(w, map[string]interface{}{"tickets": tickets})
 }
 
-// teamActivitiesForMonth loads and enriches all project activities for the
-// members of a team for a given month, sorted by user name then date.
-func (h *ProjectsHandler) teamActivitiesForMonth(teamID int64, year, month int) ([]models.ProjectActivity, error) {
-	members, err := h.DB.GetAllTeamMembers(teamID)
-	if err != nil {
-		return nil, err
-	}
+func (h *ProjectsHandler) activitiesForMembersMonth(members []models.TeamMember, year, month int) ([]models.ProjectActivity, error) {
 	if len(members) == 0 {
 		return nil, nil
 	}
@@ -472,6 +466,16 @@ func (h *ProjectsHandler) teamActivitiesForMonth(teamID int64, year, month int) 
 		return activities[i].ID < activities[j].ID
 	})
 	return activities, nil
+}
+
+// teamActivitiesForMonth loads and enriches all project activities for the
+// members of a team for a given month, sorted by user name then date.
+func (h *ProjectsHandler) teamActivitiesForMonth(teamID int64, year, month int) ([]models.ProjectActivity, error) {
+	members, err := h.DB.GetAllTeamMembers(teamID)
+	if err != nil {
+		return nil, err
+	}
+	return h.activitiesForMembersMonth(members, year, month)
 }
 
 // manualTeamsForUser returns the teams with manual timesheets enabled that are
@@ -535,23 +539,21 @@ func domainTeamsByID(groups []domainGroupView, domainID int64) []models.Team {
 // domainActivitiesForMonth loads and merges the project activities of every
 // team in the given slice for a given month, sorted by user name then date.
 func (h *ProjectsHandler) domainActivitiesForMonth(teams []models.Team, year, month int) []models.ProjectActivity {
-	var all []models.ProjectActivity
-	for _, t := range teams {
-		acts, err := h.teamActivitiesForMonth(t.ID, year, month)
-		if err != nil {
-			continue
-		}
-		all = append(all, acts...)
+	if len(teams) == 0 {
+		return nil
 	}
-	sort.Slice(all, func(i, j int) bool {
-		if all[i].UserName != all[j].UserName {
-			return all[i].UserName < all[j].UserName
-		}
-		if all[i].Date != all[j].Date {
-			return all[i].Date < all[j].Date
-		}
-		return all[i].ID < all[j].ID
-	})
+	teamIDs := make([]int64, len(teams))
+	for i, t := range teams {
+		teamIDs[i] = t.ID
+	}
+	members, err := h.DB.GetAllTeamMembersByTeams(teamIDs)
+	if err != nil {
+		return nil
+	}
+	all, err := h.activitiesForMembersMonth(members, year, month)
+	if err != nil {
+		return nil
+	}
 	return all
 }
 

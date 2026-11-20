@@ -130,7 +130,7 @@ func (h *SettingsHandler) ImpersonatePage(w http.ResponseWriter, r *http.Request
 		http.Error(w, "Accès refusé", http.StatusForbidden)
 		return
 	}
-	users, err := h.DB.ListUsers()
+	users, err := h.DB.ListUsersBasic()
 	if err != nil {
 		http.Error(w, "Erreur", http.StatusInternalServerError)
 		return

@@ -64,8 +64,14 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 	lastDay := time.Date(year, time.Month(month)+1, 0, 0, 0, 0, 0, time.UTC)
 	endDate := lastDay.Format("2006-01-02")
 
-	// Enrich days with holiday data for current user
-	holidayMap, _ := h.DB.GetUserHolidayMap(user.ID, startDate, endDate)
+	// Enrich days with holiday data for current user without redundant user/site queries
+	// when session hydration already populated SiteCountryCode.
+	var holidayMap map[string]models.Holiday
+	if user.SiteID == 0 || user.SiteCountryCode != "" {
+		holidayMap, _ = h.DB.GetHolidayMapForCountry(user.SiteCountryCode, startDate, endDate)
+	} else {
+		holidayMap, _ = h.DB.GetUserHolidayMap(user.ID, startDate, endDate)
+	}
 	for i, d := range days {
 		if hol, ok := holidayMap[d.Date]; ok {
 			days[i].IsHoliday = true
@@ -75,20 +81,49 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Get current user's presences only
-	presenceMap, err := h.DB.GetPresences([]int64{user.ID}, startDate, endDate)
+	// Load current user's teams and resolve all member lists in one batch before
+	// querying presences, overrides, reservations, certifications, and project activities.
+	myTeams, _ := h.DB.GetUserTeams(user.ID)
+	canManageAllTeams := user.HasAnyRole(models.RoleTeamManager, models.RoleGlobal)
+	ledTeamSet := make(map[int64]bool)
+	if len(myTeams) > 0 && !canManageAllTeams {
+		if ledIDs, err := h.DB.GetLedTeamIDs(user.ID); err == nil {
+			for _, id := range ledIDs {
+				ledTeamSet[id] = true
+			}
+		}
+	}
+
+	var membersByTeam map[int64][]models.User
+	batchUserIDs := []int64{user.ID}
+	if len(myTeams) > 0 {
+		teamIDs := make([]int64, len(myTeams))
+		for i, t := range myTeams {
+			teamIDs[i] = t.ID
+		}
+		var dedupedMembers []models.User
+		dedupedMembers, membersByTeam, _ = h.DB.GetTeamsMemberGroupsAt(teamIDs, startDate)
+		for _, m := range dedupedMembers {
+			if m.ID != user.ID {
+				batchUserIDs = append(batchUserIDs, m.ID)
+			}
+		}
+	}
+
+	// Batch-load presences, overrides, desk reservations, certifications, and project activities
+	// in constant query count across user.ID + all team members.
+	allPresences, err := h.DB.GetPresences(batchUserIDs, startDate, endDate)
 	if err != nil {
 		http.Error(w, "Error loading presences", http.StatusInternalServerError)
 		return
 	}
-	userPresences := presenceMap[user.ID]
+	userPresences := allPresences[user.ID]
 	if userPresences == nil {
 		userPresences = make(map[string]map[string]int64)
 	}
 
-	// Get current user's third-party overrides
-	userOverridesMap, _ := h.DB.GetPresenceOverrides([]int64{user.ID}, startDate, endDate)
-	userOverrides := userOverridesMap[user.ID]
+	allOverrides, _ := h.DB.GetPresenceOverrides(batchUserIDs, startDate, endDate)
+	userOverrides := allOverrides[user.ID]
 	if userOverrides == nil {
 		userOverrides = make(map[string]models.PresenceOverride)
 	}
@@ -96,15 +131,17 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 	// A month is complete when every declarable day has at least one status set.
 	declarableDays, declaredDays, calendarComplete := computeMonthCompletion(days, userPresences)
 
-	// Whether the current user has already certified this month's declaration.
-	certified, _ := h.DB.IsMonthCertified(user.ID, year, month)
+	allCertifications, _ := h.DB.GetCertifiedUserIDs(batchUserIDs, year, month)
+	certified := allCertifications[user.ID]
 
 	// Get seat reservations and floorplans (skipped when floor plans are disabled)
+	var allReservations map[int64]map[string]bool
 	var reservationDates map[string]bool
 	var userDayReservations map[string]models.UserDayReservation
 	var floorplans []models.Floorplan
 	if !h.DisableFloorplans {
-		reservationDates, _ = h.DB.GetUserReservationDates(user.ID, startDate, endDate)
+		allReservations, _ = h.DB.GetUsersReservationDates(batchUserIDs, startDate, endDate)
+		reservationDates = allReservations[user.ID]
 		userDayReservations, _ = h.DB.GetUserReservationDetails(user.ID, startDate, endDate)
 		floorplans, _ = h.DB.ListFloorplans()
 	}
@@ -115,33 +152,41 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 		userDayReservations = make(map[string]models.UserDayReservation)
 	}
 
-	// Get project activities for current user (dates with 100% activity declared)
-	userProjectActivities := make(map[string]bool)
+	// Get project activities across all batch users (dates with 100% activity declared)
+	activitiesByUser := make(map[int64]map[string]bool)
 	if !h.DisableProjects {
-		if activities, err := h.DB.ListUserActivitiesForMonth(user.ID, year, month); err == nil {
-			activitySums := make(map[string]float64)
-			for _, a := range activities {
-				activitySums[a.Date] += a.Percentage
-			}
-			for date, sum := range activitySums {
-				if sum >= 100.0-0.001 {
-					userProjectActivities[date] = true
+		if allActs, err := h.DB.GetActivitiesForUsersMonth(batchUserIDs, year, month); err == nil {
+			memberSums := make(map[int64]map[string]float64)
+			for _, a := range allActs {
+				if memberSums[a.UserID] == nil {
+					memberSums[a.UserID] = make(map[string]float64)
 				}
+				memberSums[a.UserID][a.Date] += a.Percentage
+			}
+			for uid, dates := range memberSums {
+				completeDates := make(map[string]bool)
+				for date, sum := range dates {
+					if sum >= 100.0-0.001 {
+						completeDates[date] = true
+					}
+				}
+				activitiesByUser[uid] = completeDates
 			}
 		}
+	}
+	userProjectActivities := activitiesByUser[user.ID]
+	if userProjectActivities == nil {
+		userProjectActivities = make(map[string]bool)
 	}
 
 	// Get statuses (only active ones for the picker)
 	statuses, _ := h.DB.ListActiveStatuses()
 
-	// Build per-team presence views for members
-	myTeams, _ := h.DB.GetUserTeams(user.ID)
+	// Assemble per-team views in memory from the single batch above (zero extra DB queries)
 	var teamViews []teamCalendarView
 	for _, team := range myTeams {
-		isLeader, _ := h.DB.IsLeaderOfTeam(user.ID, team.ID)
-		canEditTeam := user.HasAnyRole(models.RoleTeamManager, models.RoleGlobal) || isLeader
-		members, _ := h.DB.GetTeamMembersAt(team.ID, startDate)
-		members = h.DB.HydrateUsersSites(members)
+		canEditTeam := canManageAllTeams || ledTeamSet[team.ID]
+		members := membersByTeam[team.ID]
 		if len(members) == 0 {
 			continue
 		}
@@ -152,55 +197,33 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 			sName := strings.TrimSpace(m.SiteName)
 			if m.SiteID <= 0 || sName == "" {
 				hasUnassignedSite = true
-			} else {
-				if !siteSet[sName] {
-					siteSet[sName] = true
-					teamSites = append(teamSites, sName)
-				}
+			} else if !siteSet[sName] {
+				siteSet[sName] = true
+				teamSites = append(teamSites, sName)
 			}
 		}
 		sort.Strings(teamSites)
 
-		userIDs := make([]int64, len(members))
-		for i, m := range members {
-			userIDs[i] = m.ID
-		}
-		tp, _ := h.DB.GetPresences(userIDs, startDate, endDate)
-		if tp == nil {
-			tp = make(map[int64]map[string]map[string]int64)
-		}
-		to, _ := h.DB.GetPresenceOverrides(userIDs, startDate, endDate)
-		if to == nil {
-			to = make(map[int64]map[string]models.PresenceOverride)
-		}
+		tp := make(map[int64]map[string]map[string]int64, len(members))
+		to := make(map[int64]map[string]models.PresenceOverride, len(members))
 		teamReservations := make(map[int64]map[string]bool, len(members))
-		if !h.DisableFloorplans && len(userIDs) > 0 {
-			var err error
-			teamReservations, err = h.DB.GetUsersReservationDates(userIDs, startDate, endDate)
-			if err != nil || teamReservations == nil {
-				teamReservations = make(map[int64]map[string]bool, len(members))
+		teamCertifications := make(map[int64]bool, len(members))
+		teamProjectActivities := make(map[int64]map[string]bool, len(members))
+		for _, m := range members {
+			if p, ok := allPresences[m.ID]; ok {
+				tp[m.ID] = p
 			}
-		}
-		teamCertifications, _ := h.DB.GetCertifiedUserIDs(userIDs, year, month)
-
-		teamProjectActivities := make(map[int64]map[string]bool)
-		if !h.DisableProjects && len(userIDs) > 0 {
-			if teamActs, err := h.DB.GetActivitiesForUsersMonth(userIDs, year, month); err == nil {
-				memberSums := make(map[int64]map[string]float64)
-				for _, a := range teamActs {
-					if memberSums[a.UserID] == nil {
-						memberSums[a.UserID] = make(map[string]float64)
-					}
-					memberSums[a.UserID][a.Date] += a.Percentage
-				}
-				for uid, dates := range memberSums {
-					teamProjectActivities[uid] = make(map[string]bool)
-					for date, sum := range dates {
-						if sum >= 100.0-0.001 {
-							teamProjectActivities[uid][date] = true
-						}
-					}
-				}
+			if o, ok := allOverrides[m.ID]; ok {
+				to[m.ID] = o
+			}
+			if rDates, ok := allReservations[m.ID]; ok {
+				teamReservations[m.ID] = rDates
+			}
+			if allCertifications[m.ID] {
+				teamCertifications[m.ID] = true
+			}
+			if acts, ok := activitiesByUser[m.ID]; ok {
+				teamProjectActivities[m.ID] = acts
 			}
 		}
 
@@ -241,12 +264,8 @@ func (h *CalendarHandler) CalendarPage(w http.ResponseWriter, r *http.Request) {
 	if !h.DisableFloorplans {
 		userLockers, _ = h.DB.GetUserLockers(user.ID)
 		if user.SiteID > 0 {
-			if allLockerSites, err := h.DB.ListSitesWithLockers(); err == nil {
-				for _, s := range allLockerSites {
-					if s.ID == user.SiteID {
-						lockerSites = append(lockerSites, s)
-					}
-				}
+			if ls, err := h.DB.GetSiteWithLockers(user.SiteID); err == nil && ls != nil {
+				lockerSites = []*models.Site{ls}
 			}
 		}
 	}
