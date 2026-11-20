@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -650,6 +651,7 @@ FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 
 	// Secondary indexes for high-frequency queries
 	_ = d.ensureIndex(d.core, "idx_user_teams_team", "user_teams", "team_id")
+	_ = d.ensureIndex(d.core, "idx_teams_domain", "teams", "domain_id")
 	_ = d.ensureIndex(d.core, "idx_team_leaders_user", "team_leaders", "user_id")
 	_ = d.ensureIndex(d.core, "idx_domain_managers_user", "domain_managers", "user_id")
 	_ = d.ensureIndex(d.core, "idx_sessions_expires_at", "sessions", "expires_at")
@@ -763,6 +765,7 @@ FOREIGN KEY (status_id) REFERENCES statuses(id)
 
 	// Secondary indexes for presence lookups and logs
 	_ = d.ensureIndex(d.presence, "idx_presences_date", "presences", "date")
+	_ = d.ensureIndex(d.presence, "idx_presences_user_date_half_status", "presences", "user_id, date, half, status_id")
 	_ = d.ensureIndex(d.presence, "idx_presence_logs_user_date", "presence_logs", "user_id, date")
 	_ = d.ensureIndex(d.presence, "idx_calendar_sync_user_date", "calendar_sync_events", "user_id, date")
 
@@ -1527,18 +1530,72 @@ func (d *DB) GetUsersBySite(siteID int64) ([]models.User, error) {
 	return d.HydrateUsersSites(users), nil
 }
 
-// HydrateUsersSites populates SiteName and SiteCountryCode on the given users using ListSites.
+const idBatchSize = 500
+
+// forEachInt64Chunk splits ids into batches of at most chunkSize and invokes fn with
+// SQL placeholder list ("?,?,...") and corresponding []interface{} slice.
+func forEachInt64Chunk(ids []int64, chunkSize int, fn func(chunk []int64, placeholders string, args []interface{}) error) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	if chunkSize <= 0 {
+		chunkSize = idBatchSize
+	}
+	for start := 0; start < len(ids); start += chunkSize {
+		end := start + chunkSize
+		if end > len(ids) {
+			end = len(ids)
+		}
+		chunk := ids[start:end]
+		ph := make([]string, len(chunk))
+		args := make([]interface{}, len(chunk))
+		for i, id := range chunk {
+			ph[i] = "?"
+			args[i] = id
+		}
+		if err := fn(chunk, strings.Join(ph, ","), args); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type siteSummary struct {
+	Name        string
+	CountryCode string
+}
+
+// listSiteSummaries returns a lightweight id -> (name, country_code) map without querying floorplans or lockers.
+func (d *DB) listSiteSummaries() (map[int64]siteSummary, error) {
+	rows, err := d.floorplan.Query("SELECT id, name, COALESCE(country_code, '') FROM sites")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() //nolint:errcheck
+
+	siteMap := make(map[int64]siteSummary)
+	for rows.Next() {
+		var id int64
+		var s siteSummary
+		if err := rows.Scan(&id, &s.Name, &s.CountryCode); err != nil {
+			return nil, err
+		}
+		siteMap[id] = s
+	}
+	return siteMap, rows.Err()
+}
+
+// HydrateUsersSites populates SiteName and SiteCountryCode on the given users using a lightweight sites lookup.
 func (d *DB) HydrateUsersSites(users []models.User) []models.User {
-	sites, err := d.ListSites()
-	if err != nil || len(sites) == 0 {
+	if len(users) == 0 {
 		return users
 	}
-	siteMap := make(map[int64]*models.Site, len(sites))
-	for _, s := range sites {
-		siteMap[s.ID] = s
+	siteMap, err := d.listSiteSummaries()
+	if err != nil || len(siteMap) == 0 {
+		return users
 	}
 	for i := range users {
-		if s, ok := siteMap[users[i].SiteID]; ok && s != nil {
+		if s, ok := siteMap[users[i].SiteID]; ok {
 			users[i].SiteName = s.Name
 			users[i].SiteCountryCode = s.CountryCode
 		}
@@ -1607,18 +1664,17 @@ WHERE left_at IS NULL
 	return m, rows.Err()
 }
 
-// HydrateTeamMembersSites populates SiteName and SiteCountryCode on the given team members using ListSites.
+// HydrateTeamMembersSites populates SiteName and SiteCountryCode on the given team members using a lightweight sites lookup.
 func (d *DB) HydrateTeamMembersSites(members []models.TeamMember) []models.TeamMember {
-	sites, err := d.ListSites()
-	if err != nil || len(sites) == 0 {
+	if len(members) == 0 {
 		return members
 	}
-	siteMap := make(map[int64]*models.Site, len(sites))
-	for _, s := range sites {
-		siteMap[s.ID] = s
+	siteMap, err := d.listSiteSummaries()
+	if err != nil || len(siteMap) == 0 {
+		return members
 	}
 	for i := range members {
-		if s, ok := siteMap[members[i].SiteID]; ok && s != nil {
+		if s, ok := siteMap[members[i].SiteID]; ok {
 			members[i].SiteName = s.Name
 			members[i].SiteCountryCode = s.CountryCode
 		}
@@ -1935,11 +1991,7 @@ ORDER BY ut.team_id, CASE WHEN ut.left_at IS NULL THEN 0 ELSE 1 END, u.name
 	}
 	defer rows.Close() //nolint:errcheck
 
-	sites, _ := d.ListSites()
-	siteMap := make(map[int64]*models.Site, len(sites))
-	for _, s := range sites {
-		siteMap[s.ID] = s
-	}
+	siteMap, _ := d.listSiteSummaries()
 
 	result := make(map[int64][]models.TeamMember)
 	for rows.Next() {
@@ -1949,7 +2001,7 @@ ORDER BY ut.team_id, CASE WHEN ut.left_at IS NULL THEN 0 ELSE 1 END, u.name
 			return nil, err
 		}
 		m.IsLocal = m.PasswordHash != ""
-		if s, ok := siteMap[m.SiteID]; ok && s != nil {
+		if s, ok := siteMap[m.SiteID]; ok {
 			m.SiteName = s.Name
 			m.SiteCountryCode = s.CountryCode
 		}
@@ -1990,44 +2042,79 @@ ORDER BY u.name
 
 // GetTeamsMembersAt returns distinct members across multiple teams who were active at any point from startDate onwards.
 func (d *DB) GetTeamsMembersAt(teamIDs []int64, startDate string) ([]models.User, error) {
-	if len(teamIDs) == 0 {
-		return nil, nil
-	}
-	placeholders := make([]string, len(teamIDs))
-	args := make([]interface{}, 0, len(teamIDs)+1)
-	for i, id := range teamIDs {
-		placeholders[i] = "?"
-		args = append(args, id)
-	}
-	args = append(args, startDate)
+	deduped, _, err := d.GetTeamsMemberGroupsAt(teamIDs, startDate)
+	return deduped, err
+}
 
-	query := fmt.Sprintf(`
-SELECT DISTINCT u.id, u.email, u.name, u.role, COALESCE(u.password_hash,''), u.disabled, u.created_at, COALESCE(u.site_id, 0), COALESCE(u.language, '')
+// GetTeamsMemberGroupsAt returns deduplicated active members across multiple teams
+// (ordered by name) as well as per-team member lists (also ordered by name) in a single batch lookup.
+func (d *DB) GetTeamsMemberGroupsAt(teamIDs []int64, startDate string) ([]models.User, map[int64][]models.User, error) {
+	byTeam := make(map[int64][]models.User, len(teamIDs))
+	if len(teamIDs) == 0 {
+		return nil, byTeam, nil
+	}
+
+	siteMap, _ := d.listSiteSummaries()
+	dedupedByID := make(map[int64]models.User)
+	var deduped []models.User
+
+	err := forEachInt64Chunk(teamIDs, idBatchSize, func(_ []int64, placeholders string, args []interface{}) error {
+		args = append(args, startDate)
+		query := fmt.Sprintf(`
+SELECT ut.team_id, u.id, u.email, u.name, u.role, COALESCE(u.password_hash,''), u.disabled, u.created_at, COALESCE(u.site_id, 0), COALESCE(u.language, '')
 FROM users u
 JOIN user_teams ut ON u.id = ut.user_id
 WHERE ut.team_id IN (%s) AND (ut.left_at IS NULL OR ut.left_at >= ?)
-ORDER BY u.name
-`, strings.Join(placeholders, ","))
+ORDER BY u.name, u.id, ut.team_id
+`, placeholders)
 
-	rows, err := d.core.Query(query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close() //nolint:errcheck
-
-	var users []models.User
-	for rows.Next() {
-		var u models.User
-		if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt, &u.SiteID, &u.Language); err != nil {
-			return nil, err
+		rows, err := d.core.Query(query, args...)
+		if err != nil {
+			return err
 		}
-		u.IsLocal = u.PasswordHash != ""
-		users = append(users, u)
+		defer rows.Close() //nolint:errcheck
+
+		for rows.Next() {
+			var tid int64
+			var u models.User
+			if err := rows.Scan(&tid, &u.ID, &u.Email, &u.Name, &u.Roles, &u.PasswordHash, &u.Disabled, &u.CreatedAt, &u.SiteID, &u.Language); err != nil {
+				return err
+			}
+			u.IsLocal = u.PasswordHash != ""
+			if s, ok := siteMap[u.SiteID]; ok {
+				u.SiteName = s.Name
+				u.SiteCountryCode = s.CountryCode
+			}
+			byTeam[tid] = append(byTeam[tid], u)
+			if _, exists := dedupedByID[u.ID]; !exists {
+				dedupedByID[u.ID] = u
+				deduped = append(deduped, u)
+			}
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return nil, nil, err
 	}
-	if err := rows.Err(); err != nil {
-		return nil, err
+
+	if len(teamIDs) > idBatchSize {
+		sort.Slice(deduped, func(i, j int) bool {
+			if deduped[i].Name != deduped[j].Name {
+				return deduped[i].Name < deduped[j].Name
+			}
+			return deduped[i].ID < deduped[j].ID
+		})
+		for tid, members := range byTeam {
+			sort.Slice(members, func(i, j int) bool {
+				if members[i].Name != members[j].Name {
+					return members[i].Name < members[j].Name
+				}
+				return members[i].ID < members[j].ID
+			})
+			byTeam[tid] = members
+		}
 	}
-	return d.HydrateUsersSites(users), nil
+	return deduped, byTeam, nil
 }
 
 // SetTeamMemberLeftAt sets or clears the departure date for a team member.
@@ -2371,45 +2458,40 @@ func (d *DB) DeleteStatus(id int64) error {
 // --- Presence management ---
 
 func (d *DB) GetPresences(userIDs []int64, startDate, endDate string) (map[int64]map[string]map[string]int64, error) {
-	result := make(map[int64]map[string]map[string]int64)
+	result := make(map[int64]map[string]map[string]int64, len(userIDs))
 	if len(userIDs) == 0 {
 		return result, nil
 	}
 
-	placeholders := make([]string, len(userIDs))
-	args := make([]interface{}, 0, len(userIDs)+2)
-	for i, id := range userIDs {
-		placeholders[i] = "?"
-		args = append(args, id)
-	}
-	args = append(args, startDate, endDate)
-
-	query := fmt.Sprintf(
-		"SELECT user_id, date, half, status_id FROM presences WHERE user_id IN (%s) AND date >= ? AND date <= ?",
-		strings.Join(placeholders, ","),
-	)
-
-	rows, err := d.presence.Query(query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close() //nolint:errcheck
-
-	for rows.Next() {
-		var userID, statusID int64
-		var date, half string
-		if err := rows.Scan(&userID, &date, &half, &statusID); err != nil {
-			return nil, err
+	err := forEachInt64Chunk(userIDs, idBatchSize, func(_ []int64, placeholders string, args []interface{}) error {
+		args = append(args, startDate, endDate)
+		query := fmt.Sprintf(
+			"SELECT user_id, date, half, status_id FROM presences WHERE user_id IN (%s) AND date >= ? AND date <= ?",
+			placeholders,
+		)
+		rows, err := d.presence.Query(query, args...)
+		if err != nil {
+			return err
 		}
-		if result[userID] == nil {
-			result[userID] = make(map[string]map[string]int64)
+		defer rows.Close() //nolint:errcheck
+
+		for rows.Next() {
+			var userID, statusID int64
+			var date, half string
+			if err := rows.Scan(&userID, &date, &half, &statusID); err != nil {
+				return err
+			}
+			if result[userID] == nil {
+				result[userID] = make(map[string]map[string]int64)
+			}
+			if result[userID][date] == nil {
+				result[userID][date] = make(map[string]int64)
+			}
+			result[userID][date][half] = statusID
 		}
-		if result[userID][date] == nil {
-			result[userID][date] = make(map[string]int64)
-		}
-		result[userID][date][half] = statusID
-	}
-	return result, rows.Err()
+		return rows.Err()
+	})
+	return result, err
 }
 
 func (d *DB) SetPresences(userID int64, dates []string, statusID int64, half string) error {
@@ -2484,59 +2566,134 @@ func (d *DB) ClearPresences(userID int64, dates []string, half string) error {
 
 // --- Stats ---
 
-func (d *DB) GetTeamStats(teamID int64, startDate, endDate string) ([]models.UserStats, error) {
-	members, err := d.GetTeamMembersAt(teamID, startDate)
-	if err != nil {
-		return nil, err
+// GetUsersStatusCounts returns SQL-aggregated weighted day counts per user and status in [startDate, endDate].
+func (d *DB) GetUsersStatusCounts(userIDs []int64, startDate, endDate string) (map[int64]map[int64]float64, error) {
+	result := make(map[int64]map[int64]float64, len(userIDs))
+	if len(userIDs) == 0 {
+		return result, nil
 	}
+	err := forEachInt64Chunk(userIDs, idBatchSize, func(_ []int64, placeholders string, args []interface{}) error {
+		args = append(args, startDate, endDate)
+		query := fmt.Sprintf(`
+SELECT user_id, status_id,
+       COALESCE(SUM(CASE WHEN half IN ('AM', 'PM') THEN 0.5 ELSE 1.0 END), 0)
+FROM presences
+WHERE user_id IN (%s) AND date >= ? AND date <= ?
+GROUP BY user_id, status_id`, placeholders)
+		rows, err := d.presence.Query(query, args...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close() //nolint:errcheck
 
-	statuses, err := d.ListStatuses()
-	if err != nil {
-		return nil, err
+		for rows.Next() {
+			var uid, statusID int64
+			var days float64
+			if err := rows.Scan(&uid, &statusID, &days); err != nil {
+				return err
+			}
+			if result[uid] == nil {
+				result[uid] = make(map[int64]float64)
+			}
+			result[uid][statusID] += days
+		}
+		return rows.Err()
+	})
+	return result, err
+}
+
+// GetUsersBillableDays returns SQL-aggregated total billable days per user in [startDate, endDate].
+func (d *DB) GetUsersBillableDays(userIDs []int64, startDate, endDate string) (map[int64]float64, error) {
+	result := make(map[int64]float64, len(userIDs))
+	if len(userIDs) == 0 {
+		return result, nil
 	}
-	billableMap := make(map[int64]bool)
-	onSiteMap := make(map[int64]bool)
+	err := forEachInt64Chunk(userIDs, idBatchSize, func(_ []int64, placeholders string, args []interface{}) error {
+		args = append(args, startDate, endDate, true)
+		query := fmt.Sprintf(`
+SELECT p.user_id,
+       COALESCE(SUM(CASE WHEN p.half IN ('AM', 'PM') THEN 0.5 ELSE 1.0 END), 0)
+FROM presences p
+JOIN statuses s ON p.status_id = s.id
+WHERE p.user_id IN (%s) AND p.date >= ? AND p.date <= ? AND s.billable = ?
+GROUP BY p.user_id`, placeholders)
+		rows, err := d.presence.Query(query, args...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close() //nolint:errcheck
+
+		for rows.Next() {
+			var uid int64
+			var days float64
+			if err := rows.Scan(&uid, &days); err != nil {
+				return err
+			}
+			result[uid] += days
+		}
+		return rows.Err()
+	})
+	return result, err
+}
+
+// BuildUsersStats constructs UserStats slices from pre-fetched members, statuses, and per-user status counts.
+func BuildUsersStats(members []models.User, statuses []models.Status, countsByUser map[int64]map[int64]float64) []models.UserStats {
+	if len(members) == 0 {
+		return nil
+	}
+	billableMap := make(map[int64]bool, len(statuses))
+	onSiteMap := make(map[int64]bool, len(statuses))
 	for _, s := range statuses {
 		billableMap[s.ID] = s.Billable
 		onSiteMap[s.ID] = s.OnSite
 	}
 
-	userIDs := make([]int64, len(members))
-	for i, m := range members {
-		userIDs[i] = m.ID
-	}
-
-	presences, err := d.GetPresences(userIDs, startDate, endDate)
-	if err != nil {
-		return nil, err
-	}
-
-	var stats []models.UserStats
+	stats := make([]models.UserStats, 0, len(members))
 	for _, member := range members {
+		srcCounts := countsByUser[member.ID]
 		us := models.UserStats{
 			User:         member,
-			StatusCounts: make(map[int64]float64),
+			StatusCounts: make(map[int64]float64, len(srcCounts)),
 		}
-		if up, ok := presences[member.ID]; ok {
-			for _, halves := range up {
-				for half, statusID := range halves {
-					weight := 1.0
-					if half == "AM" || half == "PM" {
-						weight = 0.5
-					}
-					us.StatusCounts[statusID] += weight
-					if billableMap[statusID] {
-						us.BillableDays += weight
-					}
-					if onSiteMap[statusID] {
-						us.OnSiteDays += weight
-					}
-				}
+		for statusID, weight := range srcCounts {
+			us.StatusCounts[statusID] = weight
+			if billableMap[statusID] {
+				us.BillableDays += weight
+			}
+			if onSiteMap[statusID] {
+				us.OnSiteDays += weight
 			}
 		}
 		stats = append(stats, us)
 	}
-	return stats, nil
+	return stats
+}
+
+func (d *DB) computeStatsForMembers(members []models.User, startDate, endDate string) ([]models.UserStats, error) {
+	statuses, err := d.ListStatuses()
+	if err != nil {
+		return nil, err
+	}
+	if len(members) == 0 {
+		return nil, nil
+	}
+	userIDs := make([]int64, len(members))
+	for i, m := range members {
+		userIDs[i] = m.ID
+	}
+	countsByUser, err := d.GetUsersStatusCounts(userIDs, startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+	return BuildUsersStats(members, statuses, countsByUser), nil
+}
+
+func (d *DB) GetTeamStats(teamID int64, startDate, endDate string) ([]models.UserStats, error) {
+	members, err := d.GetTeamMembersAt(teamID, startDate)
+	if err != nil {
+		return nil, err
+	}
+	return d.computeStatsForMembers(members, startDate, endDate)
 }
 
 // GetTeamsStats returns deduplicated user stats for all active members across multiple teams in a single batch.
@@ -2551,54 +2708,7 @@ func (d *DB) GetTeamsStats(teamIDs []int64, startDate, endDate string) ([]models
 	if len(members) == 0 {
 		return nil, nil
 	}
-
-	statuses, err := d.ListStatuses()
-	if err != nil {
-		return nil, err
-	}
-	billableMap := make(map[int64]bool, len(statuses))
-	onSiteMap := make(map[int64]bool, len(statuses))
-	for _, s := range statuses {
-		billableMap[s.ID] = s.Billable
-		onSiteMap[s.ID] = s.OnSite
-	}
-
-	userIDs := make([]int64, len(members))
-	for i, m := range members {
-		userIDs[i] = m.ID
-	}
-
-	presences, err := d.GetPresences(userIDs, startDate, endDate)
-	if err != nil {
-		return nil, err
-	}
-
-	stats := make([]models.UserStats, 0, len(members))
-	for _, member := range members {
-		us := models.UserStats{
-			User:         member,
-			StatusCounts: make(map[int64]float64),
-		}
-		if up, ok := presences[member.ID]; ok {
-			for _, halves := range up {
-				for half, statusID := range halves {
-					weight := 1.0
-					if half == "AM" || half == "PM" {
-						weight = 0.5
-					}
-					us.StatusCounts[statusID] += weight
-					if billableMap[statusID] {
-						us.BillableDays += weight
-					}
-					if onSiteMap[statusID] {
-						us.OnSiteDays += weight
-					}
-				}
-			}
-		}
-		stats = append(stats, us)
-	}
-	return stats, nil
+	return d.computeStatsForMembers(members, startDate, endDate)
 }
 
 // --- Holiday management ---
@@ -2621,9 +2731,10 @@ func (d *DB) ListHolidays() ([]models.Holiday, error) {
 	return holidays, rows.Err()
 }
 
-func (d *DB) GetHolidayMap(startDate, endDate string) (map[string]models.Holiday, error) {
+// GetHolidaysInRange returns all holidays falling within [startDate, endDate] ordered by date.
+func (d *DB) GetHolidaysInRange(startDate, endDate string) ([]models.Holiday, error) {
 	rows, err := d.presence.Query(
-		"SELECT id, date, name, allow_imputed, COALESCE(country_code, '') FROM holidays WHERE date >= ? AND date <= ?",
+		"SELECT id, date, name, allow_imputed, COALESCE(country_code, '') FROM holidays WHERE date >= ? AND date <= ? ORDER BY date",
 		startDate, endDate,
 	)
 	if err != nil {
@@ -2631,15 +2742,27 @@ func (d *DB) GetHolidayMap(startDate, endDate string) (map[string]models.Holiday
 	}
 	defer rows.Close() //nolint:errcheck
 
-	result := make(map[string]models.Holiday)
+	var holidays []models.Holiday
 	for rows.Next() {
 		var h models.Holiday
 		if err := rows.Scan(&h.ID, &h.Date, &h.Name, &h.AllowImputed, &h.CountryCode); err != nil {
 			return nil, err
 		}
+		holidays = append(holidays, h)
+	}
+	return holidays, rows.Err()
+}
+
+func (d *DB) GetHolidayMap(startDate, endDate string) (map[string]models.Holiday, error) {
+	allHolidays, err := d.GetHolidaysInRange(startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[string]models.Holiday, len(allHolidays))
+	for _, h := range allHolidays {
 		result[h.Date] = h
 	}
-	return result, rows.Err()
+	return result, nil
 }
 
 // GetUserHolidayMap returns the map of holidays applicable to a given user based on their assigned site's country.
@@ -2652,37 +2775,28 @@ func (d *DB) GetUserHolidayMap(userID int64, startDate, endDate string) (map[str
 	}
 	var userCountry string
 	if user.SiteID > 0 {
-		if site, err := d.GetSite(user.SiteID); err == nil && site != nil {
-			userCountry = strings.TrimSpace(site.CountryCode)
+		siteMap, err := d.listSiteSummaries()
+		if err == nil {
+			if site, ok := siteMap[user.SiteID]; ok {
+				userCountry = strings.TrimSpace(site.CountryCode)
+			}
 		}
 	}
 
-	rows, err := d.presence.Query(
-		"SELECT id, date, name, allow_imputed, COALESCE(country_code, '') FROM holidays WHERE date >= ? AND date <= ? ORDER BY date",
-		startDate, endDate,
-	)
+	allHolidays, err := d.GetHolidaysInRange(startDate, endDate)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close() //nolint:errcheck
 
 	result := make(map[string]models.Holiday)
-	for rows.Next() {
-		var h models.Holiday
-		if err := rows.Scan(&h.ID, &h.Date, &h.Name, &h.AllowImputed, &h.CountryCode); err != nil {
-			return nil, err
-		}
+	for _, h := range allHolidays {
 		if models.UserMatchesHoliday(userCountry, h) {
-			if _, ok := result[h.Date]; ok {
-				if !h.AllowImputed {
-					result[h.Date] = h
-				}
-			} else {
+			if _, ok := result[h.Date]; !ok || !h.AllowImputed {
 				result[h.Date] = h
 			}
 		}
 	}
-	return result, rows.Err()
+	return result, nil
 }
 
 // GetUsersHolidayMaps returns holiday maps for multiple users in a batch, avoiding N+1 queries.
@@ -2695,87 +2809,52 @@ func (d *DB) GetUsersHolidayMaps(userIDs []int64, startDate, endDate string) (ma
 		result[uid] = make(map[string]models.Holiday)
 	}
 
-	rows, err := d.presence.Query(
-		"SELECT id, date, name, allow_imputed, COALESCE(country_code, '') FROM holidays WHERE date >= ? AND date <= ? ORDER BY date",
-		startDate, endDate,
-	)
+	allHolidays, err := d.GetHolidaysInRange(startDate, endDate)
 	if err != nil {
 		return result, err
-	}
-	defer rows.Close() //nolint:errcheck
-	var allHolidays []models.Holiday
-	for rows.Next() {
-		var h models.Holiday
-		if err := rows.Scan(&h.ID, &h.Date, &h.Name, &h.AllowImputed, &h.CountryCode); err != nil {
-			return result, err
-		}
-		allHolidays = append(allHolidays, h)
 	}
 
-	userPlaceholders := make([]string, len(userIDs))
-	userArgs := make([]interface{}, len(userIDs))
-	for i, uid := range userIDs {
-		userPlaceholders[i] = "?"
-		userArgs[i] = uid
-	}
-	userRows, err := d.core.Query(
-		d.dialect.rebind(fmt.Sprintf("SELECT id, site_id FROM users WHERE id IN (%s)", strings.Join(userPlaceholders, ","))),
-		userArgs...,
-	)
-	if err != nil {
-		return result, err
-	}
-	defer userRows.Close() //nolint:errcheck
 	userSiteMap := make(map[int64]int64, len(userIDs))
-	siteIDSet := make(map[int64]bool)
-	for userRows.Next() {
-		var uid, siteID int64
-		if err := userRows.Scan(&uid, &siteID); err == nil {
-			userSiteMap[uid] = siteID
-			if siteID > 0 {
-				siteIDSet[siteID] = true
-			}
-		}
-	}
-
-	siteCountryMap := make(map[int64]string, len(siteIDSet))
-	if len(siteIDSet) > 0 {
-		sitePlaceholders := make([]string, 0, len(siteIDSet))
-		siteArgs := make([]interface{}, 0, len(siteIDSet))
-		for sid := range siteIDSet {
-			sitePlaceholders = append(sitePlaceholders, "?")
-			siteArgs = append(siteArgs, sid)
-		}
-		sRows, err := d.floorplan.Query(
-			d.dialect.rebind(fmt.Sprintf("SELECT id, country_code FROM sites WHERE id IN (%s)", strings.Join(sitePlaceholders, ","))),
-			siteArgs...,
+	err = forEachInt64Chunk(userIDs, idBatchSize, func(_ []int64, placeholders string, args []interface{}) error {
+		userRows, qErr := d.core.Query(
+			fmt.Sprintf("SELECT id, site_id FROM users WHERE id IN (%s)", placeholders),
+			args...,
 		)
-		if err == nil {
-			defer sRows.Close() //nolint:errcheck
-			for sRows.Next() {
-				var sid int64
-				var cc string
-				if err := sRows.Scan(&sid, &cc); err == nil {
-					siteCountryMap[sid] = strings.TrimSpace(cc)
-				}
+		if qErr != nil {
+			return qErr
+		}
+		defer userRows.Close() //nolint:errcheck
+		for userRows.Next() {
+			var uid, siteID int64
+			if err := userRows.Scan(&uid, &siteID); err == nil {
+				userSiteMap[uid] = siteID
 			}
 		}
+		return userRows.Err()
+	})
+	if err != nil {
+		return result, err
 	}
 
+	siteMap, _ := d.listSiteSummaries()
+	byCountry := make(map[string]map[string]models.Holiday)
 	for _, uid := range userIDs {
-		siteID := userSiteMap[uid]
-		country := siteCountryMap[siteID]
-		uMap := make(map[string]models.Holiday)
-		for _, h := range allHolidays {
-			if models.UserMatchesHoliday(country, h) {
-				if _, ok := uMap[h.Date]; ok {
-					if !h.AllowImputed {
+		country := ""
+		if siteID := userSiteMap[uid]; siteID > 0 {
+			country = strings.TrimSpace(siteMap[siteID].CountryCode)
+		}
+		key := strings.ToUpper(country)
+		uMap, cached := byCountry[key]
+		if !cached {
+			uMap = make(map[string]models.Holiday)
+			for _, h := range allHolidays {
+				if models.UserMatchesHoliday(country, h) {
+					if _, ok := uMap[h.Date]; !ok || !h.AllowImputed {
 						uMap[h.Date] = h
 					}
-				} else {
-					uMap[h.Date] = h
 				}
 			}
+			byCountry[key] = uMap
 		}
 		result[uid] = uMap
 	}
@@ -2792,43 +2871,29 @@ func (d *DB) GetTeamHolidayMap(teamID int64, startDate, endDate string) (map[str
 
 	countryMap := make(map[string]bool)
 	for _, m := range members {
-		if m.SiteID > 0 {
-			if site, err := d.GetSite(m.SiteID); err == nil && site != nil && site.CountryCode != "" {
-				countryMap[site.CountryCode] = true
-			}
+		if m.SiteID > 0 && m.SiteCountryCode != "" {
+			countryMap[m.SiteCountryCode] = true
 		}
 	}
-	var countries []string
+	countries := make([]string, 0, len(countryMap))
 	for c := range countryMap {
 		countries = append(countries, c)
 	}
 
-	rows, err := d.presence.Query(
-		"SELECT id, date, name, allow_imputed, COALESCE(country_code, '') FROM holidays WHERE date >= ? AND date <= ? ORDER BY date",
-		startDate, endDate,
-	)
+	allHolidays, err := d.GetHolidaysInRange(startDate, endDate)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close() //nolint:errcheck
 
 	result := make(map[string]models.Holiday)
-	for rows.Next() {
-		var h models.Holiday
-		if err := rows.Scan(&h.ID, &h.Date, &h.Name, &h.AllowImputed, &h.CountryCode); err != nil {
-			return nil, err
-		}
+	for _, h := range allHolidays {
 		if models.CountriesMatchHoliday(countries, h) {
-			if _, ok := result[h.Date]; ok {
-				if !h.AllowImputed {
-					result[h.Date] = h
-				}
-			} else {
+			if _, ok := result[h.Date]; !ok || !h.AllowImputed {
 				result[h.Date] = h
 			}
 		}
 	}
-	return result, rows.Err()
+	return result, nil
 }
 
 func (d *DB) CreateHoliday(date, name string, allowImputed bool, countryCode ...string) (int64, error) {

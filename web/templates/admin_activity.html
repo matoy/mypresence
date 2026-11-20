@@ -1,6 +1,13 @@
 {{define "content"}}
 {{with .Data}}
 {{$allStatuses := .Statuses}}{{$execStatuses := .ExecStatuses}}{{if not $execStatuses}}{{$execStatuses = $allStatuses}}{{end}}{{$teamStatuses := .TeamStatuses}}{{if not $teamStatuses}}{{$teamStatuses = $allStatuses}}{{end}}{{$selectedTeamID := .SelectedTeamID}}{{$selectedDomainID := .SelectedDomainID}}{{$selectedSite := .SelectedSite}}{{$days := .Days}}{{$presenceMap := .PresenceMap}}{{$statusTotals := .StatusTotals}}{{$workingDays := .WorkingDays}}{{$workingDaysExcl := .WorkingDaysExcl}}{{$holidayCount := .HolidayCount}}{{$dayBillable := .DayBillable}}{{$dayOnSite := .DayOnSite}}{{$showProjectActivity := .ShowProjectActivity}}{{$projectActivityByUser := .ProjectActivityByUser}}{{$showExecSummary := .ShowExecSummary}}{{$execStatusTotals := .ExecStatusTotals}}{{$execTotalBillable := .ExecTotalBillable}}{{$execTotalOnSite := .ExecTotalOnSite}}{{$execTotalNotSet := .ExecTotalNotSet}}{{$execTotalWorkingDays := .ExecTotalWorkingDays}}{{$execProjectActivityPct := .ExecProjectActivityPct}}{{$execUserCount := .ExecUserCount}}{{$ytdBillableByUser := .YTDBillableByUser}}{{$totalYTDBillable := .TotalYTDBillable}}{{$certifiedUsers := .Certified}}{{$projectCertifiedUsers := .ProjectCertified}}{{$canDecertify := .CanDecertify}}{{$month := .Month}}{{$year := .Year}}{{$showDailyBreakdown := .ShowDailyBreakdown}}
+<style>
+#summary-table .act-pill,#exec-summary-table .act-pill{display:inline-flex;align-items:center;justify-content:center;min-width:1.75rem;height:1.75rem;border-radius:9999px;font-size:.75rem;line-height:1rem;font-weight:700}
+#summary-table .act-td{padding:.625rem .75rem;text-align:center}
+#summary-table .act-td-wide{padding:.625rem 1rem;text-align:center}
+@media (max-width:640px){#summary-table .act-td,#summary-table .act-td-wide{padding:2px}}
+</style>
+<svg aria-hidden="true" style="display:none"><symbol id="act-lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 10-8 0v4h8z"/></symbol></svg>
 <div class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
     <div class="flex items-center justify-between mb-6">
         <h1 class="text-2xl font-bold text-gray-900">{{index $.T "activity.title"}}</h1>
@@ -364,7 +371,7 @@
                 <!-- Team members rows (folded by default with hidden class) -->
                 {{if $tg.Stats}}
                 {{range $stat := $tg.Stats}}
-                <tr class="team-member-row-{{$tg.Team.ID}} hidden hover:bg-gray-50 transition bg-white border-t border-gray-100">
+                <tr class="team-member-row-{{$tg.Team.ID}} hidden hover:bg-gray-50 bg-white border-t border-gray-100">
                     <td class="px-4 py-2.5 text-sm font-medium text-gray-800 pl-8" data-v="{{.User.Name}}">
                         <div class="flex items-center gap-2">
                             <span class="text-gray-400 text-xs select-none">↳</span>
@@ -381,12 +388,12 @@
                                         data-year="{{$year}}"
                                         onclick="openDecertifyModal(this.dataset.uid, this.dataset.uname, this.dataset.month, this.dataset.year)"
                                         title="{{index $.T "cert.decertify_button_title"}}"
-                                        class="leading-none hover:opacity-70 transition text-amber-500">
-                                    <svg class="h-4 w-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 10-8 0v4h8z"/></svg>
+                                        class="leading-none hover:opacity-70 text-amber-500">
+                                    <svg class="h-4 w-4 inline"><use href="#act-lock-icon"/></svg>
                                 </button>
                                 {{else}}
                                 <span class="text-amber-500" title="{{index $.T "cert.certified_badge_title"}}">
-                                    <svg class="h-4 w-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 10-8 0v4h8z"/></svg>
+                                    <svg class="h-4 w-4 inline"><use href="#act-lock-icon"/></svg>
                                 </span>
                                 {{end}}
                             {{end}}
@@ -399,54 +406,47 @@
                                         data-year="{{$year}}"
                                         onclick="openDecertifyProjectModal(this.dataset.uid, this.dataset.uname, this.dataset.month, this.dataset.year)"
                                         title="{{index $.T "cert.decertify_project_button_title"}}"
-                                        class="leading-none hover:opacity-70 transition text-blue-500">
-                                    <svg class="h-4 w-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 10-8 0v4h8z"/></svg>
+                                        class="leading-none hover:opacity-70 text-blue-500">
+                                    <svg class="h-4 w-4 inline"><use href="#act-lock-icon"/></svg>
                                 </button>
                                 {{else}}
                                 <span class="text-blue-500" title="{{index $.T "cert.certified_project_badge_title"}}">
-                                    <svg class="h-4 w-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 10-8 0v4h8z"/></svg>
+                                    <svg class="h-4 w-4 inline"><use href="#act-lock-icon"/></svg>
                                 </span>
                                 {{end}}
                             {{end}}
                         </div>
                     </td>
                     {{range $teamStatuses}}
-                    <td class="px-3 py-2.5 text-center">
+                    <td class="act-td">
                         {{$countF := getCountF $stat.StatusCounts .ID}}
                         {{if $countF}}
-                        <div class="inline-flex items-center justify-center min-w-[28px] h-7 rounded-full text-white text-xs font-bold"
-                             {{safeStyle "background-color" .Color}}>
-                            {{fmtF $countF}}
-                        </div>
+                        <div class="act-pill text-white" {{safeStyle "background-color" .Color}}>{{fmtF $countF}}</div>
                         {{else}}
                         <span class="text-gray-300">-</span>
                         {{end}}
                     </td>
                     {{end}}
-                    <td class="px-4 py-2.5 text-center bg-gray-50">
+                    <td class="act-td-wide bg-gray-50">
                         {{$setF := sumMapF $stat.StatusCounts}}
                         {{$notSetF := subF (i2f $tg.WorkingDaysExcl) $setF}}
                         {{if $notSetF}}
-                        <span class="inline-flex items-center justify-center min-w-[28px] h-7 rounded-full bg-gray-300 text-gray-700 text-xs font-bold">
-                            {{fmtF $notSetF}}
-                        </span>
+                        <span class="act-pill bg-gray-300 text-gray-700">{{fmtF $notSetF}}</span>
                         {{else}}
                         <span class="text-gray-300">-</span>
                         {{end}}
                     </td>
-                    <td class="px-4 py-2.5 text-center bg-green-50">
-                        <span class="inline-flex items-center justify-center min-w-[28px] h-7 rounded-full bg-green-500 text-white text-xs font-bold">
-                            {{fmtF .BillableDays}}
-                        </span>
+                    <td class="act-td-wide bg-green-50">
+                        <span class="act-pill bg-green-500 text-white">{{fmtF .BillableDays}}</span>
                     </td>
-                    <td class="px-4 py-2.5 text-center bg-blue-50">
+                    <td class="act-td-wide bg-blue-50">
                         {{if .BillableDays}}
                         <span class="text-sm font-medium text-blue-700">{{percentF .OnSiteDays .BillableDays}}%</span>
                         {{else}}
                         <span class="text-gray-300">—</span>
                         {{end}}
                     </td>
-                    <td class="px-4 py-2.5 text-center bg-purple-50">
+                    <td class="act-td-wide bg-purple-50">
                         {{if $tg.WorkingDaysExcl}}
                         <span class="text-sm font-medium text-purple-700">{{percentF .BillableDays (i2f $tg.WorkingDaysExcl)}}%</span>
                         {{else}}
@@ -454,15 +454,13 @@
                         {{end}}
                     </td>
                     {{if $showProjectActivity}}
-                    <td class="px-4 py-2.5 text-center bg-indigo-50">
+                    <td class="act-td-wide bg-indigo-50">
                         <span class="text-gray-300">—</span>
                     </td>
                     <td class="px-2 py-2.5 text-center bg-indigo-50"></td>
                     {{end}}
-                    <td class="px-4 py-2.5 text-center bg-orange-50">
-                        <span class="inline-flex items-center justify-center min-w-[28px] h-7 rounded-full bg-orange-400 text-white text-xs font-bold">
-                            {{fmtF (getCountF $ytdBillableByUser .User.ID)}}
-                        </span>
+                    <td class="act-td-wide bg-orange-50">
+                        <span class="act-pill bg-orange-400 text-white">{{fmtF (getCountF $ytdBillableByUser .User.ID)}}</span>
                     </td>
                 </tr>
                 {{end}}
@@ -494,12 +492,12 @@
                                         data-year="{{$year}}"
                                         onclick="openDecertifyModal(this.dataset.uid, this.dataset.uname, this.dataset.month, this.dataset.year)"
                                         title="{{index $.T "cert.decertify_button_title"}}"
-                                        class="leading-none hover:opacity-70 transition text-amber-500">
-                                    <svg class="h-4 w-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 10-8 0v4h8z"/></svg>
+                                        class="leading-none hover:opacity-70 text-amber-500">
+                                    <svg class="h-4 w-4 inline"><use href="#act-lock-icon"/></svg>
                                 </button>
                                 {{else}}
                                 <span class="text-amber-500" title="{{index $.T "cert.certified_badge_title"}}">
-                                    <svg class="h-4 w-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 10-8 0v4h8z"/></svg>
+                                    <svg class="h-4 w-4 inline"><use href="#act-lock-icon"/></svg>
                                 </span>
                                 {{end}}
                             {{end}}
@@ -512,12 +510,12 @@
                                         data-year="{{$year}}"
                                         onclick="openDecertifyProjectModal(this.dataset.uid, this.dataset.uname, this.dataset.month, this.dataset.year)"
                                         title="{{index $.T "cert.decertify_project_button_title"}}"
-                                        class="leading-none hover:opacity-70 transition text-blue-500">
-                                    <svg class="h-4 w-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 10-8 0v4h8z"/></svg>
+                                        class="leading-none hover:opacity-70 text-blue-500">
+                                    <svg class="h-4 w-4 inline"><use href="#act-lock-icon"/></svg>
                                 </button>
                                 {{else}}
                                 <span class="text-blue-500" title="{{index $.T "cert.certified_project_badge_title"}}">
-                                    <svg class="h-4 w-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 10-8 0v4h8z"/></svg>
+                                    <svg class="h-4 w-4 inline"><use href="#act-lock-icon"/></svg>
                                 </span>
                                 {{end}}
                             {{end}}
@@ -527,7 +525,7 @@
                     <td class="px-3 py-3 text-center">
                         {{$countF := getCountF $stat.StatusCounts .ID}}
                         {{if $countF}}
-                        <div class="inline-flex items-center justify-center min-w-[28px] h-7 rounded-full text-white text-xs font-bold"
+                        <div class="act-pill text-white"
                              {{safeStyle "background-color" .Color}}>
                             {{fmtF $countF}}
                         </div>
@@ -540,7 +538,7 @@
                         {{$setF := sumMapF $stat.StatusCounts}}
                         {{$notSetF := subF (i2f $workingDaysExcl) $setF}}
                         {{if $notSetF}}
-                        <span class="inline-flex items-center justify-center min-w-[28px] h-7 rounded-full bg-gray-300 text-gray-700 text-xs font-bold">
+                        <span class="act-pill bg-gray-300 text-gray-700">
                             {{fmtF $notSetF}}
                         </span>
                         {{else}}
@@ -548,7 +546,7 @@
                         {{end}}
                     </td>
                     <td class="px-4 py-3 text-center bg-green-50">
-                        <span class="inline-flex items-center justify-center min-w-[28px] h-7 rounded-full bg-green-500 text-white text-xs font-bold">
+                        <span class="act-pill bg-green-500 text-white">
                             {{fmtF .BillableDays}}
                         </span>
                     </td>
@@ -584,7 +582,7 @@
                     </td>
                     {{end}}
                     <td class="px-4 py-3 text-center bg-orange-50">
-                        <span class="inline-flex items-center justify-center min-w-[28px] h-7 rounded-full bg-orange-400 text-white text-xs font-bold">
+                        <span class="act-pill bg-orange-400 text-white">
                             {{fmtF (getCountF $ytdBillableByUser .User.ID)}}
                         </span>
                     </td>
@@ -865,17 +863,16 @@ function toggleTeamActivity(teamId) {
 }
 
 function toggleAllTeamsActivity(expand) {
-    const allChevrons = document.querySelectorAll('[id^="chevron-team-"]');
-    allChevrons.forEach(chevron => {
-        const teamId = chevron.id.replace('chevron-team-', '');
-        const rows = document.querySelectorAll('.team-member-row-' + teamId);
-        rows.forEach(r => {
-            if (expand) {
-                r.classList.remove('hidden');
-            } else {
-                r.classList.add('hidden');
-            }
-        });
+    const table = document.getElementById('summary-table');
+    if (!table) return;
+    table.querySelectorAll('tr[class*="team-member-row-"]').forEach(r => {
+        if (expand) {
+            r.classList.remove('hidden');
+        } else {
+            r.classList.add('hidden');
+        }
+    });
+    table.querySelectorAll('[id^="chevron-team-"]').forEach(chevron => {
         if (expand) {
             chevron.classList.add('rotate-90');
         } else {

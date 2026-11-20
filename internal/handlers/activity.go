@@ -127,11 +127,36 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 
 	var stats []models.UserStats
 	var domainTeams []models.Team
+	var allTeamMembers []models.User
+	var membersByTeam map[int64][]models.User
+	var preloadedPresences map[int64]map[string]map[string]int64
+	statsByUserID := make(map[int64]models.UserStats)
+
 	if domainID > 0 {
 		domainTeams = teamsByDomain[domainID]
-		stats = h.computeDomainStats(domainTeams, startDate, endDate)
+		if len(domainTeams) > 0 {
+			domainTeamIDs := collectTeamIDs(domainTeams)
+			var deduped []models.User
+			deduped, membersByTeam, _ = h.DB.GetTeamsMemberGroupsAt(domainTeamIDs, startDate)
+			if len(deduped) > 0 {
+				userIDs := extractUserIDs(deduped)
+				countsByUser, _ := h.DB.GetUsersStatusCounts(userIDs, startDate, endDate)
+				allDomainStats := db.BuildUsersStats(deduped, statuses, countsByUser)
+				statsByUserID = make(map[int64]models.UserStats, len(allDomainStats))
+				for _, s := range allDomainStats {
+					statsByUserID[s.User.ID] = s
+				}
+				stats = allDomainStats
+			}
+		}
 	} else if teamID > 0 {
-		stats, _ = h.DB.GetTeamStats(teamID, startDate, endDate)
+		allTeamMembers, _ = h.DB.GetTeamMembersAt(teamID, startDate)
+		if len(allTeamMembers) > 0 {
+			userIDs := extractUserIDs(allTeamMembers)
+			preloadedPresences, _ = h.DB.GetPresences(userIDs, startDate, endDate)
+			countsByUser := countsFromPresences(preloadedPresences)
+			stats = db.BuildUsersStats(allTeamMembers, statuses, countsByUser)
+		}
 	}
 
 	siteFilter := strings.TrimSpace(r.URL.Query().Get("site"))
@@ -145,37 +170,42 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 
 	totalBillable, totalSetDays, statusTotals := computeStatusTotals(stats)
 
-	// Build daily breakdown data
+	// Load holidays once for [startDate, endDate] and derive per-team / per-user calendars in memory.
+	periodHolidays, _ := h.DB.GetHolidaysInRange(startDate, endDate)
+	cal := newPeriodCalendar(startDate, endDate, periodHolidays)
+
 	holidayMap := make(map[string]models.Holiday)
+	var singleTeamHolidayMap map[string]models.Holiday
 	if teamID > 0 {
-		thm, _ := h.DB.GetTeamHolidayMap(teamID, startDate, endDate)
-		for k, hol := range thm {
+		singleTeamHolidayMap = cal.teamHolidayMap(countriesForMembers(allTeamMembers))
+		for k, hol := range singleTeamHolidayMap {
 			holidayMap[k] = hol
 		}
 	} else if domainID > 0 {
 		for _, t := range domainTeams {
-			thm, _ := h.DB.GetTeamHolidayMap(t.ID, startDate, endDate)
+			thm := cal.teamHolidayMap(countriesForMembers(membersByTeam[t.ID]))
 			for k, hol := range thm {
 				holidayMap[k] = hol
 			}
 		}
 	} else {
-		for _, t := range allTeams {
-			thm, _ := h.DB.GetTeamHolidayMap(t.ID, startDate, endDate)
-			for k, hol := range thm {
-				holidayMap[k] = hol
-			}
-		}
-		if len(allTeams) == 0 {
-			ghm, _ := h.DB.GetHolidayMap(startDate, endDate)
-			for k, hol := range ghm {
-				if len(hol.CountryList()) == 0 {
+		if len(allTeams) > 0 {
+			_, allMembersByTeam, _ := h.DB.GetTeamsMemberGroupsAt(collectTeamIDs(allTeams), startDate)
+			for _, t := range allTeams {
+				thm := cal.teamHolidayMap(countriesForMembers(allMembersByTeam[t.ID]))
+				for k, hol := range thm {
 					holidayMap[k] = hol
+				}
+			}
+		} else {
+			for _, hol := range periodHolidays {
+				if len(hol.CountryList()) == 0 {
+					holidayMap[hol.Date] = hol
 				}
 			}
 		}
 	}
-	var holidays []models.Holiday
+	holidays := make([]models.Holiday, 0, len(holidayMap))
 	for _, hol := range holidayMap {
 		holidays = append(holidays, hol)
 	}
@@ -186,10 +216,25 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 		days = getDaysInMonth(year, month)
 	}
 	markHolidaysOnDays(days, holidays)
+
 	var members []models.User
 	var presenceMap map[int64]map[string]map[string]int64
-	if showDailyBreakdown {
-		members, presenceMap = h.buildActivityMemberData(stats, teamID, startDate, endDate)
+	if showDailyBreakdown && teamID > 0 {
+		members = make([]models.User, len(stats))
+		if siteFilter == "" && len(allTeamMembers) == len(stats) && preloadedPresences != nil {
+			for i, s := range stats {
+				members[i] = s.User
+			}
+			presenceMap = preloadedPresences
+		} else {
+			presenceMap = make(map[int64]map[string]map[string]int64, len(stats))
+			for i, s := range stats {
+				members[i] = s.User
+				if up, ok := preloadedPresences[s.User.ID]; ok {
+					presenceMap[s.User.ID] = up
+				}
+			}
+		}
 	} else {
 		presenceMap = map[int64]map[string]map[string]int64{}
 	}
@@ -197,16 +242,15 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 	// Count working days in the period (Mon–Fri) and holidays on those days.
 	var workingDays, holidayCount int
 	if teamID > 0 {
-		thm, _ := h.DB.GetTeamHolidayMap(teamID, startDate, endDate)
-		workingDays, holidayCount = computeWorkingDaysFromRange(startDate, endDate, thm)
+		workingDays, holidayCount = cal.workingDaysFromHolidayMap(singleTeamHolidayMap)
 	} else {
-		holMap := make(map[string]models.Holiday)
+		holMap := make(map[string]models.Holiday, len(holidays))
 		for _, hol := range holidays {
 			if _, exists := holMap[hol.Date]; !exists || !hol.AllowImputed {
 				holMap[hol.Date] = hol
 			}
 		}
-		workingDays, holidayCount = computeWorkingDaysFromRange(startDate, endDate, holMap)
+		workingDays, holidayCount = cal.workingDaysFromHolidayMap(holMap)
 	}
 	workingDaysExcluded := workingDays - holidayCount
 	totalOnSite := 0.0
@@ -225,17 +269,12 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Compute total expected working days summed accurately across each user's country holidays
+	// Compute total expected working days summed accurately across each user's country holidays (cached per country).
 	totalWorkingDays := 0.0
-	statsUserIDs := make([]int64, len(stats))
+	statUserIDs := make([]int64, len(stats))
 	for i, s := range stats {
-		statsUserIDs[i] = s.User.ID
-	}
-	userHolsMap, _ := h.DB.GetUsersHolidayMaps(statsUserIDs, startDate, endDate)
-	for _, s := range stats {
-		uHolMap := userHolsMap[s.User.ID]
-		uWorkingDays, uHolCount := computeWorkingDaysFromRange(startDate, endDate, uHolMap)
-		totalWorkingDays += float64(uWorkingDays - uHolCount)
+		statUserIDs[i] = s.User.ID
+		totalWorkingDays += float64(cal.userWorkingDays(s.User.SiteCountryCode))
 	}
 	totalNotSet := totalWorkingDays - totalSetDays
 	if totalNotSet < 0 {
@@ -245,27 +284,16 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 	// Per-day billable / on-site counts for daily breakdown footer
 	dayBillable, dayOnSite := computeDayBillableOnSite(presenceMap, statuses)
 
-	// YTD billable days per user (Jan 1 of endYear → end of current period)
+	// YTD billable days per user (Jan 1 of endYear → end of current period) via single SQL aggregation
 	ytdBillableByUser := make(map[int64]float64)
 	totalYTDBillable := 0.0
 	ytdStart := fmt.Sprintf("%04d-01-01", periodEndYear)
-	if domainID > 0 {
-		ytdStats := h.computeDomainStats(domainTeams, ytdStart, endDate)
-		if siteFilter != "" {
-			ytdStats = filterStatsBySite(ytdStats, siteFilter)
-		}
-		for _, s := range ytdStats {
-			ytdBillableByUser[s.User.ID] = s.BillableDays
-			totalYTDBillable += s.BillableDays
-		}
-	} else if teamID > 0 {
-		ytdStats, _ := h.DB.GetTeamStats(teamID, ytdStart, endDate)
-		if siteFilter != "" {
-			ytdStats = filterStatsBySite(ytdStats, siteFilter)
-		}
-		for _, s := range ytdStats {
-			ytdBillableByUser[s.User.ID] = s.BillableDays
-			totalYTDBillable += s.BillableDays
+	if (domainID > 0 || teamID > 0) && len(statUserIDs) > 0 {
+		if m, err := h.DB.GetUsersBillableDays(statUserIDs, ytdStart, endDate); err == nil {
+			ytdBillableByUser = m
+			for _, d := range ytdBillableByUser {
+				totalYTDBillable += d
+			}
 		}
 	}
 
@@ -275,16 +303,21 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 	var execTotalBillable, execTotalOnSite, execTotalNotSet, execTotalWorkingDays, execProjectActivityPct float64
 	var execUserCount int
 	if showExecSummary && len(allTeams) > 0 {
-		execStatusTotals, execTotalBillable, execTotalOnSite, execTotalNotSet, execTotalWorkingDays, execProjectActivityPct, execUserCount =
-			h.computeExecSummary(allTeams, startDate, endDate, monthKeys, siteFilter)
+		if domainID > 0 && sameTeamIDSet(domainTeams, allTeams) {
+			execStatusTotals = statusTotals
+			execTotalBillable = totalBillable
+			execTotalOnSite = totalOnSite
+			execTotalNotSet = totalNotSet
+			execTotalWorkingDays = totalWorkingDays
+			execUserCount = len(stats)
+		} else {
+			execStatusTotals, execTotalBillable, execTotalOnSite, execTotalNotSet, execTotalWorkingDays, execProjectActivityPct, execUserCount =
+				h.computeExecSummary(allTeams, startDate, endDate, monthKeys, siteFilter, statuses, cal, showProjectActivity)
+		}
 	}
 
 	// Certification status per user for the displayed period:
 	// For multi-month range, a user must be certified in all months.
-	statUserIDs := make([]int64, len(stats))
-	for i, s := range stats {
-		statUserIDs[i] = s.User.ID
-	}
 	certifiedUsers := make(map[int64]bool)
 	projectCertifiedUsers := make(map[int64]bool)
 	if len(statUserIDs) > 0 {
@@ -315,55 +348,46 @@ func (h *ActivityHandler) ActivityPage(w http.ResponseWriter, r *http.Request) {
 		domainGroups = append(domainGroups, domainGroupView{Domain: dm, Teams: teamsByDomain[dm.ID]})
 	}
 
-	// Build domain team groups when a domain is selected
+	// Build domain team groups purely in memory when a domain is selected (0 SQL queries inside loop)
 	var domainTeamGroups []DomainTeamGroup
 	if domainID > 0 && len(domainTeams) > 0 {
 		sortedDomainTeams := make([]models.Team, len(domainTeams))
 		copy(sortedDomainTeams, domainTeams)
 		sort.Slice(sortedDomainTeams, func(i, j int) bool { return sortedDomainTeams[i].Name < sortedDomainTeams[j].Name })
+		domainTeamGroups = make([]DomainTeamGroup, 0, len(sortedDomainTeams))
 
 		for _, t := range sortedDomainTeams {
-			tStats, _ := h.DB.GetTeamStats(t.ID, startDate, endDate)
-			if siteFilter != "" {
-				tStats = filterStatsBySite(tStats, siteFilter)
+			tMembers := membersByTeam[t.ID]
+			var tStats []models.UserStats
+			if len(tMembers) > 0 {
+				tStats = make([]models.UserStats, 0, len(tMembers))
+				for _, m := range tMembers {
+					if us, ok := statsByUserID[m.ID]; ok {
+						tStats = append(tStats, us)
+					}
+				}
+				if siteFilter != "" {
+					tStats = filterStatsBySite(tStats, siteFilter)
+				}
 			}
 
 			tBillable, tSetDays, tStatusTotals := computeStatusTotals(tStats)
 
-			thm, _ := h.DB.GetTeamHolidayMap(t.ID, startDate, endDate)
-			tWorkingDays, tHolidayCount := computeWorkingDaysFromRange(startDate, endDate, thm)
+			thm := cal.teamHolidayMap(countriesForMembers(tMembers))
+			tWorkingDays, tHolidayCount := cal.workingDaysFromHolidayMap(thm)
 			tWorkingDaysExcl := tWorkingDays - tHolidayCount
 
 			tTotalWorkingDays := 0.0
-			if len(tStats) > 0 {
-				tUserIDs := make([]int64, len(tStats))
-				for i, s := range tStats {
-					tUserIDs[i] = s.User.ID
-				}
-				tUserHolsMap, _ := h.DB.GetUsersHolidayMaps(tUserIDs, startDate, endDate)
-				for _, s := range tStats {
-					uHolMap := tUserHolsMap[s.User.ID]
-					uWorkingDays, uHolCount := computeWorkingDaysFromRange(startDate, endDate, uHolMap)
-					tTotalWorkingDays += float64(uWorkingDays - uHolCount)
-				}
+			tTotalOnSite := 0.0
+			tYTDBillable := 0.0
+			for _, s := range tStats {
+				tTotalWorkingDays += float64(cal.userWorkingDays(s.User.SiteCountryCode))
+				tTotalOnSite += s.OnSiteDays
+				tYTDBillable += ytdBillableByUser[s.User.ID]
 			}
 			tTotalNotSet := tTotalWorkingDays - tSetDays
 			if tTotalNotSet < 0 {
 				tTotalNotSet = 0
-			}
-
-			tTotalOnSite := 0.0
-			for _, s := range tStats {
-				tTotalOnSite += s.OnSiteDays
-			}
-
-			tYTDBillable := 0.0
-			tYTDStats, _ := h.DB.GetTeamStats(t.ID, ytdStart, endDate)
-			if siteFilter != "" {
-				tYTDStats = filterStatsBySite(tYTDStats, siteFilter)
-			}
-			for _, s := range tYTDStats {
-				tYTDBillable += s.BillableDays
 			}
 
 			domainTeamGroups = append(domainTeamGroups, DomainTeamGroup{
@@ -792,18 +816,22 @@ func (h *ActivityHandler) computeExecSummary(
 	startDate, endDate string,
 	monthKeys []string,
 	siteFilter string,
+	statuses []models.Status,
+	cal *periodCalendar,
+	includeProjectActivity bool,
 ) (statusTotals map[int64]float64, totalBillable, totalOnSite, totalNotSet, totalWorkingDays, projectActivityPct float64, userCount int) {
 	statusTotals = make(map[int64]float64)
 	totalSetDays := 0.0
 	totalProjectDeclared := 0.0
 
-	teamIDs := make([]int64, len(allTeams))
-	for i, team := range allTeams {
-		teamIDs[i] = team.ID
-	}
-	stats, err := h.DB.GetTeamsStats(teamIDs, startDate, endDate)
-	if err != nil {
-		stats = nil
+	teamIDs := collectTeamIDs(allTeams)
+	members, err := h.DB.GetTeamsMembersAt(teamIDs, startDate)
+	var stats []models.UserStats
+	if err == nil && len(members) > 0 {
+		countsByUser, cErr := h.DB.GetUsersStatusCounts(extractUserIDs(members), startDate, endDate)
+		if cErr == nil {
+			stats = db.BuildUsersStats(members, statuses, countsByUser)
+		}
 	}
 	if siteFilter != "" {
 		stats = filterStatsBySite(stats, siteFilter)
@@ -818,10 +846,10 @@ func (h *ActivityHandler) computeExecSummary(
 			statusTotals[sid] += count
 			totalSetDays += count
 		}
+		totalWorkingDays += float64(cal.userWorkingDays(s.User.SiteCountryCode))
 	}
-	totalWorkingDays = 0.0
 
-	if !h.DisableProjects && len(seenUserIDs) > 0 && len(monthKeys) > 0 {
+	if includeProjectActivity && !h.DisableProjects && len(seenUserIDs) > 0 && len(monthKeys) > 0 {
 		if batchDeclared, err := h.DB.GetUsersTotalDeclaredForMonths(seenUserIDs, monthKeys); err == nil {
 			for _, userMonths := range batchDeclared {
 				for _, mk := range monthKeys {
@@ -831,12 +859,6 @@ func (h *ActivityHandler) computeExecSummary(
 		}
 	}
 
-	seenHolsMap, _ := h.DB.GetUsersHolidayMaps(seenUserIDs, startDate, endDate)
-	for _, uid := range seenUserIDs {
-		uHolMap := seenHolsMap[uid]
-		uWorkingDays, uHolCount := computeWorkingDaysFromRange(startDate, endDate, uHolMap)
-		totalWorkingDays += float64(uWorkingDays - uHolCount)
-	}
 	totalNotSet = totalWorkingDays - totalSetDays
 	if totalNotSet < 0 {
 		totalNotSet = 0
@@ -845,6 +867,135 @@ func (h *ActivityHandler) computeExecSummary(
 		projectActivityPct = (totalProjectDeclared / totalBillable) * 100.0
 	}
 	return
+}
+
+// periodCalendar caches weekdays and per-country non-imputable holiday deductions
+// across [startDate, endDate] so hundreds of users never repeat date formatting or SQL queries.
+type periodCalendar struct {
+	totalWeekdays        int
+	weekdaySet           map[string]bool
+	holidays             []models.Holiday
+	userWorkingByCountry map[string]int
+}
+
+func newPeriodCalendar(startDate, endDate string, holidays []models.Holiday) *periodCalendar {
+	cal := &periodCalendar{
+		weekdaySet:           make(map[string]bool),
+		holidays:             holidays,
+		userWorkingByCountry: make(map[string]int),
+	}
+	start, errStart := time.Parse("2006-01-02", startDate)
+	end, errEnd := time.Parse("2006-01-02", endDate)
+	if errStart == nil && errEnd == nil {
+		for t := start; !t.After(end); t = t.AddDate(0, 0, 1) {
+			if t.Weekday() != time.Saturday && t.Weekday() != time.Sunday {
+				cal.weekdaySet[t.Format("2006-01-02")] = true
+			}
+		}
+	}
+	cal.totalWeekdays = len(cal.weekdaySet)
+	return cal
+}
+
+func (c *periodCalendar) userWorkingDays(country string) int {
+	key := strings.ToUpper(strings.TrimSpace(country))
+	if v, ok := c.userWorkingByCountry[key]; ok {
+		return v
+	}
+	holCount := 0
+	var lastNonImputed string
+	for _, h := range c.holidays {
+		if !h.AllowImputed && c.weekdaySet[h.Date] && h.Date != lastNonImputed && models.UserMatchesHoliday(key, h) {
+			holCount++
+			lastNonImputed = h.Date
+		}
+	}
+	v := c.totalWeekdays - holCount
+	c.userWorkingByCountry[key] = v
+	return v
+}
+
+func (c *periodCalendar) teamHolidayMap(countries []string) map[string]models.Holiday {
+	m := make(map[string]models.Holiday)
+	for _, h := range c.holidays {
+		if models.CountriesMatchHoliday(countries, h) {
+			if _, ok := m[h.Date]; !ok || !h.AllowImputed {
+				m[h.Date] = h
+			}
+		}
+	}
+	return m
+}
+
+func (c *periodCalendar) workingDaysFromHolidayMap(hm map[string]models.Holiday) (workingDays, holidayCount int) {
+	for d, hol := range hm {
+		if !hol.AllowImputed && c.weekdaySet[d] {
+			holidayCount++
+		}
+	}
+	return c.totalWeekdays, holidayCount
+}
+
+func collectTeamIDs(teams []models.Team) []int64 {
+	ids := make([]int64, len(teams))
+	for i, t := range teams {
+		ids[i] = t.ID
+	}
+	return ids
+}
+
+func extractUserIDs(users []models.User) []int64 {
+	ids := make([]int64, len(users))
+	for i, u := range users {
+		ids[i] = u.ID
+	}
+	return ids
+}
+
+func countriesForMembers(members []models.User) []string {
+	seen := make(map[string]bool)
+	var countries []string
+	for _, m := range members {
+		if m.SiteID > 0 && m.SiteCountryCode != "" && !seen[m.SiteCountryCode] {
+			seen[m.SiteCountryCode] = true
+			countries = append(countries, m.SiteCountryCode)
+		}
+	}
+	return countries
+}
+
+func countsFromPresences(presences map[int64]map[string]map[string]int64) map[int64]map[int64]float64 {
+	counts := make(map[int64]map[int64]float64, len(presences))
+	for uid, byDate := range presences {
+		uCounts := make(map[int64]float64)
+		for _, halves := range byDate {
+			for half, statusID := range halves {
+				weight := 1.0
+				if half == "AM" || half == "PM" {
+					weight = 0.5
+				}
+				uCounts[statusID] += weight
+			}
+		}
+		counts[uid] = uCounts
+	}
+	return counts
+}
+
+func sameTeamIDSet(a, b []models.Team) bool {
+	if len(a) != len(b) || len(a) == 0 {
+		return false
+	}
+	inA := make(map[int64]bool, len(a))
+	for _, t := range a {
+		inA[t.ID] = true
+	}
+	for _, t := range b {
+		if !inA[t.ID] {
+			return false
+		}
+	}
+	return true
 }
 
 // computeProjectActivity returns the per-user project activity percentage and
@@ -1044,23 +1195,6 @@ func markHolidaysOnDays(days []models.DayInfo, holidays []models.Holiday) {
 			}
 		}
 	}
-}
-
-// buildActivityMemberData returns the ordered member list and presence map for
-// the given team stats. Returns nil members and an empty map when teamID is 0.
-func (h *ActivityHandler) buildActivityMemberData(stats []models.UserStats, teamID int64, startDate, endDate string) (members []models.User, presenceMap map[int64]map[string]map[string]int64) {
-	presenceMap = make(map[int64]map[string]map[string]int64)
-	if teamID == 0 {
-		return
-	}
-	members = make([]models.User, len(stats))
-	userIDs := make([]int64, len(stats))
-	for i, s := range stats {
-		members[i] = s.User
-		userIDs[i] = s.User.ID
-	}
-	presenceMap, _ = h.DB.GetPresences(userIDs, startDate, endDate)
-	return
 }
 
 // filterStatsBySite filters a slice of UserStats by the given site filter.

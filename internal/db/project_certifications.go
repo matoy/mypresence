@@ -2,7 +2,6 @@ package db
 
 import (
 	"fmt"
-	"strings"
 )
 
 // migrateProjectCertifications creates the project_certifications table, used
@@ -71,31 +70,26 @@ func (d *DB) GetCertifiedProjectUserIDs(userIDs []int64, year, month int) (map[i
 		return result, nil
 	}
 
-	placeholders := make([]string, len(userIDs))
-	args := make([]interface{}, 0, len(userIDs)+2)
-	for i, id := range userIDs {
-		placeholders[i] = "?"
-		args = append(args, id)
-	}
-	args = append(args, year, month)
-
-	query := fmt.Sprintf(
-		"SELECT user_id FROM project_certifications WHERE user_id IN (%s) AND year = ? AND month = ?",
-		strings.Join(placeholders, ","),
-	)
-
-	rows, err := d.presence.Query(query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close() //nolint:errcheck
-
-	for rows.Next() {
-		var uid int64
-		if err := rows.Scan(&uid); err != nil {
-			return nil, err
+	err := forEachInt64Chunk(userIDs, idBatchSize, func(_ []int64, placeholders string, args []interface{}) error {
+		args = append(args, year, month)
+		query := fmt.Sprintf(
+			"SELECT user_id FROM project_certifications WHERE user_id IN (%s) AND year = ? AND month = ?",
+			placeholders,
+		)
+		rows, err := d.presence.Query(query, args...)
+		if err != nil {
+			return err
 		}
-		result[uid] = true
-	}
-	return result, rows.Err()
+		defer rows.Close() //nolint:errcheck
+
+		for rows.Next() {
+			var uid int64
+			if err := rows.Scan(&uid); err != nil {
+				return err
+			}
+			result[uid] = true
+		}
+		return rows.Err()
+	})
+	return result, err
 }
