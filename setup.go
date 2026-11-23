@@ -31,9 +31,10 @@ var appStartTime = time.Now().Unix()
 // buildTemplateFuncMap constructs the FuncMap used by all HTML templates.
 func buildTemplateFuncMap(cfg *config.Config) template.FuncMap {
 	return template.FuncMap{
-		"add": func(a, b int) int { return a + b },
-		"sub": func(a, b int) int { return a - b },
-		"flagFor": models.FlagForCountry,
+		"add":         func(a, b int) int { return a + b },
+		"sub":         func(a, b int) int { return a - b },
+		"flagFor":     models.FlagForCountry,
+		"displayName": models.FormatDisplayName,
 		// safehtml marks a string as safe HTML so html/template does not escape it.
 		// Only use with strings originating from our own controlled i18n data.
 		"safehtml": func(s string) template.HTML { return template.HTML(s) }, //nolint:gosec

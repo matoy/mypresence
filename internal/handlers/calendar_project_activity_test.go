@@ -183,6 +183,7 @@ func TestCalendarTemplate_RendersProjectActivityBadge(t *testing.T) {
 	}
 
 	funcMap := template.FuncMap{
+		"displayName": models.FormatDisplayName,
 		"json": func(v interface{}) template.JS {
 			b, _ := json.Marshal(v)
 			return template.JS(b)

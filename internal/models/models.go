@@ -890,3 +890,28 @@ type CalendarSyncEvent struct {
 	SyncedAt    time.Time `json:"synced_at"`
 }
 
+// FormatDisplayName prefixes "First Last" with a 3-letter trigram
+// (1st rune of first name + first 2 runes of last name), e.g.
+// "Jonathan BECKER" -> "JBE - Jonathan BECKER".
+// Single-word names are returned trimmed without a prefix.
+func FormatDisplayName(fullName string) string {
+	trimmed := strings.TrimSpace(fullName)
+	parts := strings.Fields(trimmed)
+	if len(parts) < 2 {
+		return trimmed
+	}
+	first := []rune(parts[0])
+	last := []rune(parts[len(parts)-1])
+	prefix := make([]rune, 0, 3)
+	if len(first) > 0 {
+		prefix = append(prefix, first[0])
+	}
+	for i := 0; i < 2 && i < len(last); i++ {
+		prefix = append(prefix, last[i])
+	}
+	if len(prefix) == 0 {
+		return trimmed
+	}
+	return strings.ToUpper(string(prefix)) + " - " + trimmed
+}
+

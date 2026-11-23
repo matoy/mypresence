@@ -622,7 +622,15 @@ function teamCalendarApp(statuses, currentUserId, canEdit, allPresences, members
 
             if (this.filterName) {
                 const query = this.filterName.toLowerCase().trim();
-                if (!m.name || !m.name.toLowerCase().includes(query)) {
+                const rawName = (m.name || '').trim();
+                const parts = rawName ? rawName.split(/\s+/) : [];
+                let display = rawName;
+                if (parts.length >= 2) {
+                    const first = Array.from(parts[0])[0] || '';
+                    const last = Array.from(parts[parts.length - 1]).slice(0, 2).join('');
+                    display = `${(first + last).toUpperCase()} - ${rawName}`;
+                }
+                if (!rawName.toLowerCase().includes(query) && !display.toLowerCase().includes(query)) {
                     return false;
                 }
             }

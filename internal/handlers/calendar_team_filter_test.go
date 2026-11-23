@@ -104,6 +104,7 @@ func TestCalendarTemplate_TeamFilterAndFullNames(t *testing.T) {
 	}
 
 	funcMap := template.FuncMap{
+		"displayName": models.FormatDisplayName,
 		"json": func(v interface{}) template.JS {
 			b, _ := json.Marshal(v)
 			return template.JS(b)
@@ -249,5 +250,11 @@ func TestCalendarTemplate_TeamFilterAndFullNames(t *testing.T) {
 	selectSnippet := allAssignedSection[selectIdx : selectIdx+strings.Index(allAssignedSection[selectIdx:], "</select>")]
 	if strings.Contains(selectSnippet, "value=\"__none__\"") {
 		t.Errorf("expected unassigned site option to be ABSENT in team where all members have a site, but found it in select snippet: %s", selectSnippet)
+	}
+	if !strings.Contains(html, "JMO - Jean-Christophe de Montesquiou-Fezensac") {
+		t.Errorf("expected trigram-prefixed name %q in calendar template", "JMO - Jean-Christophe de Montesquiou-Fezensac")
+	}
+	if !strings.Contains(html, "BMA - Bob Martin") {
+		t.Errorf("expected trigram-prefixed name %q in calendar template", "BMA - Bob Martin")
 	}
 }

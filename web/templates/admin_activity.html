@@ -378,12 +378,12 @@
                             <div class="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">
                                 {{slice .User.Name 0 1}}
                             </div>
-                            {{.User.Name}}
+                            {{displayName .User.Name}}
                             {{if and $certifiedUsers (index $certifiedUsers .User.ID)}}
                                 {{if $canDecertify}}
                                 <button type="button"
                                         data-uid="{{.User.ID}}"
-                                        data-uname="{{.User.Name}}"
+                                        data-uname="{{displayName .User.Name}}"
                                         data-month="{{$month}}"
                                         data-year="{{$year}}"
                                         onclick="openDecertifyModal(this.dataset.uid, this.dataset.uname, this.dataset.month, this.dataset.year)"
@@ -401,7 +401,7 @@
                                 {{if $canDecertify}}
                                 <button type="button"
                                         data-uid="{{.User.ID}}"
-                                        data-uname="{{.User.Name}}"
+                                        data-uname="{{displayName .User.Name}}"
                                         data-month="{{$month}}"
                                         data-year="{{$year}}"
                                         onclick="openDecertifyProjectModal(this.dataset.uid, this.dataset.uname, this.dataset.month, this.dataset.year)"
@@ -482,12 +482,12 @@
                             <div class="h-7 w-7 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">
                                 {{slice .User.Name 0 1}}
                             </div>
-                            {{.User.Name}}
+                            {{displayName .User.Name}}
                             {{if and $certifiedUsers (index $certifiedUsers .User.ID)}}
                                 {{if $canDecertify}}
                                 <button type="button"
                                         data-uid="{{.User.ID}}"
-                                        data-uname="{{.User.Name}}"
+                                        data-uname="{{displayName .User.Name}}"
                                         data-month="{{$month}}"
                                         data-year="{{$year}}"
                                         onclick="openDecertifyModal(this.dataset.uid, this.dataset.uname, this.dataset.month, this.dataset.year)"
@@ -505,7 +505,7 @@
                                 {{if $canDecertify}}
                                 <button type="button"
                                         data-uid="{{.User.ID}}"
-                                        data-uname="{{.User.Name}}"
+                                        data-uname="{{displayName .User.Name}}"
                                         data-month="{{$month}}"
                                         data-year="{{$year}}"
                                         onclick="openDecertifyProjectModal(this.dataset.uid, this.dataset.uname, this.dataset.month, this.dataset.year)"
@@ -686,7 +686,7 @@
                 {{$userPresences := index $presenceMap .User.ID}}
                 <tr class="hover:bg-gray-50 transition">
                     <td class="px-3 py-1.5 text-xs font-medium text-gray-800 border-r border-gray-200 whitespace-nowrap sticky left-0 bg-white z-10">
-                        {{.User.Name}}
+                        {{displayName .User.Name}}
                     </td>
                     {{range $days}}
                     <td class="px-0 py-1 text-center {{if or .IsWeekend .IsHoliday}}bg-gray-200{{end}}">

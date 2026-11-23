@@ -158,6 +158,7 @@ func TestCalendarTemplate_YTDBillableTile(t *testing.T) {
 	}
 
 	funcMap := template.FuncMap{
+		"displayName": models.FormatDisplayName,
 		"json": func(v interface{}) template.JS { return "" },
 		"statusColor": func(statuses []models.Status, id int64) string { return "#3b82f6" },
 		"statusName": func(statuses []models.Status, id int64) string { return "Office" },

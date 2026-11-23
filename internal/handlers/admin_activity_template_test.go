@@ -190,7 +190,8 @@ func TestAdminActivityTemplate_DecertifyButtonForGlobalAdmin(t *testing.T) {
 // admin_activity.html template tests.
 func buildActivityTemplateFuncMap() template.FuncMap {
 	return template.FuncMap{
-		"flagFor": models.FlagForCountry,
+		"flagFor":     models.FlagForCountry,
+		"displayName": models.FormatDisplayName,
 		"fmtF": func(f float64) string {
 			if f == float64(int64(f)) {
 				return strconv.FormatInt(int64(f), 10)
@@ -542,6 +543,44 @@ func TestAdminStatusesTemplate_EnabledColumnAndBadges(t *testing.T) {
 	}
 	if !strings.Contains(html, "Non") {
 		t.Errorf("expected 'Non' badge in html")
+	}
+}
+
+func TestAdminActivityTemplate_DisplaysTrigramPrefix(t *testing.T) {
+	data := baseActivityPageData()
+	user := models.User{ID: 7, Name: "Jonathan BECKER"}
+	data["Stats"] = []models.UserStats{{
+		User:         user,
+		StatusCounts: map[int64]float64{1: 20},
+		BillableDays: 20,
+		OnSiteDays:   13,
+	}}
+	data["Users"] = []models.User{user}
+	data["DomainTeamGroups"] = []DomainTeamGroup{{
+		Team: models.Team{ID: 1, Name: "Team A"},
+		Stats: []models.UserStats{{
+			User:         user,
+			StatusCounts: map[int64]float64{1: 20},
+			BillableDays: 20,
+			OnSiteDays:   13,
+		}},
+		TotalWorkingDays: 20,
+		WorkingDaysExcl:  20,
+		TotalOnSite:      13,
+		TotalBillable:    20,
+	}}
+
+	html := renderAdminActivityContent(t, data)
+	want := "JBE - Jonathan BECKER"
+	if count := strings.Count(html, want); count != 2 {
+		t.Errorf("expected %q in domain group and daily tables (2 occurrences), got %d", want, count)
+	}
+
+	// Single-team mode (no DomainTeamGroups)
+	data["DomainTeamGroups"] = nil
+	htmlSingle := renderAdminActivityContent(t, data)
+	if count := strings.Count(htmlSingle, want); count != 2 {
+		t.Errorf("expected %q in single-team summary and daily tables (2 occurrences), got %d", want, count)
 	}
 }
 
